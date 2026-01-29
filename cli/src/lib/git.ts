@@ -2,24 +2,24 @@
  * Git utilities
  */
 
-import { execSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { execSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * Get the current git branch name
  */
 export function getCurrentBranch(dir: string): string | null {
   // Try reading .git/HEAD directly first (faster)
-  const headPath = join(dir, '.git', 'HEAD');
+  const headPath = join(dir, ".git", "HEAD");
 
   if (existsSync(headPath)) {
     try {
-      const content = readFileSync(headPath, 'utf-8').trim();
+      const content = readFileSync(headPath, "utf-8").trim();
 
       // Format: "ref: refs/heads/branch-name"
-      if (content.startsWith('ref: refs/heads/')) {
-        return content.replace('ref: refs/heads/', '');
+      if (content.startsWith("ref: refs/heads/")) {
+        return content.replace("ref: refs/heads/", "");
       }
 
       // Detached HEAD - return short SHA
@@ -31,10 +31,10 @@ export function getCurrentBranch(dir: string): string | null {
 
   // Fall back to git command
   try {
-    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+    const branch = execSync("git rev-parse --abbrev-ref HEAD", {
       cwd: dir,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
     }).trim();
 
     return branch;
@@ -47,7 +47,7 @@ export function getCurrentBranch(dir: string): string | null {
  * Check if directory is a git repository
  */
 export function isGitRepo(dir: string): boolean {
-  const gitDir = join(dir, '.git');
+  const gitDir = join(dir, ".git");
   return existsSync(gitDir);
 }
 
@@ -56,10 +56,10 @@ export function isGitRepo(dir: string): boolean {
  */
 export function getRepoRoot(dir: string): string | null {
   try {
-    const root = execSync('git rev-parse --show-toplevel', {
+    const root = execSync("git rev-parse --show-toplevel", {
       cwd: dir,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
     }).trim();
 
     return root;
@@ -73,10 +73,10 @@ export function getRepoRoot(dir: string): string | null {
  */
 export function getRemoteUrl(dir: string): string | null {
   try {
-    const url = execSync('git remote get-url origin', {
+    const url = execSync("git remote get-url origin", {
       cwd: dir,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
     }).trim();
 
     return url;
@@ -90,10 +90,10 @@ export function getRemoteUrl(dir: string): string | null {
  */
 export function hasUncommittedChanges(dir: string): boolean {
   try {
-    const status = execSync('git status --porcelain', {
+    const status = execSync("git status --porcelain", {
       cwd: dir,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
     }).trim();
 
     return status.length > 0;
@@ -107,10 +107,10 @@ export function hasUncommittedChanges(dir: string): boolean {
  */
 export function getHeadCommit(dir: string): string | null {
   try {
-    const sha = execSync('git rev-parse HEAD', {
+    const sha = execSync("git rev-parse HEAD", {
       cwd: dir,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
     }).trim();
 
     return sha;

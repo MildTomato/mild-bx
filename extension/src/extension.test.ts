@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock vscode module
-vi.mock('vscode', () => ({
+vi.mock("vscode", () => ({
   window: {
     createOutputChannel: vi.fn(() => ({
       appendLine: vi.fn(),
@@ -10,9 +10,9 @@ vi.mock('vscode', () => ({
     createStatusBarItem: vi.fn(() => ({
       show: vi.fn(),
       hide: vi.fn(),
-      text: '',
-      tooltip: '',
-      command: '',
+      text: "",
+      tooltip: "",
+      command: "",
     })),
     showInformationMessage: vi.fn(),
     showErrorMessage: vi.fn(),
@@ -28,7 +28,7 @@ vi.mock('vscode', () => ({
     executeCommand: vi.fn(),
   },
   workspace: {
-    workspaceFolders: [{ uri: { fsPath: '/test/workspace' } }],
+    workspaceFolders: [{ uri: { fsPath: "/test/workspace" } }],
   },
   env: {
     openExternal: vi.fn(),
@@ -73,11 +73,11 @@ vi.mock('vscode', () => ({
 }));
 
 // Mock child_process
-vi.mock('child_process', () => ({
+vi.mock("child_process", () => ({
   spawn: vi.fn(() => ({
     stdout: {
       on: vi.fn((event, callback) => {
-        if (event === 'data') {
+        if (event === "data") {
           callback(Buffer.from('{"status":"success","projects":[]}'));
         }
       }),
@@ -86,7 +86,7 @@ vi.mock('child_process', () => ({
       on: vi.fn(),
     },
     on: vi.fn((event, callback) => {
-      if (event === 'close') {
+      if (event === "close") {
         setTimeout(() => callback(0), 10);
       }
     }),
@@ -94,65 +94,63 @@ vi.mock('child_process', () => ({
   })),
 }));
 
-describe('Extension', () => {
+describe("Extension", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('CLI Execution', () => {
-    it('should parse JSON output correctly', () => {
+  describe("CLI Execution", () => {
+    it("should parse JSON output correctly", () => {
       const jsonOutput = '{"status":"success","projects":[{"name":"Test"}]}';
       const parsed = JSON.parse(jsonOutput);
-      
-      expect(parsed.status).toBe('success');
+
+      expect(parsed.status).toBe("success");
       expect(parsed.projects).toHaveLength(1);
-      expect(parsed.projects[0].name).toBe('Test');
+      expect(parsed.projects[0].name).toBe("Test");
     });
 
-    it('should handle error status', () => {
+    it("should handle error status", () => {
       const jsonOutput = '{"status":"error","message":"Not authenticated"}';
       const parsed = JSON.parse(jsonOutput);
-      
-      expect(parsed.status).toBe('error');
-      expect(parsed.message).toBe('Not authenticated');
+
+      expect(parsed.status).toBe("error");
+      expect(parsed.message).toBe("Not authenticated");
     });
   });
 
-  describe('Pull Result Parsing', () => {
-    it('should parse pull result with project info', () => {
+  describe("Pull Result Parsing", () => {
+    it("should parse pull result with project info", () => {
       const pullResult = {
-        status: 'success',
-        profile: 'local',
-        project_ref: 'abcdefghijklmnopqrst',
+        status: "success",
+        profile: "local",
+        project_ref: "abcdefghijklmnopqrst",
         project: {
-          name: 'My Project',
-          region: 'us-east-1',
-          status: 'ACTIVE_HEALTHY',
+          name: "My Project",
+          region: "us-east-1",
+          status: "ACTIVE_HEALTHY",
         },
         branches: [
-          { name: 'main', is_default: true },
-          { name: 'develop', is_default: false },
+          { name: "main", is_default: true },
+          { name: "develop", is_default: false },
         ],
-        functions: [
-          { slug: 'hello-world', version: 1 },
-        ],
+        functions: [{ slug: "hello-world", version: 1 }],
         types_written: true,
       };
 
-      expect(pullResult.status).toBe('success');
-      expect(pullResult.project?.name).toBe('My Project');
+      expect(pullResult.status).toBe("success");
+      expect(pullResult.project?.name).toBe("My Project");
       expect(pullResult.branches).toHaveLength(2);
       expect(pullResult.functions).toHaveLength(1);
       expect(pullResult.types_written).toBe(true);
     });
   });
 
-  describe('Push Plan Parsing', () => {
-    it('should parse push plan with migrations', () => {
+  describe("Push Plan Parsing", () => {
+    it("should parse push plan with migrations", () => {
       const pushResult = {
-        status: 'success',
-        profile: 'staging',
-        project_ref: 'abcdefghijklmnopqrst',
+        status: "success",
+        profile: "staging",
+        project_ref: "abcdefghijklmnopqrst",
         migrations_found: 3,
         migrations_applied: 3,
         functions_found: 2,
@@ -163,36 +161,46 @@ describe('Extension', () => {
     });
   });
 
-  describe('Watch Events', () => {
-    it('should parse types_updated event', () => {
+  describe("Watch Events", () => {
+    it("should parse types_updated event", () => {
       const event = {
-        event: 'types_updated',
-        path: '/project/supabase/types/database.ts',
+        event: "types_updated",
+        path: "/project/supabase/types/database.ts",
       };
 
-      expect(event.event).toBe('types_updated');
-      expect(event.path).toContain('database.ts');
+      expect(event.event).toBe("types_updated");
+      expect(event.path).toContain("database.ts");
     });
 
-    it('should parse profile_changed event', () => {
+    it("should parse profile_changed event", () => {
       const event = {
-        event: 'profile_changed',
-        branch: 'feature/auth',
-        profile: 'local',
-        project_ref: 'abcdefghijklmnopqrst',
+        event: "profile_changed",
+        branch: "feature/auth",
+        profile: "local",
+        project_ref: "abcdefghijklmnopqrst",
       };
 
-      expect(event.event).toBe('profile_changed');
-      expect(event.profile).toBe('local');
+      expect(event.event).toBe("profile_changed");
+      expect(event.profile).toBe("local");
     });
   });
 });
 
-describe('Tree View', () => {
-  it('should create project tree items', () => {
+describe("Tree View", () => {
+  it("should create project tree items", () => {
     const projects = [
-      { name: 'Project 1', ref: 'abc123', region: 'us-east-1', status: 'ACTIVE_HEALTHY' },
-      { name: 'Project 2', ref: 'def456', region: 'eu-west-1', status: 'INACTIVE' },
+      {
+        name: "Project 1",
+        ref: "abc123",
+        region: "us-east-1",
+        status: "ACTIVE_HEALTHY",
+      },
+      {
+        name: "Project 2",
+        ref: "def456",
+        region: "eu-west-1",
+        status: "INACTIVE",
+      },
     ];
 
     const items = projects.map((p) => ({
@@ -202,21 +210,21 @@ describe('Tree View', () => {
     }));
 
     expect(items).toHaveLength(2);
-    expect(items[0].label).toBe('Project 1');
-    expect(items[0].id).toBe('abc123');
+    expect(items[0].label).toBe("Project 1");
+    expect(items[0].id).toBe("abc123");
   });
 });
 
-describe('Status Formatting', () => {
-  it('should format healthy status', () => {
-    const status = 'ACTIVE_HEALTHY';
-    const isHealthy = status === 'ACTIVE_HEALTHY';
+describe("Status Formatting", () => {
+  it("should format healthy status", () => {
+    const status = "ACTIVE_HEALTHY";
+    const isHealthy = status === "ACTIVE_HEALTHY";
     expect(isHealthy).toBe(true);
   });
 
-  it('should detect unhealthy status', () => {
-    const status = 'ACTIVE_UNHEALTHY';
-    const isHealthy = status === 'ACTIVE_HEALTHY';
+  it("should detect unhealthy status", () => {
+    const status = "ACTIVE_UNHEALTHY";
+    const isHealthy = status === "ACTIVE_HEALTHY";
     expect(isHealthy).toBe(false);
   });
 });

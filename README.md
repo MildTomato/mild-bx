@@ -24,7 +24,7 @@ supa-demo --help
 supa-demo login               # Authenticate with Supabase
 supa-demo projects            # List your projects
 supa-demo pull                # Pull remote state to local
-supa-demo push                # Push local changes to remote  
+supa-demo push                # Push local changes to remote
 supa-demo watch               # Watch for changes
 ```
 

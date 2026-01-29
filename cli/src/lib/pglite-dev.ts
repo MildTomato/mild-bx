@@ -3,11 +3,11 @@
  * Uses @electric-sql/pglite as an in-memory Postgres for computing diffs
  */
 
-import { PGlite } from '@electric-sql/pglite';
-import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { PGlite } from "@electric-sql/pglite";
+import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
+import { readdirSync, readFileSync, existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 let devDb: PGlite | null = null;
 let socketServer: PGLiteSocketServer | null = null;
@@ -20,9 +20,9 @@ function findAuthMigrationsDir(): string | null {
   // Walk up from this file to find the repo root
   const __dirname = dirname(fileURLToPath(import.meta.url));
   let dir = __dirname;
-  
+
   for (let i = 0; i < 10; i++) {
-    const candidate = join(dir, 'vendor', 'supabase-auth', 'migrations');
+    const candidate = join(dir, "vendor", "supabase-auth", "migrations");
     if (existsSync(candidate)) {
       return candidate;
     }
@@ -30,7 +30,7 @@ function findAuthMigrationsDir(): string | null {
     if (parent === dir) break;
     dir = parent;
   }
-  
+
   return null;
 }
 
@@ -41,22 +41,25 @@ function findAuthMigrationsDir(): string | null {
 function loadAuthMigrations(): string[] {
   const migrationsDir = findAuthMigrationsDir();
   if (!migrationsDir) {
-    console.error('[pglite] Auth migrations directory not found');
+    console.error("[pglite] Auth migrations directory not found");
     return [];
   }
 
   const files = readdirSync(migrationsDir)
-    .filter(f => f.endsWith('.up.sql'))
+    .filter((f) => f.endsWith(".up.sql"))
     .sort(); // Migrations are named with timestamps, so sorting gives correct order
 
   const migrations: string[] = [];
-  
+
   for (const file of files) {
-    let content = readFileSync(join(migrationsDir, file), 'utf-8');
-    
+    let content = readFileSync(join(migrationsDir, file), "utf-8");
+
     // Replace Go template syntax with "auth"
-    content = content.replace(/\{\{\s*index\s+\.Options\s+"Namespace"\s*\}\}/g, 'auth');
-    
+    content = content.replace(
+      /\{\{\s*index\s+\.Options\s+"Namespace"\s*\}\}/g,
+      "auth",
+    );
+
     migrations.push(content);
   }
 
@@ -79,18 +82,18 @@ export async function startDevDb(): Promise<string> {
 
   // Create in-memory PGlite instance using the async factory
   devDb = await PGlite.create();
-  
+
   // Create required schemas
-  console.error('[pglite] Creating schemas...');
+  console.error("[pglite] Creating schemas...");
   await devDb.exec(`
     CREATE SCHEMA IF NOT EXISTS extensions;
     CREATE SCHEMA IF NOT EXISTS auth;
   `);
 
   // Seed auth migrations
-  console.error('[pglite] Seeding auth migrations...');
+  console.error("[pglite] Seeding auth migrations...");
   const authMigrations = loadAuthMigrations();
-  
+
   for (let i = 0; i < authMigrations.length; i++) {
     try {
       await devDb.exec(authMigrations[i]);
@@ -99,12 +102,12 @@ export async function startDevDb(): Promise<string> {
       // Log but continue - we need the core tables (users, etc.)
       const msg = error instanceof Error ? error.message : String(error);
       // Only log if it's not a benign error
-      if (!msg.includes('already exists') && !msg.includes('does not exist')) {
+      if (!msg.includes("already exists") && !msg.includes("does not exist")) {
         console.error(`[pglite] Migration ${i} warning: ${msg.slice(0, 100)}`);
       }
     }
   }
-  console.error('[pglite] Auth migrations seeded');
+  console.error("[pglite] Auth migrations seeded");
 
   // Try random ports in the ephemeral range (49152-65535)
   let started = false;
@@ -113,11 +116,11 @@ export async function startDevDb(): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt++) {
     // Generate random port in ephemeral range
     const port = 49152 + Math.floor(Math.random() * (65535 - 49152));
-    
+
     socketServer = new PGLiteSocketServer({
       db: devDb,
       port,
-      host: '127.0.0.1',
+      host: "127.0.0.1",
     });
 
     try {
@@ -128,7 +131,7 @@ export async function startDevDb(): Promise<string> {
     } catch (error) {
       lastError = error as Error;
       // Port in use, try another random one
-      if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+      if ((error as NodeJS.ErrnoException).code === "EADDRINUSE") {
         continue;
       }
       throw error;
@@ -136,7 +139,10 @@ export async function startDevDb(): Promise<string> {
   }
 
   if (!started) {
-    throw lastError || new Error('Failed to start PGlite socket server after 10 attempts');
+    throw (
+      lastError ||
+      new Error("Failed to start PGlite socket server after 10 attempts")
+    );
   }
 
   // sslmode=disable is required - PGlite doesn't support SSL
@@ -172,7 +178,9 @@ export async function stopDevDb(): Promise<void> {
  * Since we import PGlite at module load, if this module loads, PGlite is available
  */
 export function isPGliteAvailable(): boolean {
-  return typeof PGlite === 'function' && typeof PGLiteSocketServer === 'function';
+  return (
+    typeof PGlite === "function" && typeof PGLiteSocketServer === "function"
+  );
 }
 
 /**
@@ -181,7 +189,7 @@ export function isPGliteAvailable(): boolean {
  */
 export async function execOnDevDb(sql: string): Promise<void> {
   if (!devDb) {
-    throw new Error('Dev database not started. Call startDevDb() first.');
+    throw new Error("Dev database not started. Call startDevDb() first.");
   }
   await devDb.exec(sql);
 }

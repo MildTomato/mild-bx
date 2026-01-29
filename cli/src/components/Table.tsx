@@ -1,5 +1,5 @@
-import React from 'react';
-import { Text, Box } from 'ink';
+import React from "react";
+import { Text, Box } from "ink";
 
 interface Column {
   key: string;
@@ -19,7 +19,7 @@ export function Table({ columns, data }: TableProps) {
 
     let maxWidth = col.header.length;
     for (const row of data) {
-      const val = String(row[col.key] ?? '');
+      const val = String(row[col.key] ?? "");
       maxWidth = Math.max(maxWidth, val.length);
     }
     return Math.min(maxWidth + 2, 40);
@@ -42,7 +42,7 @@ export function Table({ columns, data }: TableProps) {
       <Box>
         {columns.map((col, i) => (
           <Box key={col.key} width={widths[i]}>
-            <Text dimColor>{'─'.repeat(widths[i] - 1)}</Text>
+            <Text dimColor>{"─".repeat(widths[i] - 1)}</Text>
           </Box>
         ))}
       </Box>
@@ -52,7 +52,7 @@ export function Table({ columns, data }: TableProps) {
         <Box key={rowIndex}>
           {columns.map((col, i) => (
             <Box key={col.key} width={widths[i]}>
-              <Text>{String(row[col.key] ?? '')}</Text>
+              <Text>{String(row[col.key] ?? "")}</Text>
             </Box>
           ))}
         </Box>

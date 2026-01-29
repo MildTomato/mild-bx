@@ -6,7 +6,8 @@ import React, { useState, useEffect } from 'react';
 import { render, Text, Box, useApp } from 'ink';
 import { Spinner, Status } from '../components/Spinner.js';
 import { Table } from '../components/Table.js';
-import { OrgPicker, RegionPicker, NameInput } from '../components/Pickers.js';
+import { RegionPicker, NameInput } from '../components/Pickers.js';
+import { OrgFlow } from '../components/OrgFlow.js';
 import { createClient, Project, ProjectResponse, Organization } from '../lib/api.js';
 import { getAccessToken } from '../lib/config.js';
 import { formatProjectStatus, type Region } from '../lib/constants.js';
@@ -136,48 +137,52 @@ function ProjectsCreateUI({
   }
 
   if (error) {
-    return <Status type="error" message={error} />;
+    return <Box padding={1}><Status type="error" message={error} /></Box>;
   }
 
   if (step === 'org') {
     return (
-      <OrgPicker
-        onSelect={(org) => {
-          setSelectedOrg(org);
-          setStep('name');
-        }}
-        onError={setError}
-      />
+      <Box padding={1}>
+        <OrgFlow
+          onComplete={(org) => {
+            setSelectedOrg(org);
+            setStep('name');
+          }}
+          onError={setError}
+        />
+      </Box>
     );
   }
 
   if (step === 'name') {
     const suggestedName = `my-project-${Date.now().toString(36).slice(-4)}`;
     return (
-      <NameInput
-        label="Project name:"
-        placeholder={suggestedName}
-        defaultValue={suggestedName}
-        hint="This will be visible in your Supabase dashboard"
-        onSubmit={(name) => {
-          setProjectName(name);
-          setStep('region');
-        }}
-      />
+      <Box padding={1}>
+        <NameInput
+          label="Project name:"
+          placeholder={suggestedName}
+          defaultValue={suggestedName}
+          hint="This will be visible in your Supabase dashboard"
+          onSubmit={(name) => {
+            setProjectName(name);
+            setStep('region');
+          }}
+        />
+      </Box>
     );
   }
 
   if (step === 'region') {
-    return <RegionPicker title="Select region for new project:" onSelect={createProject} />;
+    return <Box padding={1}><RegionPicker title="Select region for new project:" onSelect={createProject} /></Box>;
   }
 
   if (step === 'creating') {
-    return <Spinner message={`Creating project "${projectName}"...`} />;
+    return <Box padding={1}><Spinner message={`Creating project "${projectName}"...`} /></Box>;
   }
 
   if (step === 'done' && createdProject) {
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" padding={1}>
         <Status type="success" message={`Project created: ${createdProject.name}`} />
         <Text>  Ref: {createdProject.ref}</Text>
         <Text>  Region: {createdProject.region}</Text>

@@ -1,15 +1,15 @@
-const esbuild = require('esbuild');
+const esbuild = require("esbuild");
 
-const watch = process.argv.includes('--watch');
+const watch = process.argv.includes("--watch");
 
 const buildOptions = {
-  entryPoints: ['src/extension.ts'],
+  entryPoints: ["src/extension.ts"],
   bundle: true,
-  outfile: 'dist/extension.js',
-  external: ['vscode'],
-  format: 'cjs',
-  platform: 'node',
-  target: 'node18',
+  outfile: "dist/extension.js",
+  external: ["vscode"],
+  format: "cjs",
+  platform: "node",
+  target: "node18",
   sourcemap: true,
   minify: !watch,
 };
@@ -17,10 +17,10 @@ const buildOptions = {
 if (watch) {
   esbuild.context(buildOptions).then((ctx) => {
     ctx.watch();
-    console.log('Watching for changes...');
+    console.log("Watching for changes...");
   });
 } else {
   esbuild.build(buildOptions).then(() => {
-    console.log('Build complete');
+    console.log("Build complete");
   });
 }

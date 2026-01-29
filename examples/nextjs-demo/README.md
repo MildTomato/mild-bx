@@ -9,14 +9,17 @@ Example Next.js app with Supabase DX CLI integration.
 2. **Update config** - Edit `supabase/config.toml` and replace `your-project-ref` with your project reference ID
 
 3. **Login to CLI**:
+
    ```bash
    supa-demo login
    ```
 
 4. **Pull project state**:
+
    ```bash
    supa-demo pull
    ```
+
    This will:
    - Fetch project info
    - Generate TypeScript types to `supabase/types/database.ts`
@@ -60,6 +63,7 @@ The `config.json` file uses JSON Schema for IDE autocompletion:
 ```
 
 Your IDE will provide:
+
 - Autocompletion for all Supabase config fields
 - Descriptions and documentation inline
 - Validation as you type

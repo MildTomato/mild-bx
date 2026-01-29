@@ -22,6 +22,7 @@ cp -r supabase-cli ~/.codex/skills/
 ## Usage
 
 Once installed, your AI assistant will automatically have context about:
+
 - How to use the `supa` CLI commands
 - How to configure profiles in `./supabase/config.toml`
 - Best practices for Supabase development workflows

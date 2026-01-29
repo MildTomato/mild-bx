@@ -1,0 +1,26 @@
+# Supabase DX Configuration
+# This file configures profiles for the supa-demo CLI
+
+[project]
+id = "your-project-ref"  # Replace with your Supabase project ref
+
+# Local development profile
+# Used when working on feature branches
+[profiles.local]
+mode = "local"
+workflow = "dashboard"
+branches = ["feature/*", "fix/*", "dev"]
+
+# Staging profile
+# Used for the staging branch
+[profiles.staging]
+mode = "remote"
+workflow = "git"
+branches = ["staging"]
+
+# Production profile  
+# Used for main branch deployments
+[profiles.production]
+mode = "remote"
+workflow = "git"
+branches = ["main", "master"]

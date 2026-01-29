@@ -2,15 +2,15 @@
  * Config diff comparison and formatting
  */
 
-import type { ConfigDiff } from './config-types.js';
+import type { ConfigDiff } from "./config-types.js";
 
 /**
  * Format a value for display
  */
 function formatValue(value: unknown): string {
-  if (value === undefined || value === null) return 'undefined';
-  if (typeof value === 'string' && value === '') return 'undefined';
-  if (typeof value === 'string') return `"${value}"`;
+  if (value === undefined || value === null) return "undefined";
+  if (typeof value === "string" && value === "") return "undefined";
+  if (typeof value === "string") return `"${value}"`;
   return String(value);
 }
 
@@ -40,7 +40,7 @@ function areValuesEqual(a: unknown, b: unknown): boolean {
  */
 export function compareConfigs(
   localPayload: Record<string, unknown>,
-  remoteConfig: Record<string, unknown>
+  remoteConfig: Record<string, unknown>,
 ): ConfigDiff[] {
   const diffs: ConfigDiff[] = [];
 
@@ -48,7 +48,7 @@ export function compareConfigs(
   for (const [key, newValue] of Object.entries(localPayload)) {
     const oldValue = remoteConfig[key];
     const changed = !areValuesEqual(oldValue, newValue);
-    
+
     diffs.push({
       key,
       oldValue,
@@ -63,7 +63,11 @@ export function compareConfigs(
 /**
  * Format a diff for display
  */
-export function formatDiff(diff: ConfigDiff): { key: string; old: string; new: string } {
+export function formatDiff(diff: ConfigDiff): {
+  key: string;
+  old: string;
+  new: string;
+} {
   return {
     key: diff.key,
     old: formatValue(diff.oldValue),

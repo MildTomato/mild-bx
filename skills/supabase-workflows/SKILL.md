@@ -139,17 +139,20 @@ mode = "local"
 ```
 
 **Pros:**
+
 - Offline development
 - Fast iteration
 - No API limits
 - Safe experimentation
 
 **Cons:**
+
 - Need Docker
 - Data doesn't persist between `supabase stop`
 - Different from production (versions, extensions)
 
 **Commands:**
+
 ```bash
 supabase start    # Start local stack
 supabase stop     # Stop (data preserved)
@@ -167,17 +170,20 @@ branches = ["preview/*"]
 ```
 
 **Pros:**
+
 - Real Supabase environment
 - Isolated per PR/branch
 - Tests against production-like setup
 - Automatic cleanup
 
 **Cons:**
+
 - Requires Pro plan (or higher)
 - Network latency vs local
 - Branch creation takes time
 
 **How it works:**
+
 1. Push to a branch
 2. GitHub integration creates a Supabase branch
 3. Branch has own database with your migrations
@@ -195,11 +201,13 @@ branches = ["main"]
 ```
 
 **Pros:**
+
 - Real environment
 - Shared team access
 - Production data (careful!)
 
 **Cons:**
+
 - Changes affect real data
 - API rate limits
 - Network dependency
@@ -218,6 +226,7 @@ supabase/migrations/
 ```
 
 **Pros:**
+
 - Clear history of changes
 - Easy to review in PRs
 - Rollback capabilities
@@ -239,16 +248,19 @@ schema = "declarative"
 ```
 
 **Pros:**
+
 - See full schema at a glance
 - No migration file management
 - Easier for complex refactors
 
 **Cons:**
+
 - Need to run diff to generate migrations
 - Less granular control
 - Newer, less documented
 
 **Usage:**
+
 ```bash
 # Edit schema files
 vim supabase/schemas/public.sql
@@ -371,21 +383,25 @@ SUPABASE_DB_URL=postgresql://...
 ## Troubleshooting
 
 ### "Migration failed"
+
 - Check SQL syntax
 - Ensure migrations are idempotent
 - Look at Supabase dashboard logs
 
 ### "Preview branch not created"
+
 - Verify GitHub integration is connected
 - Check branch naming matches patterns
 - Ensure Pro plan is active
 
 ### "db diff shows unexpected changes"
+
 - Someone may have made dashboard changes
 - Run `supabase db pull` to sync remote → local
 - Review and commit the diff
 
 ### "Migrations out of sync"
+
 - Compare `supabase_migrations.schema_migrations` table
 - Use `supabase db push` to apply local migrations
 - Or reset and reapply if in development

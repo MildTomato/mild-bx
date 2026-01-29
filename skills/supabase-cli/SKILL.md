@@ -75,6 +75,7 @@ supa pull --json
 ```
 
 **What pull does:**
+
 - Fetches project info from Supabase Management API
 - Lists branches (if branching is enabled)
 - Lists edge functions
@@ -102,6 +103,7 @@ supa push --dry-run
 ```
 
 **What push does:**
+
 - Finds migration files in `supabase/migrations/`
 - Applies migrations to remote database via Management API
 - (Future) Deploys edge functions
@@ -125,6 +127,7 @@ supa watch --no-branch-watch
 ```
 
 **What watch does:**
+
 - Monitors git branch changes → auto-switches profile
 - Regenerates TypeScript types periodically
 - Outputs events as JSON (useful for VS Code extension)
@@ -133,11 +136,11 @@ supa watch --no-branch-watch
 
 All commands support these flags:
 
-| Flag | Short | Description |
-|------|-------|-------------|
-| `--profile` | `-p` | Profile to use from `./supabase/config.toml` |
-| `--dry-run` | | Show what would happen without making changes |
-| `--json` | | Output as JSON (for scripts/extension) |
+| Flag        | Short | Description                                   |
+| ----------- | ----- | --------------------------------------------- |
+| `--profile` | `-p`  | Profile to use from `./supabase/config.toml`  |
+| `--dry-run` |       | Show what would happen without making changes |
+| `--json`    |       | Output as JSON (for scripts/extension)        |
 
 ## Configuration
 
@@ -166,27 +169,30 @@ branches = ["main"]
 
 ### Profile Options
 
-| Option | Values | Description |
-|--------|--------|-------------|
-| `mode` | `local`, `preview`, `remote` | Development mode |
-| `workflow` | `git`, `dashboard` | How changes are managed |
-| `schema` | `declarative`, `migrations` | Schema management style |
-| `branches` | `["pattern/*"]` | Git branch patterns for auto-selection |
-| `project` | `"ref"` | Override project ref for this profile |
+| Option     | Values                       | Description                            |
+| ---------- | ---------------------------- | -------------------------------------- |
+| `mode`     | `local`, `preview`, `remote` | Development mode                       |
+| `workflow` | `git`, `dashboard`           | How changes are managed                |
+| `schema`   | `declarative`, `migrations`  | Schema management style                |
+| `branches` | `["pattern/*"]`              | Git branch patterns for auto-selection |
+| `project`  | `"ref"`                      | Override project ref for this profile  |
 
 ## Modes
 
 ### Local Mode (`mode = "local"`)
+
 - Develop against local Supabase (via `supabase start`)
 - Fast iteration, offline capable
 - Use `workflow = "dashboard"` to capture schema changes
 
 ### Preview Mode (`mode = "preview"`)
+
 - Use Supabase's preview branch feature
 - Each git branch gets its own remote database
 - Great for testing before merging
 
 ### Remote Mode (`mode = "remote"`)
+
 - Connect directly to a remote Supabase project
 - Use for staging/production environments
 - Use `workflow = "git"` for CI/CD integration
@@ -204,6 +210,7 @@ branches = ["staging", "develop"]  # Exact matches
 ```
 
 When you switch branches, `supa watch` will:
+
 1. Detect the branch change
 2. Find a matching profile
 3. Switch context automatically
@@ -298,18 +305,22 @@ supa pull --profile production
 ## Troubleshooting
 
 ### "not logged in"
+
 ```bash
 supa login
 # Or set SUPABASE_ACCESS_TOKEN environment variable
 ```
 
 ### "no profiles configured"
+
 Create `./supabase/config.toml` with at least one profile.
 
 ### "profile not found"
+
 Check your profile name matches one in `config.toml`.
 
 ### "API error 401"
+
 Your access token may be expired. Generate a new one and run `supa login` again.
 
 ## See Also

@@ -11,17 +11,25 @@
       "public",
       "extensions"
     ],
-    "max_rows": 500
+    "max_rows": 1000
   },
   "auth": {
-    "site_url": "https://dsddssd.com",
+    "site_url": "https://myapp.com",
     "additional_redirect_urls": [
       "http://localhost:3000/auth/callback",
       "https://myapp.com/auth/callback"
     ],
-    "jwt_expiry": 7200,
+    "jwt_expiry": 3600,
     "enable_signup": true,
-    "enable_anonymous_sign_ins": true
+    "enable_anonymous_sign_ins": false
+  },
+  "db": {
+    "seed": {
+      "enabled": true,
+      "sql_paths": [
+        "./seeds/*.sql"
+      ]
+    }
   },
   "profiles": {
     "local": {

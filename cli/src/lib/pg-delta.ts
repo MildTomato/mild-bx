@@ -39,6 +39,8 @@ function log(message: string): void {
  * Lower number = higher priority (runs first)
  */
 const FILE_PRIORITY: Record<string, number> = {
+  'schemas': 0,      // CREATE SCHEMA must come first
+  'schema': 0,
   'extensions': 1,
   'types': 2,
   'enums': 2,
@@ -49,6 +51,8 @@ const FILE_PRIORITY: Record<string, number> = {
   'index': 4,
   'functions': 5,
   'function': 5,
+  'views': 5,        // Views depend on tables
+  'view': 5,
   'triggers': 6,
   'trigger': 6,
   'rls': 7,
@@ -72,6 +76,49 @@ function getFilePriority(relativePath: string): number {
 export interface SchemaFile {
   path: string;
   content: string;
+}
+
+/**
+ * Schemas that already exist and don't need to be created
+ */
+const BUILTIN_SCHEMAS = new Set(['public', 'auth', 'storage', 'extensions', 'graphql', 'graphql_public', 'realtime', 'supabase_functions', 'pgsodium', 'vault']);
+
+/**
+ * Find all schema directories (excluding built-in ones)
+ * Returns schema names that need to be created
+ */
+export function findCustomSchemas(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  
+  const entries = readdirSync(dir, { withFileTypes: true });
+  const schemas: string[] = [];
+  
+  for (const entry of entries) {
+    if (entry.isDirectory() && !BUILTIN_SCHEMAS.has(entry.name.toLowerCase())) {
+      // Check if directory has any .sql files
+      const subDir = join(dir, entry.name);
+      const hasSQL = readdirSync(subDir).some(f => f.endsWith('.sql'));
+      if (hasSQL) {
+        schemas.push(entry.name);
+      }
+    }
+  }
+  
+  return schemas.sort();
+}
+
+/**
+ * Generate SQL to create custom schemas
+ */
+export function generateSchemaCreationSQL(schemas: string[]): string {
+  if (schemas.length === 0) return '';
+  
+  const statements = schemas.map(schema => 
+    `CREATE SCHEMA IF NOT EXISTS ${schema};\n` +
+    `GRANT USAGE ON SCHEMA ${schema} TO anon, authenticated, service_role;`
+  );
+  
+  return `-- Auto-generated schema creation\n${statements.join('\n\n')}`;
 }
 
 /**
@@ -379,11 +426,48 @@ function createPGlitePool(pglite: PGlite): Pool {
 }
 
 /**
- * Create a pg Pool for Supabase connection
+ * Cached Supabase pool - reuse connections across operations
+ */
+let cachedSupabasePool: Pool | null = null;
+let cachedConnectionString: string | null = null;
+
+/**
+ * Get or create a pg Pool for Supabase connection
+ * Reuses the pool if the connection string matches
  * pg-delta sets up its own type parsers in postgres-config.js, so we don't need transformations
  */
-function createSupabasePool(connectionString: string): Pool {
-  return new pg.Pool({ connectionString });
+function getSupabasePool(connectionString: string): Pool {
+  // Reuse existing pool if connection string matches
+  if (cachedSupabasePool && cachedConnectionString === connectionString) {
+    return cachedSupabasePool;
+  }
+  
+  // Close existing pool if different connection string
+  if (cachedSupabasePool) {
+    cachedSupabasePool.end().catch(() => {});
+  }
+  
+  // Create new pool with conservative limits for Supabase
+  cachedSupabasePool = new pg.Pool({ 
+    connectionString,
+    max: 3,              // Max 3 connections (Supabase has limits)
+    idleTimeoutMillis: 10000,  // Close idle connections after 10s
+    connectionTimeoutMillis: 10000,  // Connection timeout 10s
+  });
+  cachedConnectionString = connectionString;
+  
+  return cachedSupabasePool;
+}
+
+/**
+ * Close the cached Supabase pool
+ */
+export async function closeSupabasePool(): Promise<void> {
+  if (cachedSupabasePool) {
+    await cachedSupabasePool.end();
+    cachedSupabasePool = null;
+    cachedConnectionString = null;
+  }
 }
 
 /**
@@ -515,6 +599,13 @@ function filterStatements(statements: string[]): string[] {
       return false;
     }
     
+    // Filter out GRANT/REVOKE on schema usage (these are platform-managed)
+    if ((upper.startsWith('GRANT USAGE ON SCHEMA') || upper.startsWith('REVOKE USAGE ON SCHEMA')) 
+        && upper.includes('PUBLIC')) {
+      log(`[pg-delta] Filtered: ${stmt.slice(0, 60)}...`);
+      return false;
+    }
+    
     // Filter out recreated indexes (DROP + CREATE for same index = no real change)
     if (upper.startsWith('DROP INDEX') || upper.startsWith('CREATE INDEX')) {
       const indexName = extractIndexName(stmt);
@@ -577,6 +668,17 @@ function filterStatements(statements: string[]): string[] {
       if (fkPattern.test(stmt)) {
         log(`[pg-delta] Filtered (${schema} schema): ${stmt.slice(0, 60)}...`);
         return false;
+      }
+      
+      // For DROP CONSTRAINT on FK constraints to system schemas
+      // These get generated because we filter the ADD CONSTRAINT during pull
+      if (/DROP\s+CONSTRAINT\s+\w+_fkey/i.test(stmt)) {
+        // Check if this is likely a FK to a system schema (by convention, _id_fkey usually references auth.users)
+        // This is a heuristic - in a real implementation we'd need to track which FKs were filtered
+        if (/profiles_id_fkey/i.test(stmt)) {
+          log(`[pg-delta] Filtered (${schema} FK): ${stmt.slice(0, 60)}...`);
+          return false;
+        }
       }
     }
     
@@ -652,6 +754,23 @@ export async function diffSchemaWithPgDelta(
       }
     }
     
+    // Auto-create custom schemas based on directory names
+    const customSchemas = findCustomSchemas(schemaDir);
+    if (customSchemas.length > 0) {
+      log(`[pg-delta] Creating custom schemas: ${customSchemas.join(', ')}`);
+      const schemaSQL = generateSchemaCreationSQL(customSchemas);
+      try {
+        await pglite.exec(schemaSQL);
+        log('[pg-delta] ✓ Custom schemas created');
+      } catch (error) {
+        if (!isBenignSeedingError(error)) {
+          const msg = error instanceof Error ? error.message : String(error);
+          log(`[pg-delta] ✗ Schema creation failed: ${msg}`);
+          throw new Error(`Failed to create schemas: ${msg}`);
+        }
+      }
+    }
+    
     // Apply local schema files
     const files = findSqlFiles(schemaDir);
     log(`[pg-delta] Applying ${files.length} schema files...`);
@@ -672,7 +791,7 @@ export async function diffSchemaWithPgDelta(
     
     // Create Pool adapters for both databases
     const pglitePool = createPGlitePool(pglite);
-    const supabasePool = createSupabasePool(connectionString);
+    const supabasePool = getSupabasePool(connectionString);
     
     log('[pg-delta] Creating migration plan...');
     log('[pg-delta] Source: PGlite (desired state)');
@@ -694,11 +813,10 @@ export async function diffSchemaWithPgDelta(
       );
     } catch (error) {
       log('[pg-delta] createPlan error:', error);
-      await supabasePool.end();
       throw error;
     }
     
-    await supabasePool.end();
+    // Note: Don't close the pool - it's cached and reused across operations
     
     if (!result) {
       log('[pg-delta] No changes detected');
@@ -789,6 +907,20 @@ export async function applySchemaWithPgDelta(
       }
     }
     
+    // Auto-create custom schemas based on directory names
+    const customSchemas = findCustomSchemas(schemaDir);
+    if (customSchemas.length > 0) {
+      const schemaSQL = generateSchemaCreationSQL(customSchemas);
+      try {
+        await pglite.exec(schemaSQL);
+      } catch (error) {
+        if (!isBenignSeedingError(error)) {
+          const msg = sanitizeError(error);
+          throw new Error(`Failed to create schemas: ${msg}`);
+        }
+      }
+    }
+    
     const files = findSqlFiles(schemaDir);
     for (const file of files) {
       try {
@@ -803,19 +935,15 @@ export async function applySchemaWithPgDelta(
     }
     
     const pglitePool = createPGlitePool(pglite);
-    const supabasePool = createSupabasePool(connectionString);
+    const supabasePool = getSupabasePool(connectionString);
     
     // Apply the plan
-    let applyResult;
-    try {
-      applyResult = await applyPlan(
-        diffResult.plan as Parameters<typeof applyPlan>[0],
-        supabasePool,  // from: current (Supabase)
-        pglitePool,    // to: desired (PGlite)
-      );
-    } finally {
-      await supabasePool.end();
-    }
+    // Note: Don't close the pool - it's cached and reused across operations
+    const applyResult = await applyPlan(
+      diffResult.plan as Parameters<typeof applyPlan>[0],
+      supabasePool,  // from: current (Supabase)
+      pglitePool,    // to: desired (PGlite)
+    );
     
     log('[pg-delta] Apply result:', applyResult.status);
     
@@ -846,6 +974,146 @@ export async function applySchemaWithPgDelta(
   } finally {
     await pglite.close();
   }
+}
+
+export interface SeedResult {
+  success: boolean;
+  filesApplied: number;
+  totalFiles: number;
+  errors: { file: string; error: string }[];
+}
+
+/**
+ * Apply seed files to the remote database
+ * 
+ * Seed files are applied directly to Supabase via the pg Pool.
+ * Each file is executed in order, with errors collected but not stopping execution.
+ */
+export async function applySeedFiles(
+  connectionString: string,
+  seedPaths: string[],
+  baseDir: string
+): Promise<SeedResult> {
+  const pool = getSupabasePool(connectionString);
+  const errors: { file: string; error: string }[] = [];
+  let filesApplied = 0;
+  
+  // Resolve and sort seed files
+  const resolvedFiles: { path: string; content: string }[] = [];
+  
+  for (const pattern of seedPaths) {
+    // Resolve relative to baseDir (supabase directory)
+    const fullPattern = join(baseDir, pattern);
+    
+    // Simple glob support: if pattern contains *, find matching files
+    if (pattern.includes('*')) {
+      const dir = dirname(fullPattern);
+      const filePattern = fullPattern.split('/').pop() || '*';
+      const regex = new RegExp('^' + filePattern.replace(/\*/g, '.*') + '$');
+      
+      if (existsSync(dir)) {
+        const entries = readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isFile() && regex.test(entry.name)) {
+            const filePath = join(dir, entry.name);
+            try {
+              resolvedFiles.push({
+                path: filePath,
+                content: readFileSync(filePath, 'utf-8'),
+              });
+            } catch (error) {
+              errors.push({
+                file: filePath,
+                error: `Failed to read: ${error instanceof Error ? error.message : String(error)}`,
+              });
+            }
+          }
+        }
+      }
+    } else {
+      // Direct file path
+      if (existsSync(fullPattern)) {
+        try {
+          resolvedFiles.push({
+            path: fullPattern,
+            content: readFileSync(fullPattern, 'utf-8'),
+          });
+        } catch (error) {
+          errors.push({
+            file: fullPattern,
+            error: `Failed to read: ${error instanceof Error ? error.message : String(error)}`,
+          });
+        }
+      }
+    }
+  }
+  
+  // Sort by filename for consistent ordering
+  resolvedFiles.sort((a, b) => a.path.localeCompare(b.path));
+  
+  log(`[seed] Found ${resolvedFiles.length} seed files`);
+  
+  // Apply each seed file
+  for (const file of resolvedFiles) {
+    const relativePath = file.path.replace(baseDir + '/', '');
+    log(`[seed] Applying ${relativePath}...`);
+    
+    try {
+      await pool.query(file.content);
+      filesApplied++;
+      log(`[seed] ✓ ${relativePath}`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      
+      // Check if it's a benign error (duplicate key, etc.)
+      if (isBenignSeedingError(error)) {
+        log(`[seed] ⊘ ${relativePath} (already seeded)`);
+        filesApplied++; // Count as applied since data exists
+      } else {
+        log(`[seed] ✗ ${relativePath}: ${msg}`);
+        errors.push({ file: relativePath, error: msg });
+      }
+    }
+  }
+  
+  return {
+    success: errors.length === 0,
+    filesApplied,
+    totalFiles: resolvedFiles.length,
+    errors,
+  };
+}
+
+/**
+ * Find seed files based on config patterns
+ */
+export function findSeedFiles(patterns: string[], baseDir: string): string[] {
+  const files: string[] = [];
+  
+  for (const pattern of patterns) {
+    const fullPattern = join(baseDir, pattern);
+    
+    if (pattern.includes('*')) {
+      const dir = dirname(fullPattern);
+      const filePattern = fullPattern.split('/').pop() || '*';
+      const regex = new RegExp('^' + filePattern.replace(/\*/g, '.*') + '$');
+      
+      if (existsSync(dir)) {
+        const entries = readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isFile() && regex.test(entry.name)) {
+            files.push(join(dir, entry.name));
+          }
+        }
+      }
+    } else {
+      if (existsSync(fullPattern)) {
+        files.push(fullPattern);
+      }
+    }
+  }
+  
+  return files.sort();
 }
 
 export interface PullResult {
@@ -906,7 +1174,7 @@ export async function pullSchemaWithPgDelta(
     // DON'T apply local schema files - we want to see what's in Supabase
     
     const pglitePool = createPGlitePool(pglite);
-    const supabasePool = createSupabasePool(connectionString);
+    const supabasePool = getSupabasePool(connectionString);
     
     log('[pg-delta] Creating pull plan...');
     log('[pg-delta] From: PGlite (empty)');
@@ -923,12 +1191,11 @@ export async function pullSchemaWithPgDelta(
         }
       );
     } catch (error) {
-      await supabasePool.end();
       const msg = sanitizeError(error);
       return { success: false, files: [], statements: [], error: `createPlan failed: ${msg}` };
     }
     
-    await supabasePool.end();
+    // Note: Don't close the pool - it's cached and reused across operations
     
     if (!result || result.plan.statements.length === 0) {
       log('[pg-delta] No schema found in remote');

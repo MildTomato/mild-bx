@@ -5,22 +5,22 @@
  */
 
 // ANSI escape codes
-const ESC = '\x1b[';
+const ESC = "\x1b[";
 
 // Raw ANSI colors
 export const colors = {
   reset: `${ESC}0m`,
   bold: `${ESC}1m`,
   dim: `${ESC}2m`,
-  
+
   // Semantic colors (matching external/cli)
-  value: `${ESC}37m`,           // Primary values (white)
+  value: `${ESC}37m`, // Primary values (white)
   secondary: `${ESC}38;5;244m`, // Secondary text (256-color gray)
-  icon: `${ESC}33m`,            // Icons and accents (burnt orange/yellow)
-  fileName: `${ESC}36m`,        // File names (cyan)
-  error: `${ESC}31m`,           // Errors (red)
-  success: `${ESC}32m`,         // Success (green)
-  
+  icon: `${ESC}33m`, // Icons and accents (burnt orange/yellow)
+  fileName: `${ESC}36m`, // File names (cyan)
+  error: `${ESC}31m`, // Errors (red)
+  success: `${ESC}32m`, // Success (green)
+
   // Additional colors
   cyan: `${ESC}36m`,
   yellow: `${ESC}33m`,
@@ -34,16 +34,16 @@ export const colors = {
 
 // Icons (unicode)
 export const icons = {
-  check: '✓',
-  cross: '✗',
-  arrow: '→',
-  bullet: '•',
-  file: '📄',
-  folder: '📁',
-  key: '🔑',
-  link: '🔗',
-  warning: '⚠',
-  info: 'ℹ',
+  check: "✓",
+  cross: "✗",
+  arrow: "→",
+  bullet: "•",
+  file: "📄",
+  folder: "📁",
+  key: "🔑",
+  link: "🔗",
+  warning: "⚠",
+  info: "ℹ",
 };
 
 // Styled text helpers using semantic colors

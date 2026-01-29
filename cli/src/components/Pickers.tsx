@@ -2,14 +2,14 @@
  * Reusable picker components for Ink UI
  */
 
-import React, { useState, useEffect } from 'react';
-import { Box, Text } from 'ink';
-import SelectInput from 'ink-select-input';
-import TextInput from 'ink-text-input';
-import { Spinner, Status } from './Spinner.js';
-import { createClient, type Organization, type Project } from '../lib/api.js';
-import { getAccessToken } from '../lib/config.js';
-import { REGIONS, type Region } from '../lib/constants.js';
+import React, { useState, useEffect } from "react";
+import { Box, Text } from "ink";
+import SelectInput from "ink-select-input";
+import TextInput from "ink-text-input";
+import { Spinner, Status } from "./Spinner.js";
+import { createClient, type Organization, type Project } from "../lib/api.js";
+import { getAccessToken } from "../lib/config.js";
+import { REGIONS, type Region } from "../lib/constants.js";
 
 // Generic choice picker
 interface ChoicePickerProps {
@@ -21,7 +21,9 @@ interface ChoicePickerProps {
 export function ChoicePicker({ title, choices, onSelect }: ChoicePickerProps) {
   return (
     <Box flexDirection="column">
-      <Text color="cyan" bold>{title}</Text>
+      <Text color="cyan" bold>
+        {title}
+      </Text>
       <Box marginTop={1}>
         <SelectInput
           items={choices}
@@ -50,7 +52,7 @@ export function OrgPicker({ onSelect, onError }: OrgPickerProps) {
   async function loadOrgs() {
     const token = getAccessToken();
     if (!token) {
-      const msg = 'Not authenticated';
+      const msg = "Not authenticated";
       setError(msg);
       onError?.(msg);
       setLoading(false);
@@ -61,13 +63,14 @@ export function OrgPicker({ onSelect, onError }: OrgPickerProps) {
       const client = createClient(token);
       const organizations = await client.listOrganizations();
       setOrgs(organizations);
-      
+
       // Auto-select if only one
       if (organizations.length === 1) {
         onSelect(organizations[0]);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to load organizations';
+      const msg =
+        err instanceof Error ? err.message : "Failed to load organizations";
       setError(msg);
       onError?.(msg);
     } finally {
@@ -92,22 +95,32 @@ export function OrgPicker({ onSelect, onError }: OrgPickerProps) {
     return null;
   }
 
-  const items = orgs.map(org => ({
+  const items = orgs.map((org) => ({
     key: org.slug,
     label: org.name,
     value: org,
   }));
 
   // Custom item renderer to dim the slug
-  const OrgItem = ({ isSelected, label, value }: { isSelected: boolean; label: string; value: Organization }) => (
-    <Text color={isSelected ? 'cyan' : undefined}>
+  const OrgItem = ({
+    isSelected,
+    label,
+    value,
+  }: {
+    isSelected: boolean;
+    label: string;
+    value: Organization;
+  }) => (
+    <Text color={isSelected ? "cyan" : undefined}>
       {label} <Text dimColor>({value.slug})</Text>
     </Text>
   );
 
   return (
     <Box flexDirection="column">
-      <Text color="cyan" bold>Select organization:</Text>
+      <Text color="cyan" bold>
+        Select organization:
+      </Text>
       <Box marginTop={1}>
         <SelectInput
           items={items}
@@ -127,7 +140,12 @@ interface ProjectPickerProps {
   onEmpty?: () => void;
 }
 
-export function ProjectPicker({ orgSlug, onSelect, onError, onEmpty }: ProjectPickerProps) {
+export function ProjectPicker({
+  orgSlug,
+  onSelect,
+  onError,
+  onEmpty,
+}: ProjectPickerProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +157,7 @@ export function ProjectPicker({ orgSlug, onSelect, onError, onEmpty }: ProjectPi
   async function loadProjects() {
     const token = getAccessToken();
     if (!token) {
-      const msg = 'Not authenticated';
+      const msg = "Not authenticated";
       setError(msg);
       onError?.(msg);
       setLoading(false);
@@ -149,16 +167,17 @@ export function ProjectPicker({ orgSlug, onSelect, onError, onEmpty }: ProjectPi
     try {
       const client = createClient(token);
       const allProjects = await client.listProjects();
-      const filtered = orgSlug 
-        ? allProjects.filter(p => p.organization_slug === orgSlug)
+      const filtered = orgSlug
+        ? allProjects.filter((p) => p.organization_slug === orgSlug)
         : allProjects;
       setProjects(filtered);
-      
+
       if (filtered.length === 0) {
         onEmpty?.();
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to load projects';
+      const msg =
+        err instanceof Error ? err.message : "Failed to load projects";
       setError(msg);
       onError?.(msg);
     } finally {
@@ -178,7 +197,7 @@ export function ProjectPicker({ orgSlug, onSelect, onError, onEmpty }: ProjectPi
     return <Status type="info" message="No projects found" />;
   }
 
-  const items = projects.map(p => ({
+  const items = projects.map((p) => ({
     key: p.ref,
     label: `${p.name} (${p.ref}) - ${p.region}`,
     value: p,
@@ -186,12 +205,11 @@ export function ProjectPicker({ orgSlug, onSelect, onError, onEmpty }: ProjectPi
 
   return (
     <Box flexDirection="column">
-      <Text color="cyan" bold>Select project:</Text>
+      <Text color="cyan" bold>
+        Select project:
+      </Text>
       <Box marginTop={1}>
-        <SelectInput
-          items={items}
-          onSelect={(item) => onSelect(item.value)}
-        />
+        <SelectInput items={items} onSelect={(item) => onSelect(item.value)} />
       </Box>
     </Box>
   );
@@ -203,10 +221,15 @@ interface RegionPickerProps {
   title?: string;
 }
 
-export function RegionPicker({ onSelect, title = 'Select region:' }: RegionPickerProps) {
+export function RegionPicker({
+  onSelect,
+  title = "Select region:",
+}: RegionPickerProps) {
   return (
     <Box flexDirection="column">
-      <Text color="cyan" bold>{title}</Text>
+      <Text color="cyan" bold>
+        {title}
+      </Text>
       <Box marginTop={1}>
         <SelectInput
           items={REGIONS}
@@ -222,33 +245,52 @@ interface CreateOrSelectProps {
   entityName: string; // "organization" or "project"
   existingCount: number;
   existingNames?: string[]; // Show first few names for context
-  onChoice: (choice: 'existing' | 'new') => void;
+  onChoice: (choice: "existing" | "new") => void;
 }
 
-export function CreateOrSelectChoice({ entityName, existingCount, existingNames, onChoice }: CreateOrSelectProps) {
+export function CreateOrSelectChoice({
+  entityName,
+  existingCount,
+  existingNames,
+  onChoice,
+}: CreateOrSelectProps) {
   const hasExisting = existingCount > 0;
-  const [highlighted, setHighlighted] = useState<'existing' | 'new'>('existing');
-  
+  const [highlighted, setHighlighted] = useState<"existing" | "new">(
+    "existing",
+  );
+
   const items = hasExisting
     ? [
-        { key: 'existing', label: `Use existing ${entityName}`, value: 'existing' as const },
-        { key: 'new', label: `Create new ${entityName}`, value: 'new' as const },
+        {
+          key: "existing",
+          label: `Use existing ${entityName}`,
+          value: "existing" as const,
+        },
+        {
+          key: "new",
+          label: `Create new ${entityName}`,
+          value: "new" as const,
+        },
       ]
     : [
-        { key: 'new', label: `Create new ${entityName}`, value: 'new' as const },
+        {
+          key: "new",
+          label: `Create new ${entityName}`,
+          value: "new" as const,
+        },
       ];
 
   // Build context message based on highlighted item
-  let contextMsg = '';
-  if (highlighted === 'existing' && hasExisting) {
+  let contextMsg = "";
+  if (highlighted === "existing" && hasExisting) {
     if (existingNames && existingNames.length > 0) {
       const displayNames = existingNames.slice(0, 3);
-      const more = existingCount > 3 ? ` (+${existingCount - 3} more)` : '';
-      contextMsg = `You have ${existingCount} ${entityName}${existingCount > 1 ? 's' : ''}: ${displayNames.join(', ')}${more}`;
+      const more = existingCount > 3 ? ` (+${existingCount - 3} more)` : "";
+      contextMsg = `You have ${existingCount} ${entityName}${existingCount > 1 ? "s" : ""}: ${displayNames.join(", ")}${more}`;
     } else {
-      contextMsg = `You have ${existingCount} ${entityName}${existingCount > 1 ? 's' : ''}`;
+      contextMsg = `You have ${existingCount} ${entityName}${existingCount > 1 ? "s" : ""}`;
     }
-  } else if (highlighted === 'new') {
+  } else if (highlighted === "new") {
     contextMsg = `Create a new ${entityName} for your project`;
   } else {
     contextMsg = `No ${entityName}s found in your account`;
@@ -277,7 +319,13 @@ interface NameInputProps {
   onSubmit: (value: string) => void;
 }
 
-export function NameInput({ label, placeholder, defaultValue = '', hint, onSubmit }: NameInputProps) {
+export function NameInput({
+  label,
+  placeholder,
+  defaultValue = "",
+  hint,
+  onSubmit,
+}: NameInputProps) {
   const [value, setValue] = useState(defaultValue);
 
   return (
@@ -285,7 +333,7 @@ export function NameInput({ label, placeholder, defaultValue = '', hint, onSubmi
       <Text>{label}</Text>
       {hint && <Text dimColor>{hint}</Text>}
       <Box marginTop={1}>
-        <Text color="cyan">{'> '}</Text>
+        <Text color="cyan">{"> "}</Text>
         <TextInput
           value={value}
           onChange={setValue}

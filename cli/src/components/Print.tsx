@@ -1,5 +1,5 @@
-import React from 'react';
-import { Box, Text } from 'ink';
+import React from "react";
+import { Box, Text } from "ink";
 
 interface OutputProps {
   children: React.ReactNode;
@@ -21,5 +21,5 @@ export function Output({ children }: OutputProps) {
  * Renders a blank line for spacing between sections.
  */
 export function BlankLine() {
-  return <Text>{' '}</Text>;
+  return <Text> </Text>;
 }

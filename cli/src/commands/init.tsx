@@ -4,23 +4,20 @@
 
 import React, { useState, useEffect } from 'react';
 import { render, Box, Text } from 'ink';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Spinner, Status } from '../components/Spinner.js';
 import { 
-  OrgPicker, 
   ProjectPicker, 
   RegionPicker, 
   CreateOrSelectChoice,
   NameInput
 } from '../components/Pickers.js';
+import { OrgFlow } from '../components/OrgFlow.js';
 import { createClient, type Organization, type Project } from '../lib/api.js';
 import { getAccessToken } from '../lib/config.js';
-import { type Region } from '../lib/constants.js';
-import { 
-  createProject as createProjectOp, 
-  createOrganization as createOrgOp
-} from '../lib/operations.js';
+import { type Region, REGIONS } from '../lib/constants.js';
+import { createProject as createProjectOp } from '../lib/operations.js';
 import { success, bold, url, dim, icons } from '../lib/styles.js';
 import { Output, BlankLine } from '../components/Print.js';
 import { buildApiConfigFromRemote, buildAuthConfigFromRemote } from '../lib/sync.js';
@@ -28,6 +25,10 @@ import { buildApiConfigFromRemote, buildAuthConfigFromRemote } from '../lib/sync
 interface InitOptions {
   yes?: boolean;
   json?: boolean;
+  org?: string;
+  project?: string;
+  name?: string;
+  region?: string;
 }
 
 interface ConfigData {
@@ -67,11 +68,7 @@ function buildConfigJson(data: ConfigData): string {
 }
 
 type Step = 
-  | 'loading'
-  | 'org-choice'
-  | 'org-select'
-  | 'org-name'
-  | 'org-creating'
+  | 'org'
   | 'project-choice'
   | 'project-select'
   | 'project-name'
@@ -81,14 +78,13 @@ type Step =
 interface ProjectResult {
   ref: string;
   name: string;
+  dbPassword?: string;
 }
 
 function InitUI({ onComplete }: { onComplete: (result: ProjectResult) => void }) {
-  const [step, setStep] = useState<Step>('loading');
-  const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [step, setStep] = useState<Step>('org');
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
-  const [orgName, setOrgName] = useState<string>('');
   const [projectName, setProjectName] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
@@ -97,23 +93,10 @@ function InitUI({ onComplete }: { onComplete: (result: ProjectResult) => void })
     const orgContext = selectedOrg ? `Organization: ${selectedOrg.name}` : undefined;
     
     switch (step) {
-      case 'loading':
-        return { title: 'Initialize Supabase Project' };
-      case 'org-choice':
-      case 'org-select':
+      case 'org':
         return { 
           title: 'Step 1/2: Choose Organization',
           subtitle: 'Projects belong to organizations. Select or create one.'
-        };
-      case 'org-name':
-        return { 
-          title: 'Step 1/2: Create Organization - Name',
-          subtitle: 'Organizations group your projects together.'
-        };
-      case 'org-creating':
-        return { 
-          title: 'Step 1/2: Creating Organization',
-          subtitle: orgName ? `Name: ${orgName}` : undefined
         };
       case 'project-choice':
       case 'project-select':
@@ -141,27 +124,6 @@ function InitUI({ onComplete }: { onComplete: (result: ProjectResult) => void })
     }
   }
 
-  useEffect(() => {
-    loadOrgs();
-  }, []);
-
-  async function loadOrgs() {
-    const token = getAccessToken();
-    if (!token) {
-      setError('Not authenticated');
-      return;
-    }
-
-    try {
-      const client = createClient(token);
-      const organizations = await client.listOrganizations();
-      setOrgs(organizations);
-      setStep('org-choice');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load organizations');
-    }
-  }
-
   async function loadProjects(org: Organization) {
     const token = getAccessToken();
     if (!token) return;
@@ -177,25 +139,6 @@ function InitUI({ onComplete }: { onComplete: (result: ProjectResult) => void })
     }
   }
 
-  async function createOrg(name: string) {
-    const token = getAccessToken();
-    if (!token) {
-      setError('Not authenticated');
-      return;
-    }
-
-    try {
-      const newOrg = await createOrgOp({ token, name });
-      setOrgs((prev) => [...prev, newOrg]);
-      setSelectedOrg(newOrg);
-      setProjects([]);
-      setStep('project-choice');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to create organization';
-      setError(msg);
-    }
-  }
-
   async function createProject(region: Region) {
     setStep('project-creating');
     const token = getAccessToken();
@@ -205,14 +148,14 @@ function InitUI({ onComplete }: { onComplete: (result: ProjectResult) => void })
     }
 
     try {
-      const project = await createProjectOp({
+      const { project, dbPassword } = await createProjectOp({
         token,
         orgSlug: selectedOrg.slug,
         region,
         name: projectName || undefined,
       });
       
-      onComplete({ ref: project.ref, name: projectName });
+      onComplete({ ref: project.ref, name: projectName, dbPassword });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create project');
     }
@@ -238,60 +181,16 @@ function InitUI({ onComplete }: { onComplete: (result: ProjectResult) => void })
     return withHeader(<Status type="error" message={error} />);
   }
 
-  if (step === 'loading') {
-    return withHeader(<Spinner message="Connecting to Supabase..." />);
-  }
-
-  if (step === 'org-choice') {
+  if (step === 'org') {
     return withHeader(
-      <CreateOrSelectChoice
-        entityName="organization"
-        existingCount={orgs.length}
-        existingNames={orgs.map(o => o.name)}
-        onChoice={(choice) => {
-          if (choice === 'new') {
-            setStep('org-name');
-          } else {
-            setStep('org-select');
-          }
-        }}
-      />
-    );
-  }
-
-  if (step === 'org-select') {
-    return withHeader(
-      <OrgPicker
-        onSelect={(org) => {
+      <OrgFlow
+        onComplete={(org) => {
           setSelectedOrg(org);
           loadProjects(org);
         }}
         onError={setError}
       />
     );
-  }
-
-  if (step === 'org-name') {
-    const suggestedName = `my-org-${Date.now().toString(36).slice(-4)}`;
-    return withHeader(
-      <NameInput
-        label="What would you like to name your organization?"
-        placeholder={suggestedName}
-        defaultValue={suggestedName}
-        hint="Organizations group related projects together"
-        onSubmit={(name) => {
-          setOrgName(name);
-          setStep('org-creating');
-          createOrg(name).catch((err) => {
-            setError(err instanceof Error ? err.message : 'Failed to create organization');
-          });
-        }}
-      />
-    );
-  }
-
-  if (step === 'org-creating') {
-    return withHeader(<Spinner message={`Creating organization "${orgName}"...`} />);
   }
 
   if (step === 'project-choice') {
@@ -380,25 +279,111 @@ export async function initCommand(options: InitOptions): Promise<void> {
     return;
   }
 
-  const project = await new Promise<ProjectResult>((resolve) => {
-    const { unmount, clear } = render(
-      <InitUI onComplete={(result) => { clear(); unmount(); resolve(result); }} />
-    );
-  });
+  let project: ProjectResult;
+
+  // Non-interactive mode: use flags if provided
+  if (options.project) {
+    // Link to existing project by ref
+    const client = createClient(token);
+    try {
+      const projects = await client.listProjects();
+      const found = projects.find(p => p.ref === options.project);
+      if (!found) {
+        if (options.json) {
+          console.log(JSON.stringify({ status: 'error', message: `Project not found: ${options.project}` }));
+        } else {
+          console.error(`Error: Project not found: ${options.project}`);
+        }
+        process.exit(1);
+      }
+      project = { ref: found.ref, name: found.name };
+    } catch (err) {
+      if (options.json) {
+        console.log(JSON.stringify({ status: 'error', message: err instanceof Error ? err.message : 'Failed to fetch projects' }));
+      } else {
+        console.error('Error:', err instanceof Error ? err.message : 'Failed to fetch projects');
+      }
+      process.exit(1);
+    }
+  } else if (options.org && options.name && options.region) {
+    // Create new project with provided flags
+    const validRegions = REGIONS.map(r => r.value);
+    if (!validRegions.includes(options.region as Region)) {
+      if (options.json) {
+        console.log(JSON.stringify({ status: 'error', message: `Invalid region: ${options.region}. Valid regions: ${validRegions.join(', ')}` }));
+      } else {
+        console.error(`Error: Invalid region: ${options.region}`);
+        console.error(`Valid regions: ${validRegions.join(', ')}`);
+      }
+      process.exit(1);
+    }
+
+    try {
+      if (!options.json) {
+        console.log(`Creating project "${options.name}" in ${options.region}...`);
+      }
+      const { project: newProject, dbPassword } = await createProjectOp({
+        token,
+        orgSlug: options.org,
+        region: options.region as Region,
+        name: options.name,
+      });
+      project = { ref: newProject.ref, name: options.name, dbPassword };
+    } catch (err) {
+      if (options.json) {
+        console.log(JSON.stringify({ status: 'error', message: err instanceof Error ? err.message : 'Failed to create project' }));
+      } else {
+        console.error('Error:', err instanceof Error ? err.message : 'Failed to create project');
+      }
+      process.exit(1);
+    }
+  } else if (options.org || options.name || options.region) {
+    // Partial flags provided - show error
+    if (options.json) {
+      console.log(JSON.stringify({ status: 'error', message: 'To create a new project non-interactively, provide all of: --org, --name, --region. Or use --project to link to an existing project.' }));
+    } else {
+      console.error('Error: To create a new project non-interactively, provide all of: --org, --name, --region');
+      console.error('Or use --project <ref> to link to an existing project.');
+    }
+    process.exit(1);
+  } else if (options.json || !process.stdin.isTTY) {
+    // Non-interactive mode but no flags provided
+    if (options.json) {
+      console.log(JSON.stringify({ 
+        status: 'error', 
+        message: 'Non-interactive mode requires flags. Use --project <ref> for existing project, or --org, --name, --region for new project.',
+        hint: 'Run "supa orgs --json" to list organizations, "supa projects list --json" to list projects.'
+      }));
+    } else {
+      console.error('Error: Non-interactive mode requires flags.');
+      console.error('Use --project <ref> for existing project, or --org, --name, --region for new project.');
+      console.error('Run "supa orgs --json" to list organizations, "supa projects list --json" to list projects.');
+    }
+    process.exit(1);
+  } else {
+    // Interactive mode
+    project = await new Promise<ProjectResult>((resolve) => {
+      const { unmount, clear } = render(
+        <InitUI onComplete={(result) => { clear(); unmount(); resolve(result); }} />
+      );
+    });
+  }
 
   const { ref: projectRef, name: projectName } = project;
   
-  // Show spinner while fetching project config
-  const ConfigSpinner = () => (
-    <Box flexDirection="column" paddingTop={1}>
-      <Text dimColor>Initializing Supabase in this directory</Text>
-      <Box marginTop={1}>
-        <Spinner message="Fetching project config..." />
+  // Show spinner while fetching project config (only in interactive mode)
+  let configSpinner: { clear: () => void; unmount: () => void } | null = null;
+  if (!options.json && process.stdin.isTTY) {
+    const ConfigSpinner = () => (
+      <Box flexDirection="column" paddingTop={1}>
+        <Text dimColor>Initializing Supabase in this directory</Text>
+        <Box marginTop={1}>
+          <Spinner message="Fetching project config..." />
+        </Box>
       </Box>
-    </Box>
-  );
-  
-  const configSpinner = render(<ConfigSpinner />);
+    );
+    configSpinner = render(<ConfigSpinner />);
+  }
   
   // Fetch project config and API keys
   const client = createClient(token);
@@ -428,13 +413,36 @@ export async function initCommand(options: InitOptions): Promise<void> {
     // Config might not be available yet if project is still initializing
   }
   
-  configSpinner.clear();
-  configSpinner.unmount();
+  if (configSpinner) {
+    configSpinner.clear();
+    configSpinner.unmount();
+  }
 
   // Create directories
-  const dirs = [supabaseDir, join(supabaseDir, 'migrations'), join(supabaseDir, 'functions'), join(supabaseDir, 'types')];
+  const dirs = [
+    supabaseDir,
+    join(supabaseDir, 'migrations'),
+    join(supabaseDir, 'functions'),
+    join(supabaseDir, 'types'),
+    join(supabaseDir, 'schema', 'public'),
+  ];
   for (const dir of dirs) {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  }
+
+  // Write DB password to .env if we created a new project
+  if (project.dbPassword) {
+    const envPath = join(cwd, '.env');
+    const envLine = `SUPABASE_DB_PASSWORD=${project.dbPassword}\n`;
+    if (existsSync(envPath)) {
+      // Append to existing .env
+      const existingContent = readFileSync(envPath, 'utf-8');
+      if (!existingContent.includes('SUPABASE_DB_PASSWORD=')) {
+        appendFileSync(envPath, envLine);
+      }
+    } else {
+      writeFileSync(envPath, envLine);
+    }
   }
 
   // Build config from actual project settings
@@ -454,7 +462,8 @@ export async function initCommand(options: InitOptions): Promise<void> {
       apiUrl,
       anonKey: anonKey || null,
       dashboardUrl: `https://supabase.com/dashboard/project/${projectRef}`,
-      created: ['supabase/config.json', 'supabase/migrations/', 'supabase/functions/', 'supabase/types/'] 
+      created: ['supabase/config.json', 'supabase/migrations/', 'supabase/functions/', 'supabase/types/', 'supabase/schema/public/'],
+      next: 'supa dev --json'
     }));
   } else {
     const dashboardUrl = `https://supabase.com/dashboard/project/${projectRef}`;

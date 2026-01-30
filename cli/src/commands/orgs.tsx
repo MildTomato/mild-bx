@@ -47,6 +47,14 @@ export async function orgsCommand(options: OrgsOptions): Promise<void> {
     return;
   }
 
+  // Non-TTY mode without --json: show helpful error
+  if (!process.stdin.isTTY) {
+    console.error("Error: Interactive mode requires a TTY.");
+    console.error("Use --json for non-interactive output:");
+    console.error("  supa orgs --json");
+    process.exit(1);
+  }
+
   // Interactive mode
   return new Promise((resolve) => {
     const { unmount } = render(

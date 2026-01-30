@@ -88,7 +88,12 @@ program
   .addHelpText("before", () => {
     return `\n${getProjectContext()}\n`;
   })
-  .addHelpText("after", "\n")
+  .addHelpText(
+    "after",
+    `
+${C.secondary}Tip for AI agents:${C.reset} Most commands support ${C.value}--json${C.reset} for machine-readable output.
+`,
+  )
   .action(() => {
     // Show help when no command is given
     program.help();
@@ -110,6 +115,19 @@ program
       );
       process.exit(1);
     }
+  })
+  .hook("postAction", (thisCommand) => {
+    // In non-TTY environments, suggest --json if not already using it
+    if (!process.stdout.isTTY && !process.argv.includes("--json")) {
+      // Skip for commands that don't support --json
+      const commandOptions = thisCommand.options.map((o) => o.long);
+      if (commandOptions.includes("--json")) {
+        console.error();
+        console.error(
+          `${C.secondary}Tip: Use --json for structured output when scripting${C.reset}`,
+        );
+      }
+    }
   });
 
 // Init command
@@ -120,10 +138,13 @@ configureHelp(
     .option("-y, --yes", "Skip prompts and use defaults")
     .option("--org <slug>", "Organization slug")
     .option("--project <ref>", "Link to existing project by ref")
-    .option("--name <name>", "Name for new project (requires --org and --region)")
+    .option(
+      "--name <name>",
+      "Name for new project (requires --org and --region)",
+    )
     .option("--region <region>", "Region for new project (e.g., us-east-1)")
     .option("--json", "Output as JSON")
-    .action(initCommand)
+    .action(initCommand),
 );
 
 // Organizations command
@@ -132,13 +153,15 @@ configureHelp(
     .command("orgs")
     .description("List organizations")
     .option("--json", "Output as JSON")
-    .action(orgsCommand)
+    .action(orgsCommand),
 );
 
 // Projects command group
 const projects = configureHelp(
-  program.command("projects").description("Manage projects")
-    .action(() => projects.help())
+  program
+    .command("projects")
+    .description("Manage projects")
+    .action(() => projects.help()),
 );
 
 configureHelp(
@@ -147,7 +170,7 @@ configureHelp(
     .description("List all projects")
     .option("--json", "Output as JSON")
     .option("--org <id>", "Filter by organization ID")
-    .action((options) => projectsCommand({ ...options, action: "list" }))
+    .action((options) => projectsCommand({ ...options, action: "list" })),
 );
 
 configureHelp(
@@ -158,14 +181,16 @@ configureHelp(
     .option("--region <region>", "Region (e.g., us-east-1)")
     .option("--name <name>", "Project name")
     .option("-y, --yes", "Skip confirmation prompts")
-    .action((options) => projectsCommand({ ...options, action: "new" }))
+    .action((options) => projectsCommand({ ...options, action: "new" })),
 );
 
 // Dev command - top-level shortcut
 configureHelp(
   program
     .command("dev")
-    .description("Start a watcher that continuously syncs schema changes to remote [long-running]")
+    .description(
+      "Start a watcher that continuously syncs schema changes to remote [long-running]",
+    )
     .option("-p, --profile <name>", "Profile to use")
     .option(
       "--debounce <ms>",
@@ -186,13 +211,15 @@ configureHelp(
     .option("--dry-run", "Show what would be synced without applying")
     .option("-v, --verbose", "Show detailed pg-delta logging")
     .option("--json", "Output as JSON (events as newline-delimited JSON)")
-    .action(devCommand)
+    .action(devCommand),
 );
 
 // Project command group - database operations
 const project = configureHelp(
-  program.command("project").description("Project database operations")
-    .action(() => project.help())
+  program
+    .command("project")
+    .description("Project database operations")
+    .action(() => project.help()),
 );
 
 configureHelp(
@@ -209,7 +236,7 @@ configureHelp(
     )
     .option("--json", "Output as JSON")
     .option("-v, --verbose", "Show detailed pg-delta logging")
-    .action(pullCommand)
+    .action(pullCommand),
 );
 
 configureHelp(
@@ -223,13 +250,15 @@ configureHelp(
     .option("--config-only", "Only apply config changes (api, auth settings)")
     .option("--json", "Output as JSON")
     .option("-v, --verbose", "Show detailed pg-delta logging")
-    .action(pushCommand)
+    .action(pushCommand),
 );
 
 configureHelp(
   project
     .command("dev")
-    .description("Start a watcher that continuously syncs schema changes to remote [long-running]")
+    .description(
+      "Start a watcher that continuously syncs schema changes to remote [long-running]",
+    )
     .option("-p, --profile <name>", "Profile to use")
     .option(
       "--debounce <ms>",
@@ -250,7 +279,7 @@ configureHelp(
     .option("--dry-run", "Show what would be synced without applying")
     .option("-v, --verbose", "Show detailed pg-delta logging")
     .option("--json", "Output as JSON (events as newline-delimited JSON)")
-    .action(devCommand)
+    .action(devCommand),
 );
 
 configureHelp(
@@ -261,7 +290,7 @@ configureHelp(
     .option("--dry-run", "Show what would be seeded without applying")
     .option("-v, --verbose", "Show detailed logging")
     .option("--json", "Output as JSON")
-    .action(seedCommand)
+    .action(seedCommand),
 );
 
 configureHelp(
@@ -269,7 +298,7 @@ configureHelp(
     .command("seed-status")
     .description("Show seed configuration and files")
     .option("--json", "Output as JSON")
-    .action(seedStatusCommand)
+    .action(seedStatusCommand),
 );
 
 configureHelp(
@@ -279,7 +308,7 @@ configureHelp(
     .option("-p, --profile <name>", "Profile to use")
     .option("--reveal", "Show full API keys (not masked)")
     .option("--json", "Output as JSON")
-    .action(apiKeysCommand)
+    .action(apiKeysCommand),
 );
 
 program.parse();

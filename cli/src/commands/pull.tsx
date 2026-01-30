@@ -116,6 +116,27 @@ function PullApp({
       // Fetch project info
       const project = await client.getProject(projectRef);
 
+      // Check project status before proceeding
+      if (project.status === "INACTIVE") {
+        setState({
+          step: "error",
+          error: `Project is paused. Restore from: https://supabase.com/dashboard/project/${projectRef}`,
+        });
+        setTimeout(() => exit(), 100);
+        return;
+      }
+      if (
+        project.status !== "ACTIVE_HEALTHY" &&
+        project.status !== "ACTIVE_UNHEALTHY"
+      ) {
+        setState({
+          step: "error",
+          error: `Project is not ready (status: ${project.status}). Wait for the project to become active.`,
+        });
+        setTimeout(() => exit(), 100);
+        return;
+      }
+
       // Fetch branches (may fail if not enabled)
       let branches: Branch[] = [];
       try {
@@ -581,6 +602,36 @@ export async function pullCommand(options: PullOptions) {
 
     try {
       const client = createClient(token);
+
+      // Check project status before proceeding
+      const project = await client.getProject(projectRef);
+      if (project.status === "INACTIVE") {
+        console.log(
+          JSON.stringify({
+            status: "error",
+            message: "Project is paused",
+            hint: "Restore the project from the Supabase dashboard",
+            dashboardUrl: `https://supabase.com/dashboard/project/${projectRef}`,
+          }),
+        );
+        process.exitCode = 1;
+        return;
+      }
+      if (
+        project.status !== "ACTIVE_HEALTHY" &&
+        project.status !== "ACTIVE_UNHEALTHY"
+      ) {
+        console.log(
+          JSON.stringify({
+            status: "error",
+            message: `Project is not ready (status: ${project.status})`,
+            hint: "Wait for the project to become active",
+          }),
+        );
+        process.exitCode = 1;
+        return;
+      }
+
       const result: Record<string, unknown> = {
         status: "success",
         profile: profile?.name,
@@ -598,7 +649,7 @@ export async function pullCommand(options: PullOptions) {
         }
         result.message = "TypeScript types generated";
       } else {
-        result.project = await client.getProject(projectRef);
+        result.project = project; // Use project from status check
         try {
           result.branches = await client.listBranches(projectRef);
         } catch {

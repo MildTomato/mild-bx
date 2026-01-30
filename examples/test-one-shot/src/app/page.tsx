@@ -1,30 +1,35 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useCallback } from 'react';
-import { supabase, type Todo, type TodoUpdate, type Priority } from '@/lib/supabase';
+import { useEffect, useState, useCallback } from "react";
+import {
+  supabase,
+  type Todo,
+  type TodoUpdate,
+  type Priority,
+} from "@/lib/supabase";
 
-type Filter = 'all' | 'active' | 'completed';
+type Filter = "all" | "active" | "completed";
 
 export default function Home() {
   const [todos, setTodos] = useState<Todo[]>([]);
-  const [newTodo, setNewTodo] = useState('');
-  const [newPriority, setNewPriority] = useState<Priority>('medium');
-  const [newDueDate, setNewDueDate] = useState('');
+  const [newTodo, setNewTodo] = useState("");
+  const [newPriority, setNewPriority] = useState<Priority>("medium");
+  const [newDueDate, setNewDueDate] = useState("");
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText] = useState('');
+  const [editText, setEditText] = useState("");
 
   const fetchTodos = useCallback(async () => {
     const { data, error } = await supabase
-      .from('todos')
-      .select('*')
-      .order('due_date', { ascending: true, nullsFirst: false })
-      .order('priority', { ascending: false })
-      .order('created_at', { ascending: false });
+      .from("todos")
+      .select("*")
+      .order("due_date", { ascending: true, nullsFirst: false })
+      .order("priority", { ascending: false })
+      .order("created_at", { ascending: false });
 
     if (error) {
-      console.error('Error fetching todos:', error);
+      console.error("Error fetching todos:", error);
     } else {
       setTodos(data || []);
     }
@@ -39,7 +44,7 @@ export default function Home() {
     e.preventDefault();
     if (!newTodo.trim()) return;
 
-    const { error } = await supabase.from('todos').insert([
+    const { error } = await supabase.from("todos").insert([
       {
         title: newTodo.trim(),
         priority: newPriority,
@@ -48,23 +53,23 @@ export default function Home() {
     ]);
 
     if (error) {
-      console.error('Error adding todo:', error);
+      console.error("Error adding todo:", error);
     } else {
-      setNewTodo('');
-      setNewPriority('medium');
-      setNewDueDate('');
+      setNewTodo("");
+      setNewPriority("medium");
+      setNewDueDate("");
       fetchTodos();
     }
   };
 
   const toggleTodo = async (id: string, completed: boolean) => {
     const { error } = await supabase
-      .from('todos')
+      .from("todos")
       .update({ completed: !completed, updated_at: new Date().toISOString() })
-      .eq('id', id);
+      .eq("id", id);
 
     if (error) {
-      console.error('Error updating todo:', error);
+      console.error("Error updating todo:", error);
     } else {
       fetchTodos();
     }
@@ -72,22 +77,22 @@ export default function Home() {
 
   const updateTodo = async (id: string, updates: TodoUpdate) => {
     const { error } = await supabase
-      .from('todos')
+      .from("todos")
       .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', id);
+      .eq("id", id);
 
     if (error) {
-      console.error('Error updating todo:', error);
+      console.error("Error updating todo:", error);
     } else {
       fetchTodos();
     }
   };
 
   const deleteTodo = async (id: string) => {
-    const { error } = await supabase.from('todos').delete().eq('id', id);
+    const { error } = await supabase.from("todos").delete().eq("id", id);
 
     if (error) {
-      console.error('Error deleting todo:', error);
+      console.error("Error deleting todo:", error);
     } else {
       fetchTodos();
     }
@@ -103,23 +108,23 @@ export default function Home() {
       await updateTodo(id, { title: editText.trim() });
     }
     setEditingId(null);
-    setEditText('');
+    setEditText("");
   };
 
   const filteredTodos = todos.filter((todo) => {
-    if (filter === 'active') return !todo.completed;
-    if (filter === 'completed') return todo.completed;
+    if (filter === "active") return !todo.completed;
+    if (filter === "completed") return todo.completed;
     return true;
   });
 
   const priorityColor = (priority: Priority) => {
     switch (priority) {
-      case 'high':
-        return 'text-red-400 bg-red-400/10 border-red-400/30';
-      case 'medium':
-        return 'text-yellow-400 bg-yellow-400/10 border-yellow-400/30';
-      case 'low':
-        return 'text-blue-400 bg-blue-400/10 border-blue-400/30';
+      case "high":
+        return "text-red-400 bg-red-400/10 border-red-400/30";
+      case "medium":
+        return "text-yellow-400 bg-yellow-400/10 border-yellow-400/30";
+      case "low":
+        return "text-blue-400 bg-blue-400/10 border-blue-400/30";
     }
   };
 
@@ -130,9 +135,9 @@ export default function Home() {
 
   const formatDate = (date: string | null) => {
     if (!date) return null;
-    return new Date(date).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
+    return new Date(date).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
     });
   };
 
@@ -187,14 +192,14 @@ export default function Home() {
 
         {/* Filter Tabs */}
         <div className="flex gap-2 mb-6">
-          {(['all', 'active', 'completed'] as Filter[]).map((f) => (
+          {(["all", "active", "completed"] as Filter[]).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
               className={`px-4 py-2 rounded-lg font-medium transition capitalize ${
                 filter === f
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  ? "bg-emerald-600 text-white"
+                  : "bg-slate-700 text-slate-300 hover:bg-slate-600"
               }`}
             >
               {f}
@@ -207,8 +212,8 @@ export default function Home() {
           <p className="text-slate-400 text-center">Loading...</p>
         ) : filteredTodos.length === 0 ? (
           <p className="text-slate-400 text-center">
-            {filter === 'all'
-              ? 'No todos yet. Add one above!'
+            {filter === "all"
+              ? "No todos yet. Add one above!"
               : `No ${filter} todos.`}
           </p>
         ) : (
@@ -218,8 +223,8 @@ export default function Home() {
                 key={todo.id}
                 className={`flex items-center gap-3 p-4 bg-slate-700/50 rounded-lg border transition ${
                   todo.completed
-                    ? 'border-slate-600/50 opacity-60'
-                    : 'border-slate-600'
+                    ? "border-slate-600/50 opacity-60"
+                    : "border-slate-600"
                 }`}
               >
                 {/* Checkbox */}
@@ -227,8 +232,8 @@ export default function Home() {
                   onClick={() => toggleTodo(todo.id, todo.completed)}
                   className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition ${
                     todo.completed
-                      ? 'bg-emerald-500 border-emerald-500'
-                      : 'border-slate-400 hover:border-emerald-500'
+                      ? "bg-emerald-500 border-emerald-500"
+                      : "border-slate-400 hover:border-emerald-500"
                   }`}
                 >
                   {todo.completed && (
@@ -256,7 +261,7 @@ export default function Home() {
                       value={editText}
                       onChange={(e) => setEditText(e.target.value)}
                       onBlur={() => saveEdit(todo.id)}
-                      onKeyDown={(e) => e.key === 'Enter' && saveEdit(todo.id)}
+                      onKeyDown={(e) => e.key === "Enter" && saveEdit(todo.id)}
                       className="w-full px-2 py-1 rounded bg-slate-600 text-white border border-slate-500 focus:outline-none focus:border-emerald-500"
                       autoFocus
                     />
@@ -265,8 +270,8 @@ export default function Home() {
                       onDoubleClick={() => startEdit(todo)}
                       className={`block truncate cursor-pointer ${
                         todo.completed
-                          ? 'text-slate-400 line-through'
-                          : 'text-white'
+                          ? "text-slate-400 line-through"
+                          : "text-white"
                       }`}
                     >
                       {todo.title}
@@ -275,7 +280,7 @@ export default function Home() {
                   <div className="flex items-center gap-2 mt-1">
                     <span
                       className={`text-xs px-2 py-0.5 rounded border ${priorityColor(
-                        todo.priority
+                        todo.priority,
                       )}`}
                     >
                       {todo.priority}
@@ -284,13 +289,13 @@ export default function Home() {
                       <span
                         className={`text-xs ${
                           isOverdue(todo.due_date) && !todo.completed
-                            ? 'text-red-400'
-                            : 'text-slate-400'
+                            ? "text-red-400"
+                            : "text-slate-400"
                         }`}
                       >
                         {isOverdue(todo.due_date) && !todo.completed
-                          ? '⚠ '
-                          : ''}
+                          ? "⚠ "
+                          : ""}
                         {formatDate(todo.due_date)}
                       </span>
                     )}
@@ -301,7 +306,9 @@ export default function Home() {
                 <select
                   value={todo.priority}
                   onChange={(e) =>
-                    updateTodo(todo.id, { priority: e.target.value as Priority })
+                    updateTodo(todo.id, {
+                      priority: e.target.value as Priority,
+                    })
                   }
                   className="px-2 py-1 text-sm rounded bg-slate-600 text-slate-300 border border-slate-500 focus:outline-none"
                 >
@@ -339,7 +346,7 @@ export default function Home() {
           <div className="mt-6 text-center">
             <button
               onClick={async () => {
-                await supabase.from('todos').delete().eq('completed', true);
+                await supabase.from("todos").delete().eq("completed", true);
                 fetchTodos();
               }}
               className="text-slate-400 hover:text-red-400 text-sm transition"

@@ -5,13 +5,15 @@
 import React, { useState, useEffect } from 'react';
 import { render, Box, Text } from 'ink';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, appendFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { Spinner, Status } from '../components/Spinner.js';
 import { 
   ProjectPicker, 
   RegionPicker, 
   CreateOrSelectChoice,
-  NameInput
+  NameInput,
+  ChoicePicker
 } from '../components/Pickers.js';
 import { OrgFlow } from '../components/OrgFlow.js';
 import { createClient, type Organization, type Project } from '../lib/api.js';
@@ -133,6 +135,8 @@ function InitUI({ onComplete }: { onComplete: (result: ProjectResult) => void })
       const allProjects = await client.listProjects();
       const orgProjects = allProjects.filter(p => p.organization_slug === org.slug);
       setProjects(orgProjects);
+      // Clear terminal before transitioning to step 2 to remove org picker output
+      console.clear();
       setStep('project-choice');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load projects');
@@ -252,6 +256,22 @@ function InitUI({ onComplete }: { onComplete: (result: ProjectResult) => void })
   }
 
   return null;
+}
+
+// Confirmation prompt for running supa dev
+function RunDevPrompt({ onComplete }: { onComplete: (runDev: boolean) => void }) {
+  const choices = [
+    { key: 'yes', label: 'Yes, start supa dev', value: 'yes' },
+    { key: 'no', label: 'No, I\'ll run it later', value: 'no' },
+  ];
+  
+  return (
+    <ChoicePicker
+      title="Run supa dev now?"
+      choices={choices}
+      onSelect={(value) => onComplete(value === 'yes')}
+    />
+  );
 }
 
 export async function initCommand(options: InitOptions): Promise<void> {
@@ -458,12 +478,27 @@ export async function initCommand(options: InitOptions): Promise<void> {
   if (options.json) {
     console.log(JSON.stringify({ 
       status: 'success', 
-      projectId: projectRef,
-      apiUrl,
-      anonKey: anonKey || null,
-      dashboardUrl: `https://supabase.com/dashboard/project/${projectRef}`,
+      project: {
+        id: projectRef,
+        name: projectName,
+        dashboardUrl: `https://supabase.com/dashboard/project/${projectRef}`
+      },
+      api: {
+        url: apiUrl,
+        anonKey: anonKey || null,
+        secretKey: '[hidden] run "supa project api-keys --json --reveal"'
+      },
+      usage: `createClient("${apiUrl}", "<ANON_KEY>")`,
       created: ['supabase/config.json', 'supabase/migrations/', 'supabase/functions/', 'supabase/types/', 'supabase/schema/public/'],
-      next: 'supa dev --json'
+      next: {
+        command: 'supa dev --json',
+        description: 'Start watcher for continuous sync - runs schema changes automatically'
+      },
+      customize: {
+        config: 'supabase/config.json - Edit API and auth settings',
+        schema: 'supabase/schema/ - Add .sql files to define your database schema',
+        migrations: 'supabase/migrations/ - Add version-controlled migration files'
+      }
     }));
   } else {
     const dashboardUrl = `https://supabase.com/dashboard/project/${projectRef}`;
@@ -491,12 +526,40 @@ export async function initCommand(options: InitOptions): Promise<void> {
         <Text>    <Text dimColor>{icons.folder}</Text> functions/</Text>
         <Text>    <Text dimColor>{icons.folder}</Text> types/</Text>
         <BlankLine />
-        <Text dimColor>  Next steps</Text>
-        <Text>    <Text dimColor>$</Text> supa pull   <Text dimColor>Pull types from remote</Text></Text>
-        <Text>    <Text dimColor>$</Text> supa watch  <Text dimColor>Watch for changes</Text></Text>
+        <Text dimColor>  Customize your project</Text>
+        <Text>    <Text dimColor>{icons.file}</Text> supabase/config.json     <Text dimColor>API and auth settings</Text></Text>
+        <Text>    <Text dimColor>{icons.folder}</Text> supabase/schema/         <Text dimColor>Add .sql files for schema</Text></Text>
+        <Text>    <Text dimColor>{icons.folder}</Text> supabase/migrations/     <Text dimColor>Version-controlled migrations</Text></Text>
+        <BlankLine />
+        <Text dimColor>  Tip: Use --json for structured output when scripting</Text>
       </Output>
     );
     
     render(<SuccessOutput />);
+    
+    // In interactive TTY mode, prompt to run supa dev
+    if (process.stdin.isTTY) {
+      const runDev = await new Promise<boolean>((resolve) => {
+        const { unmount, clear } = render(
+          <RunDevPrompt onComplete={(choice) => { clear(); unmount(); resolve(choice); }} />
+        );
+      });
+      
+      if (runDev) {
+        console.log();
+        console.log(dim('Starting supa dev...'));
+        console.log();
+        
+        // Spawn supa dev in the foreground
+        const child = spawn('pnpm', ['supa', 'dev'], {
+          stdio: 'inherit',
+          cwd: process.cwd(),
+        });
+        
+        await new Promise<void>((resolve) => {
+          child.on('close', () => resolve());
+        });
+      }
+    }
   }
 }

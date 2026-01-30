@@ -34,8 +34,9 @@ export function generateProjectName(): string {
  * Generate a secure database password (alphanumeric only)
  */
 export function generateDbPassword(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let password = '';
+  const chars =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let password = "";
   for (let i = 0; i < 24; i++) {
     password += chars.charAt(Math.floor(Math.random() * chars.length));
   }

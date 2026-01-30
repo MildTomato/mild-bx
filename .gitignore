@@ -37,3 +37,6 @@ pnpm-debug.log*
 
 # External tools (not submodules)
 external/cli
+
+# Agent skills (installed via npx skills)
+.agents/skills/

@@ -160,6 +160,31 @@ function PushApp({
     const client = createClient(token);
     const projectConfig = config as ProjectConfig;
 
+    // Check project status before proceeding
+    try {
+      const project = await client.getProject(projectRef);
+      if (project.status === "INACTIVE") {
+        exitWithError(
+          `Project is paused. Restore from: https://supabase.com/dashboard/project/${projectRef}`,
+        );
+        return;
+      }
+      if (
+        project.status !== "ACTIVE_HEALTHY" &&
+        project.status !== "ACTIVE_UNHEALTHY"
+      ) {
+        exitWithError(
+          `Project is not ready (status: ${project.status}). Wait for the project to become active.`,
+        );
+        return;
+      }
+    } catch (error) {
+      exitWithError(
+        `Failed to check project status: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+
     let plan: PushPlan;
     try {
       plan = await buildPlan({
@@ -836,6 +861,46 @@ export async function pushCommand(options: PushOptions) {
 
     const client = createClient(token);
     const projectConfig = config as ProjectConfig;
+
+    // Check project status before proceeding
+    try {
+      const project = await client.getProject(projectRef);
+      if (project.status === "INACTIVE") {
+        console.log(
+          JSON.stringify({
+            status: "error",
+            message: "Project is paused",
+            hint: "Restore the project from the Supabase dashboard",
+            dashboardUrl: `https://supabase.com/dashboard/project/${projectRef}`,
+          }),
+        );
+        process.exitCode = 1;
+        return;
+      }
+      if (
+        project.status !== "ACTIVE_HEALTHY" &&
+        project.status !== "ACTIVE_UNHEALTHY"
+      ) {
+        console.log(
+          JSON.stringify({
+            status: "error",
+            message: `Project is not ready (status: ${project.status})`,
+            hint: "Wait for the project to become active",
+          }),
+        );
+        process.exitCode = 1;
+        return;
+      }
+    } catch (error) {
+      console.log(
+        JSON.stringify({
+          status: "error",
+          message: `Failed to check project status: ${error instanceof Error ? error.message : String(error)}`,
+        }),
+      );
+      process.exitCode = 1;
+      return;
+    }
 
     let plan: PushPlan;
     try {

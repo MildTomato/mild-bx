@@ -14,10 +14,20 @@ CREATE TABLE IF NOT EXISTS todos (
 );
 
 -- Enable RLS
-ALTER TABLE todos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE
+  todos ENABLE ROW LEVEL SECURITY;
 
 -- Allow anonymous access for demo
-CREATE POLICY "Allow anonymous read" ON todos FOR SELECT USING (true);
-CREATE POLICY "Allow anonymous insert" ON todos FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow anonymous update" ON todos FOR UPDATE USING (true);
+CREATE POLICY "Allow anonymous read" ON todos FOR
+SELECT
+  USING (true);
+
+CREATE POLICY "Allow anonymous insert" ON todos FOR
+INSERT
+  WITH CHECK (true);
+
+CREATE POLICY "Allow anonymous update" ON todos FOR
+UPDATE
+  USING (true);
+
 CREATE POLICY "Allow anonymous delete" ON todos FOR DELETE USING (true);

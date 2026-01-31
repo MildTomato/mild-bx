@@ -16,6 +16,10 @@ import {
 import { getCurrentBranch } from "./lib/git.js";
 import { C } from "./lib/colors.js";
 
+// Command descriptions
+const DEV_COMMAND_DESCRIPTION =
+  "Watcher that auto syncs changes to hosted environment [long-running]";
+
 // Load .env files silently (simple implementation to avoid dotenv noise)
 function loadEnvFile(path: string) {
   try {
@@ -188,9 +192,7 @@ configureHelp(
 configureHelp(
   program
     .command("dev")
-    .description(
-      "Start a watcher that continuously syncs schema changes to remote [long-running]",
-    )
+    .description(DEV_COMMAND_DESCRIPTION)
     .option("-p, --profile <name>", "Profile to use")
     .option(
       "--debounce <ms>",
@@ -214,11 +216,11 @@ configureHelp(
     .action(devCommand),
 );
 
-// Project command group - database operations
+// Project command group - project operations
 const project = configureHelp(
   program
     .command("project")
-    .description("Project database operations")
+    .description("Project operations")
     .action(() => project.help()),
 );
 
@@ -256,9 +258,7 @@ configureHelp(
 configureHelp(
   project
     .command("dev")
-    .description(
-      "Start a watcher that continuously syncs schema changes to remote [long-running]",
-    )
+    .description(DEV_COMMAND_DESCRIPTION)
     .option("-p, --profile <name>", "Profile to use")
     .option(
       "--debounce <ms>",

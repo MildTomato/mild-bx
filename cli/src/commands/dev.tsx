@@ -189,9 +189,209 @@ export async function devCommand(options: DevOptions): Promise<void> {
   // Get connection string
   const client = createClient(token);
 
-  // Check project status
+  // Check project status and wait if coming up
+  const isProjectReady = (status: string) =>
+    status === "ACTIVE_HEALTHY" || status === "ACTIVE_UNHEALTHY";
+
+  // Check if db and pooler services are healthy
+  const checkServicesHealth = async (): Promise<{
+    ready: boolean;
+    status: string;
+  }> => {
+    try {
+      const health = await client.getProjectHealth(projectRef, [
+        "db",
+        "pooler",
+      ]);
+      const dbHealth = health.find((h) => h.name === "db");
+      const poolerHealth = health.find((h) => h.name === "pooler");
+
+      const dbReady = dbHealth?.status === "ACTIVE_HEALTHY";
+      const poolerReady = poolerHealth?.status === "ACTIVE_HEALTHY";
+
+      if (dbReady && poolerReady) {
+        return { ready: true, status: "healthy" };
+      }
+
+      const statuses: string[] = [];
+      if (dbHealth) statuses.push(`db: ${dbHealth.status}`);
+      if (poolerHealth) statuses.push(`pooler: ${poolerHealth.status}`);
+      return { ready: false, status: statuses.join(", ") || "checking" };
+    } catch {
+      // Health endpoint might not be available yet
+      return { ready: false, status: "checking" };
+    }
+  };
+
+  const waitForProject = async (): Promise<boolean> => {
+    const maxWaitMs = 180000; // 3 minutes max
+    const pollIntervalMs = 2000; // Check every 2 seconds
+    const startTime = Date.now();
+    let spinnerFrame = 0;
+    let lastStatus = "";
+    let lastPhase = "project"; // "project" or "services"
+    let pollCount = 0;
+
+    // Status-specific messages
+    const getStatusMessage = (status: string): string => {
+      switch (status) {
+        case "COMING_UP":
+          return "Starting services";
+        case "GOING_DOWN":
+          return "Shutting down";
+        case "RESTORING":
+          return "Restoring from backup";
+        case "UPGRADING":
+          return "Upgrading";
+        case "PAUSING":
+          return "Pausing";
+        default:
+          return status.toLowerCase().replace(/_/g, " ");
+      }
+    };
+
+    while (Date.now() - startTime < maxWaitMs) {
+      try {
+        const project = await client.getProject(projectRef);
+        const statusChanged =
+          lastStatus !== "" && lastStatus !== project.status;
+        lastStatus = project.status;
+        pollCount++;
+
+        if (project.status === "INACTIVE") {
+          if (options.json) {
+            console.log(
+              JSON.stringify({
+                status: "error",
+                message: "Project is paused",
+                hint: "Restore the project from the Supabase dashboard",
+                dashboardUrl: `https://supabase.com/dashboard/project/${projectRef}`,
+              }),
+            );
+          } else {
+            process.stdout.write("\r\x1b[K");
+            console.error(`\n${C.error}Error:${C.reset} Project is paused`);
+            console.error(
+              `  Restore from: ${C.value}https://supabase.com/dashboard/project/${projectRef}${C.reset}\n`,
+            );
+          }
+          return false;
+        }
+
+        if (isProjectReady(project.status)) {
+          // Project is active, now check if db and pooler are healthy
+          if (lastPhase === "project") {
+            lastPhase = "services";
+            if (!options.json) {
+              process.stdout.write("\r\x1b[K");
+              console.log(`${C.success}✓${C.reset} Project is active`);
+            }
+          }
+
+          const servicesHealth = await checkServicesHealth();
+          if (servicesHealth.ready) {
+            return true;
+          }
+
+          // Services not ready yet - keep waiting
+          if (!options.json) {
+            const elapsed = Math.round((Date.now() - startTime) / 1000);
+            const char = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length];
+            process.stdout.write(
+              `\r${C.icon}${char}${C.reset} Waiting for database... ${C.secondary}(${servicesHealth.status}) ${elapsed}s${C.reset}\x1b[K`,
+            );
+            spinnerFrame++;
+          } else {
+            console.log(
+              JSON.stringify({
+                event: "waiting_for_services",
+                services_status: servicesHealth.status,
+                elapsed_ms: Date.now() - startTime,
+                poll_count: pollCount,
+              }),
+            );
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+          continue;
+        }
+
+        // Project is in a transitional state - wait and retry
+        if (!options.json) {
+          const elapsed = Math.round((Date.now() - startTime) / 1000);
+          const char = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length];
+          const statusMsg = getStatusMessage(project.status);
+
+          // Show status change on new line if status changed
+          if (statusChanged) {
+            process.stdout.write("\r\x1b[K");
+            console.log(
+              `${C.secondary}→${C.reset} Status: ${C.value}${statusMsg}${C.reset}`,
+            );
+          }
+
+          process.stdout.write(
+            `\r${C.icon}${char}${C.reset} ${statusMsg}... ${C.secondary}${elapsed}s${C.reset}\x1b[K`,
+          );
+          spinnerFrame++;
+        } else {
+          console.log(
+            JSON.stringify({
+              event: "waiting_for_project",
+              status: project.status,
+              elapsed_ms: Date.now() - startTime,
+              poll_count: pollCount,
+            }),
+          );
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      } catch (error) {
+        if (options.json) {
+          console.log(
+            JSON.stringify({
+              status: "error",
+              message: `Failed to check project status: ${error instanceof Error ? error.message : String(error)}`,
+            }),
+          );
+        } else {
+          process.stdout.write("\r\x1b[K");
+          console.error(
+            `\n${C.error}Error:${C.reset} Failed to check project status`,
+          );
+          console.error(
+            `  ${error instanceof Error ? error.message : String(error)}\n`,
+          );
+        }
+        return false;
+      }
+    }
+
+    // Timed out waiting
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    if (options.json) {
+      console.log(
+        JSON.stringify({
+          status: "error",
+          message: `Timed out waiting for project after ${elapsed}s (last status: ${lastStatus})`,
+          hint: "Check the Supabase dashboard for project status",
+        }),
+      );
+    } else {
+      process.stdout.write("\r\x1b[K");
+      console.error(
+        `\n${C.error}Error:${C.reset} Timed out after ${C.value}${elapsed}s${C.reset} (status: ${C.value}${lastStatus}${C.reset})`,
+      );
+      console.error(
+        `  Check: ${C.value}https://supabase.com/dashboard/project/${projectRef}${C.reset}\n`,
+      );
+    }
+    return false;
+  };
+
   try {
     const project = await client.getProject(projectRef);
+
     if (project.status === "INACTIVE") {
       if (options.json) {
         console.log(
@@ -211,26 +411,46 @@ export async function devCommand(options: DevOptions): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    if (
-      project.status !== "ACTIVE_HEALTHY" &&
-      project.status !== "ACTIVE_UNHEALTHY"
-    ) {
-      if (options.json) {
+
+    if (!isProjectReady(project.status)) {
+      // Project is in a transitional state - wait for it
+      if (!options.json) {
         console.log(
-          JSON.stringify({
-            status: "error",
-            message: `Project is not ready (status: ${project.status})`,
-            hint: "Wait for the project to become active",
-          }),
+          `\n${C.secondary}Project is starting up (${C.value}${project.status}${C.reset}${C.secondary}), waiting...${C.reset}`,
         );
-      } else {
-        console.error(
-          `\n${C.error}Error:${C.reset} Project is not ready (status: ${C.value}${project.status}${C.reset})`,
-        );
-        console.error(`  Wait for the project to become active\n`);
       }
-      process.exitCode = 1;
-      return;
+
+      const ready = await waitForProject();
+      if (!ready) {
+        process.exitCode = 1;
+        return;
+      }
+
+      if (!options.json) {
+        process.stdout.write("\r\x1b[K"); // Clear the spinner line
+        console.log(`${C.success}✓${C.reset} Database is ready\n`);
+      }
+    } else {
+      // Project is active but check if services are ready (newly created projects)
+      const servicesHealth = await checkServicesHealth();
+      if (!servicesHealth.ready) {
+        if (!options.json) {
+          console.log(
+            `\n${C.secondary}Waiting for database services...${C.reset}`,
+          );
+        }
+
+        const ready = await waitForProject();
+        if (!ready) {
+          process.exitCode = 1;
+          return;
+        }
+
+        if (!options.json) {
+          process.stdout.write("\r\x1b[K"); // Clear the spinner line
+          console.log(`${C.success}✓${C.reset} Database is ready\n`);
+        }
+      }
     }
   } catch (error) {
     if (options.json) {

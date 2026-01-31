@@ -476,6 +476,12 @@ function getSupabasePool(connectionString: string): Pool {
   });
   cachedConnectionString = connectionString;
 
+  // Attach error handler to prevent unhandled 'error' event crashes
+  // These errors will still be thrown when queries are made, but won't crash the process
+  cachedSupabasePool.on("error", (err) => {
+    log(`[pg-pool] Connection error: ${err.message}`);
+  });
+
   return cachedSupabasePool;
 }
 

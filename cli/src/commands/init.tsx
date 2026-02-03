@@ -27,11 +27,16 @@ import { getAccessToken } from "../lib/config.js";
 import { type Region, REGIONS } from "../lib/constants.js";
 import { createProject as createProjectOp } from "../lib/operations.js";
 import { success, bold, url, dim, icons } from "../lib/styles.js";
+import { loadProjectConfig, getWorkflowProfile } from "../lib/config.js";
 import { Output, BlankLine } from "../components/Print.js";
 import {
   buildApiConfigFromRemote,
   buildAuthConfigFromRemote,
 } from "../lib/sync.js";
+import { WORKFLOW_PROFILES } from "../lib/workflow-profiles.js";
+import type { WorkflowProfile, SchemaManagement, ConfigSource } from "../lib/config-types.js";
+import SelectInput from "ink-select-input";
+import { ProfileArt } from "../components/ProfileArt.js";
 
 interface InitOptions {
   yes?: boolean;
@@ -44,6 +49,9 @@ interface InitOptions {
 
 interface ConfigData {
   projectId: string;
+  workflowProfile: WorkflowProfile;
+  schemaManagement: SchemaManagement;
+  configSource: ConfigSource;
   api?: ReturnType<typeof buildApiConfigFromRemote>;
   auth?: ReturnType<typeof buildAuthConfigFromRemote>;
 }
@@ -52,6 +60,9 @@ function buildConfigJson(data: ConfigData): string {
   const config: Record<string, unknown> = {
     $schema: "../../../cli/config-schema/config.schema.json",
     project_id: data.projectId,
+    workflow_profile: data.workflowProfile,
+    schema_management: data.schemaManagement,
+    config_source: data.configSource,
   };
 
   if (data.api && Object.keys(data.api).length > 0) {
@@ -62,19 +73,6 @@ function buildConfigJson(data: ConfigData): string {
     config.auth = data.auth;
   }
 
-  config.profiles = {
-    local: {
-      mode: "local",
-      workflow: "dashboard",
-      branches: ["feature/*", "fix/*", "dev"],
-    },
-    production: {
-      mode: "remote",
-      workflow: "git",
-      branches: ["main", "master"],
-    },
-  };
-
   return JSON.stringify(config, null, 2);
 }
 
@@ -84,11 +82,96 @@ type Step =
   | "project-select"
   | "project-name"
   | "project-region"
-  | "project-creating";
+  | "project-creating"
+  | "schema-management"
+  | "config-source"
+  | "workflow-profile";
+
+/** Major steps shown in progress indicator (sub-steps map to their parent) */
+const INIT_STEPS = ["org", "project", "schema-management", "config-source", "workflow-profile"] as const;
+
+/** Map each step to its major step for progress calculation */
+const STEP_TO_MAJOR: Record<Step, (typeof INIT_STEPS)[number]> = {
+  "org": "org",
+  "project-choice": "project",
+  "project-select": "project",
+  "project-name": "project",
+  "project-region": "project",
+  "project-creating": "project",
+  "schema-management": "schema-management",
+  "config-source": "config-source",
+  "workflow-profile": "workflow-profile",
+};
+
+function getStepProgress(step: Step): { current: number; total: number } {
+  const majorStep = STEP_TO_MAJOR[step];
+  const current = INIT_STEPS.indexOf(majorStep) + 1;
+  return { current, total: INIT_STEPS.length };
+}
+
+/**
+ * Profile selector with live diagram preview.
+ * Shows the ASCII art for the focused profile above the selector.
+ */
+function ProfileSelector({
+  onSelect,
+}: {
+  onSelect: (profile: WorkflowProfile) => void;
+}) {
+  const defaultProfile = "solo";
+  const [focusedIndex, setFocusedIndex] = useState(0);
+
+  const items = WORKFLOW_PROFILES.map((p) => ({
+    label: `${p.name} - "${p.title}"`,
+    value: p.name,
+    isDefault: p.name === defaultProfile,
+  }));
+
+  const focusedProfile = WORKFLOW_PROFILES[focusedIndex];
+
+  const ProfileItem = ({
+    label,
+    isSelected,
+    isDefault,
+  }: {
+    label: string;
+    isSelected: boolean;
+    isDefault?: boolean;
+  }) => (
+    <Text color={isSelected ? "cyan" : undefined}>
+      {label}
+      {isDefault && <Text dimColor> (default)</Text>}
+    </Text>
+  );
+
+  return (
+    <Box flexDirection="column">
+      <ProfileArt profile={focusedProfile} />
+      <SelectInput
+        items={items}
+        onHighlight={(item) => {
+          const idx = WORKFLOW_PROFILES.findIndex((p) => p.name === item.value);
+          if (idx >= 0) setFocusedIndex(idx);
+        }}
+        itemComponent={({ label, isSelected, isDefault }) => (
+          <ProfileItem
+            label={label}
+            isSelected={isSelected}
+            isDefault={isDefault}
+          />
+        )}
+        onSelect={(item) => onSelect(item.value as WorkflowProfile)}
+      />
+    </Box>
+  );
+}
 
 interface ProjectResult {
   ref: string;
   name: string;
+  schemaManagement: SchemaManagement;
+  configSource: ConfigSource;
+  workflowProfile: WorkflowProfile;
   dbPassword?: string;
 }
 
@@ -101,10 +184,16 @@ function InitUI({
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
   const [projectName, setProjectName] = useState<string>("");
+  const [selectedProject, setSelectedProject] = useState<{ ref: string; name: string } | null>(null);
+  const [dbPassword, setDbPassword] = useState<string | undefined>(undefined);
+  const [schemaManagement, setSchemaManagement] = useState<SchemaManagement>("declarative");
+  const [configSource, setConfigSource] = useState<ConfigSource>("code");
   const [error, setError] = useState<string | null>(null);
 
   // Get step description for header
   function getStepInfo(): { title: string; subtitle?: string } {
+    const { current, total } = getStepProgress(step);
+    const prefix = `Step ${current}/${total}:`;
     const orgContext = selectedOrg
       ? `Organization: ${selectedOrg.name}`
       : undefined;
@@ -112,31 +201,46 @@ function InitUI({
     switch (step) {
       case "org":
         return {
-          title: "Step 1/2: Choose Organization",
+          title: `${prefix} Choose Organization`,
           subtitle: "Projects belong to organizations. Select or create one.",
         };
       case "project-choice":
       case "project-select":
         return {
-          title: "Step 2/2: Choose Project",
+          title: `${prefix} Choose Project`,
           subtitle: orgContext,
         };
       case "project-name":
         return {
-          title: "Step 2/2: Create Project - Name",
+          title: `${prefix} Create Project - Name`,
           subtitle: orgContext,
         };
       case "project-region":
         return {
-          title: "Step 2/2: Create Project - Region",
+          title: `${prefix} Create Project - Region`,
           subtitle: projectName ? `Project: ${projectName}` : orgContext,
         };
       case "project-creating":
         return {
-          title: "Step 2/2: Creating Project",
+          title: `${prefix} Creating Project`,
           subtitle: projectName
             ? `${projectName} in ${selectedOrg?.name}`
             : undefined,
+        };
+      case "schema-management":
+        return {
+          title: `${prefix} Schema Management`,
+          subtitle: "How do you want to manage database schema changes?",
+        };
+      case "config-source":
+        return {
+          title: `${prefix} Config Source of Truth`,
+          subtitle: "Where should your config be managed?",
+        };
+      case "workflow-profile":
+        return {
+          title: `${prefix} Choose Workflow Profile`,
+          subtitle: "How do you want to work with Supabase?",
         };
       default:
         return { title: "Initialize Supabase Project" };
@@ -154,8 +258,6 @@ function InitUI({
         (p) => p.organization_slug === org.slug,
       );
       setProjects(orgProjects);
-      // Clear terminal before transitioning to step 2 to remove org picker output
-      console.clear();
       setStep("project-choice");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load projects");
@@ -171,14 +273,16 @@ function InitUI({
     }
 
     try {
-      const { project, dbPassword } = await createProjectOp({
+      const { project, dbPassword: pwd } = await createProjectOp({
         token,
         orgSlug: selectedOrg.slug,
         region,
         name: projectName || undefined,
       });
 
-      onComplete({ ref: project.ref, name: projectName, dbPassword });
+      setSelectedProject({ ref: project.ref, name: projectName });
+      setDbPassword(pwd);
+      setStep("schema-management");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create project");
     }
@@ -239,9 +343,10 @@ function InitUI({
     return withHeader(
       <ProjectPicker
         orgSlug={selectedOrg?.slug}
-        onSelect={(project) =>
-          onComplete({ ref: project.ref, name: project.name })
-        }
+        onSelect={(project) => {
+          setSelectedProject({ ref: project.ref, name: project.name });
+          setStep("schema-management");
+        }}
         onError={setError}
       />,
     );
@@ -276,6 +381,100 @@ function InitUI({
     return withHeader(
       <Spinner
         message={`Creating project "${projectName}" (this may take a minute)...`}
+      />,
+    );
+  }
+
+  if (step === "schema-management") {
+    const choices = [
+      {
+        key: "declarative",
+        label: "Declarative (recommended)",
+        value: "declarative",
+      },
+      {
+        key: "migrations",
+        label: "Migrations",
+        value: "migrations",
+      },
+    ];
+
+    return withHeader(
+      <Box flexDirection="column">
+        <Box flexDirection="column" marginBottom={1}>
+          <Text>
+            <Text bold color="blue">Declarative</Text>
+            <Text dimColor> - Write what you want, we figure out the changes</Text>
+          </Text>
+          <Text>
+            <Text bold color="blue">Migrations</Text>
+            <Text dimColor> - Traditional versioned migration files</Text>
+          </Text>
+        </Box>
+        <ChoicePicker
+          title="How do you want to manage schema?"
+          choices={choices}
+          onSelect={(value) => {
+            setSchemaManagement(value as SchemaManagement);
+            setStep("config-source");
+          }}
+        />
+      </Box>,
+    );
+  }
+
+  if (step === "config-source") {
+    const choices = [
+      {
+        key: "code",
+        label: "In code (recommended)",
+        value: "code",
+      },
+      {
+        key: "remote",
+        label: "Remote (dashboard)",
+        value: "remote",
+      },
+    ];
+
+    return withHeader(
+      <Box flexDirection="column">
+        <Box flexDirection="column" marginBottom={1}>
+          <Text>
+            <Text bold color="blue">In code</Text>
+            <Text dimColor> - config.json is source of truth, pushed to remote</Text>
+          </Text>
+          <Text>
+            <Text bold color="blue">Remote</Text>
+            <Text dimColor> - Dashboard is source of truth, pulled to local</Text>
+          </Text>
+        </Box>
+        <ChoicePicker
+          title="Where should config live?"
+          choices={choices}
+          onSelect={(value) => {
+            setConfigSource(value as ConfigSource);
+            setStep("workflow-profile");
+          }}
+        />
+      </Box>,
+    );
+  }
+
+  if (step === "workflow-profile") {
+    return withHeader(
+      <ProfileSelector
+        onSelect={(profile) => {
+          if (!selectedProject) return;
+          onComplete({
+            ref: selectedProject.ref,
+            name: selectedProject.name,
+            schemaManagement,
+            configSource,
+            workflowProfile: profile,
+            dbPassword,
+          });
+        }}
       />,
     );
   }
@@ -332,14 +531,45 @@ export async function initCommand(options: InitOptions): Promise<void> {
   const supabaseDir = join(cwd, "supabase");
 
   if (existsSync(join(supabaseDir, "config.json"))) {
+    const config = loadProjectConfig(cwd);
+    const projectId = config?.project_id || "unknown";
+    const profile = config ? getWorkflowProfile(config) : "unknown";
+    const dashboardUrl = `https://supabase.com/dashboard/project/${projectId}`;
+
+    const profileDef = WORKFLOW_PROFILES.find((p) => p.name === profile);
+
     if (options.json) {
       console.log(
-        JSON.stringify({ status: "error", message: "Already initialized" }),
+        JSON.stringify({
+          status: "already_initialized",
+          project_id: projectId,
+          workflow_profile: profile,
+          dashboard_url: dashboardUrl,
+          config_path: join(supabaseDir, "config.json"),
+        }),
       );
     } else {
-      console.log();
-      console.log("Already initialized. supabase/config.json exists.");
-      console.log();
+      const AlreadyInitOutput = () => (
+        <Output>
+          <Text>Already initialized in this directory.</Text>
+          <BlankLine />
+          <Text>
+            <Text dimColor>Project:</Text> {projectId}
+          </Text>
+          <Text>
+            <Text dimColor>Config:</Text> supabase/config.json
+          </Text>
+          <Text>
+            <Text dimColor>Profile:</Text> {profile}
+          </Text>
+          {profileDef && <ProfileArt profile={profileDef} hideHeader />}
+          <Text dimColor>Next steps:</Text>
+          <Text>  supa dev  <Text dimColor>Start development watcher</Text></Text>
+          <Text>  supa project profile  <Text dimColor>Change workflow profile</Text></Text>
+          <Text>  supa status  <Text dimColor>Show project status</Text></Text>
+        </Output>
+      );
+      render(<AlreadyInitOutput />);
     }
     return;
   }
@@ -380,7 +610,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
         }
         process.exit(1);
       }
-      project = { ref: found.ref, name: found.name };
+      project = { ref: found.ref, name: found.name, schemaManagement: "declarative", configSource: "code", workflowProfile: "solo" };
     } catch (err) {
       if (options.json) {
         console.log(
@@ -428,7 +658,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
         region: options.region as Region,
         name: options.name,
       });
-      project = { ref: newProject.ref, name: options.name, dbPassword };
+      project = { ref: newProject.ref, name: options.name, schemaManagement: "declarative", configSource: "code", workflowProfile: "solo", dbPassword };
     } catch (err) {
       if (options.json) {
         console.log(
@@ -499,7 +729,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
     });
   }
 
-  const { ref: projectRef, name: projectName } = project;
+  const { ref: projectRef, name: projectName, schemaManagement = "declarative", configSource = "code", workflowProfile = "solo" } = project;
 
   // Show spinner while fetching project config (only in interactive mode)
   let configSpinner: { clear: () => void; unmount: () => void } | null = null;
@@ -584,6 +814,9 @@ export async function initCommand(options: InitOptions): Promise<void> {
   // Build config from actual project settings
   const configContent = buildConfigJson({
     projectId: projectRef,
+    workflowProfile,
+    schemaManagement,
+    configSource,
     api: apiConfig,
     auth: authConfig,
   });

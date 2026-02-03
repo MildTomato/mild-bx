@@ -14,6 +14,33 @@
         "general"
       ]
     },
+    "workflow_profile": {
+      "type": "string",
+      "enum": ["solo", "staged", "preview", "preview-git"],
+      "description": "Workflow profile that determines how commands behave. Options: 'solo' (direct to prod), 'staged' (staging -> prod), 'preview' (manual preview envs), 'preview-git' (git-driven preview envs). Defaults to 'solo'.",
+      "default": "solo",
+      "tags": [
+        "general"
+      ]
+    },
+    "schema_management": {
+      "type": "string",
+      "enum": ["declarative", "migrations"],
+      "description": "How database schema changes are managed. 'declarative': describe desired state, system calculates diff. 'migrations': traditional versioned migration files. Defaults to 'declarative'.",
+      "default": "declarative",
+      "tags": [
+        "general"
+      ]
+    },
+    "config_source": {
+      "type": "string",
+      "enum": ["code", "remote"],
+      "description": "Where config is managed. 'code': config.json is source of truth, pushed to remote. 'remote': dashboard is source of truth, pulled to local. Defaults to 'code'.",
+      "default": "code",
+      "tags": [
+        "general"
+      ]
+    },
     "analytics": {
       "type": "object",
       "additionalProperties": false,
@@ -3453,52 +3480,6 @@
           "tags": [
             "experimental"
           ]
-        }
-      }
-    },
-    "profiles": {
-      "type": "object",
-      "description": "Profile configuration for different environments",
-      "additionalProperties": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "mode": {
-            "type": "string",
-            "description": "The mode for this profile",
-            "enum": [
-              "local",
-              "preview",
-              "remote"
-            ]
-          },
-          "workflow": {
-            "type": "string",
-            "description": "The workflow type for this profile",
-            "enum": [
-              "git",
-              "dashboard"
-            ]
-          },
-          "schema": {
-            "type": "string",
-            "description": "The schema management approach",
-            "enum": [
-              "declarative",
-              "migrations"
-            ]
-          },
-          "branches": {
-            "type": "array",
-            "description": "Git branch patterns that match this profile",
-            "items": {
-              "type": "string"
-            }
-          },
-          "project": {
-            "type": "string",
-            "description": "Override project ID for this profile"
-          }
         }
       }
     }

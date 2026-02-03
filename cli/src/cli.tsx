@@ -8,6 +8,7 @@ import { pushCommand } from "./commands/push.js";
 import { devCommand } from "./commands/dev.js";
 import { seedCommand, seedStatusCommand } from "./commands/seed.js";
 import { apiKeysCommand } from "./commands/api-keys.js";
+import { profileCommand } from "./commands/profile.js";
 import {
   loadProjectConfig,
   getProfileOrAuto,
@@ -221,7 +222,20 @@ const project = configureHelp(
   program
     .command("project")
     .description("Project operations")
-    .action(() => project.help()),
+    .allowUnknownOption(true)
+    .action(() => {
+      // Check for common mistakes and suggest corrections
+      const rawArgs = process.argv.slice(process.argv.indexOf("project") + 1);
+
+      if (rawArgs.includes("--set")) {
+        const setIdx = rawArgs.indexOf("--set");
+        const setValue = rawArgs[setIdx + 1] || "<profile>";
+        console.error(`Did you mean: supa project profile --set ${setValue}`);
+        process.exit(1);
+      }
+
+      project.help();
+    }),
 );
 
 configureHelp(
@@ -309,6 +323,15 @@ configureHelp(
     .option("--reveal", "Show full API keys (not masked)")
     .option("--json", "Output as JSON")
     .action(apiKeysCommand),
+);
+
+configureHelp(
+  project
+    .command("profile")
+    .description("View or change workflow profile")
+    .option("--set <profile>", "Set workflow profile (solo, staged, preview, preview-git)")
+    .option("--json", "Output as JSON")
+    .action(profileCommand),
 );
 
 program.parse();

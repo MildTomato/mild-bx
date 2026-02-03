@@ -76,8 +76,15 @@ export interface AuthConfig {
   mfa?: MfaConfig;
 }
 
+export type WorkflowProfile = "solo" | "staged" | "preview" | "preview-git";
+export type SchemaManagement = "declarative" | "migrations";
+export type ConfigSource = "code" | "remote";
+
 export interface ProjectConfig {
   project_id?: string;
+  workflow_profile?: WorkflowProfile;
+  schema_management?: SchemaManagement;
+  config_source?: ConfigSource;
   api?: ApiConfig;
   auth?: AuthConfig;
   // Other sections we don't sync yet
@@ -90,7 +97,6 @@ export interface ProjectConfig {
   analytics?: unknown;
   inbucket?: unknown;
   experimental?: unknown;
-  profiles?: unknown;
 }
 
 /**

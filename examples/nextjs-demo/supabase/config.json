@@ -2,8 +2,15 @@
   "$schema": "../../../cli/config-schema/config.schema.json",
   "project_id": "dumltzfoaxseaekszcnt",
   "api": {
-    "schemas": ["public", "graphql_public", "storage"],
-    "extra_search_path": ["public", "extensions"],
+    "schemas": [
+      "public",
+      "graphql_public",
+      "storage"
+    ],
+    "extra_search_path": [
+      "public",
+      "extensions"
+    ],
     "max_rows": 1000
   },
   "auth": {
@@ -19,19 +26,29 @@
   "db": {
     "seed": {
       "enabled": true,
-      "sql_paths": ["./seeds/*.sql"]
+      "sql_paths": [
+        "./seeds/*.sql"
+      ]
     }
   },
   "profiles": {
     "local": {
       "mode": "local",
       "workflow": "dashboard",
-      "branches": ["feature/*", "fix/*", "dev"]
+      "branches": [
+        "feature/*",
+        "fix/*",
+        "dev"
+      ]
     },
     "production": {
       "mode": "remote",
       "workflow": "git",
-      "branches": ["main", "master"]
+      "branches": [
+        "main",
+        "master"
+      ]
     }
-  }
+  },
+  "workflow_profile": "staged"
 }

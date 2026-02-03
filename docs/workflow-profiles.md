@@ -15,9 +15,17 @@ Exploring different "workflow profiles" that users can select in their config to
 ### 1. `solo` - "Just ship it"
 
 ```
-   [Local] ──────supa push──────► [PRODUCTION]
+────────────────────────────────────────────
+  solo - "Just ship it"
+────────────────────────────────────────────
 
-   One environment. Zero ceremony. Just ship.
+   ▓▓▓▓▓▓▓         supa push         ▓▓▓▓▓▓▓▓▓▓▓▓
+   ▓ Local ▓  ─────────────────────► ▓ PRODUCTION ▓
+   ▓▓▓▓▓▓▓                            ▓▓▓▓▓▓▓▓▓▓▓▓
+
+   One environment. Push straight to prod.
+
+────────────────────────────────────────────
 ```
 
 | Aspect       | Behavior                                 |
@@ -25,7 +33,6 @@ Exploring different "workflow profiles" that users can select in their config to
 | Environments | 1 (prod)                                 |
 | `supa dev`   | Watches files, shows what _would_ change |
 | `supa push`  | Applies changes to prod                  |
-| Ceremony     | Minimal                                  |
 
 **Vibe**: Side project, indie hacker, moving fast
 
@@ -43,9 +50,17 @@ Exploring different "workflow profiles" that users can select in their config to
 ### 2. `staged` - "Safety net"
 
 ```
-   [Local] ──supa push──► [STAGING] ──supa merge──► [PRODUCTION]
+────────────────────────────────────────────
+  staged - "Safety net"
+────────────────────────────────────────────
 
-   Test in staging, then merge to prod. Peace of mind.
+   ▓▓▓▓▓▓▓    supa push    ▓▓▓▓▓▓▓▓▓    supa merge   ▓▓▓▓▓▓▓▓▓▓▓▓
+   ▓ Local ▓ ────────────► ▓ STAGING ▓ ────────────► ▓ PRODUCTION ▓
+   ▓▓▓▓▓▓▓                 ▓▓▓▓▓▓▓▓▓                 ▓▓▓▓▓▓▓▓▓▓▓▓
+
+   Test in staging first, then merge to prod.
+
+────────────────────────────────────────────
 ```
 
 | Aspect       | Behavior                       |
@@ -54,9 +69,8 @@ Exploring different "workflow profiles" that users can select in their config to
 | `supa dev`   | Syncs to staging automatically |
 | `supa push`  | Applies changes to staging     |
 | `supa merge` | Merges staging → prod          |
-| Ceremony     | Medium                         |
 
-**Vibe**: "I want to test before prod but I'm still mostly solo"
+**Vibe**: Want to test before prod
 
 **Config example:**
 
@@ -75,11 +89,20 @@ Exploring different "workflow profiles" that users can select in their config to
 ### 3. `preview` - "Multiple preview environments"
 
 ```
-   [Local] ──► [preview-alice] ─┐
-   [Local] ──► [preview-bob]   ─┤
-   [Local] ──► [preview-carol] ─┴─► [PRODUCTION]
+────────────────────────────────────────────
+  preview - "Multiple preview environments"
+────────────────────────────────────────────
+
+   ▓▓▓▓▓▓▓  ──► ▓▓▓▓▓▓▓▓▓▓▓▓▓ ─┐
+   ▓ Local ▓     ▓ preview-alice ▓ ─┤
+   ▓▓▓▓▓▓▓  ──► ▓▓▓▓▓▓▓▓▓▓▓▓▓ ─┤           ▓▓▓▓▓▓▓▓▓▓▓▓
+                ▓ preview-bob ▓   ─┤──────► ▓ PRODUCTION ▓
+            ──► ▓▓▓▓▓▓▓▓▓▓▓▓▓ ─┤           ▓▓▓▓▓▓▓▓▓▓▓▓
+                ▓preview-carol▓ ─┘
 
    Manually create and push to named preview environments.
+
+────────────────────────────────────────────
 ```
 
 | Aspect       | Behavior                                                 |
@@ -88,7 +111,6 @@ Exploring different "workflow profiles" that users can select in their config to
 | `supa dev`   | Syncs to selected preview env                            |
 | `supa push`  | Applies to selected preview env                          |
 | `supa merge` | Merge any preview → prod (e.g. `merge alice production`) |
-| Ceremony     | Medium (manual environment management)                   |
 
 **Vibe**: Multiple developers, each with their own sandbox
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { VscEdit, VscShare, VscTrash, VscEllipsis, VscGlobe } from "react-icons/vsc";
+import { VscEdit, VscShare, VscTrash, VscEllipsis, VscGlobe, VscLink } from "react-icons/vsc";
 import { useFileBrowser } from "@/lib/file-browser-context";
 import { useResourceShares, useMyPermission } from "@/lib/queries";
 import type { Folder, File } from "@/lib/types";
@@ -46,7 +46,7 @@ export function ResourceRow({
   onDelete,
   onMouseEnter,
 }: ResourceRowProps) {
-  const { openShareDialog } = useFileBrowser();
+  const { openShareDialog, openLinkShareDialog } = useFileBrowser();
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(resource.name);
   const [error, setError] = useState("");
@@ -104,6 +104,12 @@ export function ResourceRow({
           Share
         </ContextMenuItem>
       )}
+      {canShare && (
+        <ContextMenuItem onSelect={() => openLinkShareDialog(resource, resourceType)}>
+          <VscLink />
+          Get Link
+        </ContextMenuItem>
+      )}
       {canDelete && (
         <ContextMenuItem variant="destructive" onSelect={handleDelete}>
           <VscTrash />
@@ -125,6 +131,12 @@ export function ResourceRow({
         <DropdownMenuItem onSelect={() => openShareDialog(resource, resourceType)}>
           <VscShare />
           Share
+        </DropdownMenuItem>
+      )}
+      {canShare && (
+        <DropdownMenuItem onSelect={() => openLinkShareDialog(resource, resourceType)}>
+          <VscLink />
+          Get Link
         </DropdownMenuItem>
       )}
       {canDelete && (

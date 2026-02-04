@@ -6,7 +6,7 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query'
-import type { FolderPage, Folder, File, Share, SharePermission, ShareableUser, Comment } from './types'
+import type { FolderPage, Folder, File, Share, SharePermission, ShareableUser, Comment, LinkShare } from './types'
 import { supabase } from './supabase'
 
 const PAGE_SIZE = 50
@@ -360,7 +360,8 @@ export function useResourceShares(resourceType: 'file' | 'folder', resourceId: s
 }
 
 // Get current user's permission level for a resource
-// Returns 'owner' | 'edit' | 'view' | null
+// Returns 'owner' | 'edit' | 'comment' | 'view' | null
+// Checks direct shares and inherited folder permissions
 export function useMyPermission(
   resourceType: 'file' | 'folder',
   resourceId: string,
@@ -375,8 +376,8 @@ export function useMyPermission(
       // Check if owner
       if (ownerId === user.id) return 'owner'
 
-      // Check shares for this user
-      const { data: share } = await supabase
+      // Check direct shares for this user on this resource
+      const { data: directShare } = await supabase
         .from('shares')
         .select('permission')
         .eq('resource_type', resourceType)
@@ -384,9 +385,51 @@ export function useMyPermission(
         .eq('shared_with_user_id', user.id)
         .single()
 
-      if (share) return share.permission as 'edit' | 'comment' | 'view'
+      if (directShare) return directShare.permission as 'edit' | 'comment' | 'view'
 
-      // TODO: Check group shares and inherited folder permissions
+      // Check inherited folder permissions by traversing up the tree
+      let parentFolderId: string | null = null
+
+      if (resourceType === 'file') {
+        // Get the file's folder_id
+        const { data: file } = await supabase
+          .from('files')
+          .select('folder_id')
+          .eq('id', resourceId)
+          .single()
+        parentFolderId = file?.folder_id ?? null
+      } else {
+        // Get the folder's parent_id
+        const { data: folder } = await supabase
+          .from('folders')
+          .select('parent_id')
+          .eq('id', resourceId)
+          .single()
+        parentFolderId = folder?.parent_id ?? null
+      }
+
+      // Walk up the folder tree checking for shares
+      while (parentFolderId) {
+        const { data: folderShare } = await supabase
+          .from('shares')
+          .select('permission')
+          .eq('resource_type', 'folder')
+          .eq('resource_id', parentFolderId)
+          .eq('shared_with_user_id', user.id)
+          .single()
+
+        if (folderShare) return folderShare.permission as 'edit' | 'comment' | 'view'
+
+        // Get the next parent
+        const { data: parentFolder } = await supabase
+          .from('folders')
+          .select('parent_id')
+          .eq('id', parentFolderId)
+          .single()
+
+        parentFolderId = parentFolder?.parent_id ?? null
+      }
+
       return null
     },
     enabled: !!resourceId,
@@ -436,6 +479,7 @@ export function useCreateShare() {
         queryKey: ['resource-shares', variables.resourceType, variables.resourceId],
       })
       queryClient.invalidateQueries({ queryKey: ['folder-contents'] })
+      queryClient.invalidateQueries({ queryKey: ['my-permission'] })
     },
   })
 }
@@ -451,6 +495,25 @@ export function useRemoveShare() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resource-shares'] })
       queryClient.invalidateQueries({ queryKey: ['folder-contents'] })
+      queryClient.invalidateQueries({ queryKey: ['my-permission'] })
+    },
+  })
+}
+
+export function useUpdateSharePermission() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['update-share-permission'],
+    mutationFn: async (data: { shareId: string; permission: SharePermission }) => {
+      const { error } = await supabase
+        .from('shares')
+        .update({ permission: data.permission })
+        .eq('id', data.shareId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['resource-shares'] })
+      queryClient.invalidateQueries({ queryKey: ['my-permission'] })
     },
   })
 }
@@ -536,6 +599,104 @@ export function useDeleteComment() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['file-comments', variables.fileId] })
+    },
+  })
+}
+
+// =============================================================================
+// LINK SHARES
+// =============================================================================
+
+function generateToken(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+  let token = ''
+  for (let i = 0; i < 24; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return token
+}
+
+async function fetchResourceLinkShares(
+  resourceType: 'file' | 'folder',
+  resourceId: string
+): Promise<LinkShare[]> {
+  const { data, error } = await supabase
+    .from('link_shares')
+    .select('id, resource_type, resource_id, token, permission, expires_at, created_by')
+    .eq('resource_type', resourceType)
+    .eq('resource_id', resourceId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(`Failed to fetch link shares: ${error.message}`)
+
+  return (data ?? []).map((ls) => ({
+    id: ls.id,
+    resource_type: ls.resource_type as 'file' | 'folder',
+    resource_id: ls.resource_id,
+    token: ls.token,
+    permission: ls.permission as 'view' | 'edit',
+    expires_at: ls.expires_at,
+    created_by: ls.created_by,
+  }))
+}
+
+export const resourceLinkSharesOptions = (resourceType: 'file' | 'folder', resourceId: string) =>
+  queryOptions({
+    queryKey: ['resource-link-shares', resourceType, resourceId] as const,
+    queryFn: () => fetchResourceLinkShares(resourceType, resourceId),
+    enabled: !!resourceId,
+    retry: false,
+    throwOnError: false,
+  })
+
+export function useResourceLinkShares(resourceType: 'file' | 'folder', resourceId: string) {
+  return useQuery(resourceLinkSharesOptions(resourceType, resourceId))
+}
+
+export function useCreateLinkShare() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['create-link-share'],
+    mutationFn: async (data: {
+      resourceType: 'file' | 'folder'
+      resourceId: string
+      permission: 'view' | 'edit'
+      expiresAt?: Date | null
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const token = generateToken()
+      const { error } = await supabase.from('link_shares').insert({
+        id: crypto.randomUUID(),
+        resource_type: data.resourceType,
+        resource_id: data.resourceId,
+        token,
+        permission: data.permission,
+        expires_at: data.expiresAt?.toISOString() ?? null,
+        created_by: user.id,
+      })
+      if (error) throw error
+      return token
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['resource-link-shares', variables.resourceType, variables.resourceId],
+      })
+    },
+  })
+}
+
+export function useDeleteLinkShare() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['delete-link-share'],
+    mutationFn: async (linkShareId: string) => {
+      const { error } = await supabase.from('link_shares').delete().eq('id', linkShareId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['resource-link-shares'] })
     },
   })
 }

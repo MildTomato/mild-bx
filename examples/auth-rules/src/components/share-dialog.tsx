@@ -21,7 +21,7 @@ import {
 import { Field, FieldLabel, FieldError } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { UserSearch } from "./user-search";
-import { useResourceShares, useCreateShare, useRemoveShare } from "@/lib/queries";
+import { useResourceShares, useCreateShare, useRemoveShare, useUpdateSharePermission } from "@/lib/queries";
 import type { SharePermission, Folder, File } from "@/lib/types";
 
 const shareFormSchema = z.object({
@@ -62,6 +62,7 @@ export function ShareDialog({
   );
   const createShare = useCreateShare();
   const removeShare = useRemoveShare();
+  const updatePermission = useUpdateSharePermission();
 
   const existingUserIds = useMemo(
     () => (shares ?? [])
@@ -190,9 +191,25 @@ export function ShareDialog({
                   <span className="flex-1 text-sm truncate">
                     {share.shared_with_email ?? "Unknown user"}
                   </span>
-                  <span className="text-xs text-muted-foreground capitalize">
-                    {share.permission}
-                  </span>
+                  <Select
+                    value={share.permission}
+                    onValueChange={(value) =>
+                      updatePermission.mutate({
+                        shareId: share.id,
+                        permission: value as SharePermission,
+                      })
+                    }
+                    disabled={updatePermission.isPending}
+                  >
+                    <SelectTrigger className="w-28 h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="view">View</SelectItem>
+                      <SelectItem value="comment">Comment</SelectItem>
+                      <SelectItem value="edit">Edit</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button
                     size="sm"
                     variant="ghost"

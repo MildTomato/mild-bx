@@ -1,24 +1,75 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { VscFile, VscCalendar, VscAccount, VscLock } from "react-icons/vsc";
 import { useFileBrowser } from "@/lib/file-browser-context";
-import { useUpdateFileContent, useMyPermission } from "@/lib/queries";
+import { useUpdateFileContent, useMyPermission, useResourceShares } from "@/lib/queries";
 import { FileComments } from "./file-comments";
+import { supabase } from "@/lib/supabase";
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+function formatDate(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getPermissionBadge(permission: string | null | undefined): { label: string; className: string } {
+  switch (permission) {
+    case "owner":
+      return { label: "Owner", className: "bg-primary text-primary-foreground" };
+    case "edit":
+      return { label: "Can edit", className: "bg-emerald-600 text-white" };
+    case "comment":
+      return { label: "Can comment", className: "bg-sky-600 text-white" };
+    case "view":
+      return { label: "View only", className: "bg-fg-muted/30 text-fg-muted" };
+    default:
+      return { label: "—", className: "bg-border text-fg-muted" };
+  }
+}
 
 export function FilePreview() {
   const { selectedFile, selectFile } = useFileBrowser();
   const [fileContent, setFileContent] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState<string | null>(null);
 
   const updateFileContentMutation = useUpdateFileContent();
-  const { data: permission } = useMyPermission(
+  const { data: permission, isPending: permissionPending } = useMyPermission(
     "file",
     selectedFile?.id ?? "",
     selectedFile?.owner_id ?? ""
   );
+  const { data: shares } = useResourceShares("file", selectedFile?.id ?? "");
   const canEdit = permission === "owner" || permission === "edit";
   const canComment = permission === "owner" || permission === "edit" || permission === "comment";
+
+  // Fetch owner email
+  useEffect(() => {
+    if (!selectedFile?.owner_id) {
+      setOwnerEmail(null);
+      return;
+    }
+    supabase
+      .from("users")
+      .select("email")
+      .eq("id", selectedFile.owner_id)
+      .single()
+      .then(({ data }) => setOwnerEmail(data?.email ?? null));
+  }, [selectedFile?.owner_id]);
 
   useEffect(() => {
     if (selectedFile) {
@@ -67,6 +118,49 @@ export function FilePreview() {
           </button>
         </div>
       </div>
+
+      {/* Metadata panel */}
+      <div className="px-4 py-3 border-b border-border bg-bg-secondary">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <div className="flex items-center gap-2 text-fg-muted">
+            <VscFile className="shrink-0" />
+            <span>Size</span>
+          </div>
+          <div className="text-fg">{formatFileSize(selectedFile.size)}</div>
+
+          <div className="flex items-center gap-2 text-fg-muted">
+            <VscCalendar className="shrink-0" />
+            <span>Created</span>
+          </div>
+          <div className="text-fg">{formatDate(selectedFile.created_at)}</div>
+
+          <div className="flex items-center gap-2 text-fg-muted">
+            <VscAccount className="shrink-0" />
+            <span>Owner</span>
+          </div>
+          <div className="text-fg truncate">{ownerEmail ?? "..."}</div>
+
+          <div className="flex items-center gap-2 text-fg-muted">
+            <VscLock className="shrink-0" />
+            <span>Access</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {permissionPending ? (
+              <span className="w-16 h-5 bg-border rounded animate-pulse" />
+            ) : (
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${getPermissionBadge(permission).className}`}>
+                {getPermissionBadge(permission).label}
+              </span>
+            )}
+            {shares && shares.length > 0 && (
+              <span className="text-xs text-fg-muted">
+                +{shares.length} shared
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
       {error && <p className="text-red-500 px-4 py-2">{error}</p>}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         <div className="flex-1 p-4 overflow-auto">

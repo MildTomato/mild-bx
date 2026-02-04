@@ -52,3 +52,13 @@ export type Comment = {
   created_at: string
   user_email?: string // joined from users table
 }
+
+export type LinkShare = {
+  id: string
+  resource_type: 'file' | 'folder'
+  resource_id: string
+  token: string
+  permission: 'view' | 'edit'
+  expires_at: string | null
+  created_by: string
+}

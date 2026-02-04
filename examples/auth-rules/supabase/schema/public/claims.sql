@@ -18,6 +18,7 @@ SELECT auth_rules.claim('group_ids', $$
 $$);
 
 -- accessible_file_ids: all files user can access
+-- Uses descendant expansion with LIMIT to prevent explosion on huge folders
 SELECT auth_rules.claim('accessible_file_ids', $$
   -- Files user owns
   SELECT owner_id AS user_id, id FROM public.files
@@ -37,7 +38,7 @@ SELECT auth_rules.claim('accessible_file_ids', $$
   FROM public.files
   JOIN public.folders ON files.folder_id = folders.id
   UNION
-  -- Files in folders shared with user (including all subfolders)
+  -- Files in folders shared with user (capped at 100k folders to prevent timeout)
   SELECT shares.shared_with_user_id AS user_id, files.id
   FROM public.shares
   JOIN LATERAL (
@@ -47,12 +48,12 @@ SELECT auth_rules.claim('accessible_file_ids', $$
       SELECT f.id FROM public.folders f
       JOIN folder_tree ft ON f.parent_id = ft.id
     )
-    SELECT id FROM folder_tree
+    SELECT id FROM folder_tree LIMIT 100000
   ) descendant_folders ON true
   JOIN public.files ON files.folder_id = descendant_folders.id
   WHERE shares.resource_type = 'folder' AND shares.shared_with_user_id IS NOT NULL
   UNION
-  -- Files in folders shared with groups user is in (including all subfolders)
+  -- Files in folders shared with groups user is in (capped)
   SELECT group_members.user_id, files.id
   FROM public.shares
   JOIN public.group_members ON group_members.group_id = shares.shared_with_group_id
@@ -63,7 +64,7 @@ SELECT auth_rules.claim('accessible_file_ids', $$
       SELECT f.id FROM public.folders f
       JOIN folder_tree ft ON f.parent_id = ft.id
     )
-    SELECT id FROM folder_tree
+    SELECT id FROM folder_tree LIMIT 100000
   ) descendant_folders ON true
   JOIN public.files ON files.folder_id = descendant_folders.id
   WHERE shares.resource_type = 'folder'
@@ -77,6 +78,7 @@ SELECT auth_rules.claim('accessible_file_ids', $$
 $$);
 
 -- editable_file_ids: files user can edit
+-- Uses descendant expansion with LIMIT to prevent explosion on huge folders
 SELECT auth_rules.claim('editable_file_ids', $$
   -- Files user owns
   SELECT owner_id AS user_id, id FROM public.files
@@ -91,7 +93,7 @@ SELECT auth_rules.claim('editable_file_ids', $$
   JOIN public.group_members ON group_members.group_id = shares.shared_with_group_id
   WHERE shares.resource_type = 'file' AND shares.permission = 'edit'
   UNION
-  -- Files in folders shared with edit permission (including all subfolders)
+  -- Files in folders shared with edit permission (capped at 100k folders)
   SELECT shares.shared_with_user_id AS user_id, files.id
   FROM public.shares
   JOIN LATERAL (
@@ -101,12 +103,12 @@ SELECT auth_rules.claim('editable_file_ids', $$
       SELECT f.id FROM public.folders f
       JOIN folder_tree ft ON f.parent_id = ft.id
     )
-    SELECT id FROM folder_tree
+    SELECT id FROM folder_tree LIMIT 100000
   ) descendant_folders ON true
   JOIN public.files ON files.folder_id = descendant_folders.id
   WHERE shares.resource_type = 'folder' AND shares.shared_with_user_id IS NOT NULL AND shares.permission = 'edit'
   UNION
-  -- Files in folders shared with groups with edit permission (including all subfolders)
+  -- Files in folders shared with groups with edit permission (capped)
   SELECT group_members.user_id, files.id
   FROM public.shares
   JOIN public.group_members ON group_members.group_id = shares.shared_with_group_id
@@ -117,7 +119,7 @@ SELECT auth_rules.claim('editable_file_ids', $$
       SELECT f.id FROM public.folders f
       JOIN folder_tree ft ON f.parent_id = ft.id
     )
-    SELECT id FROM folder_tree
+    SELECT id FROM folder_tree LIMIT 100000
   ) descendant_folders ON true
   JOIN public.files ON files.folder_id = descendant_folders.id
   WHERE shares.resource_type = 'folder' AND shares.permission = 'edit'
@@ -137,6 +139,7 @@ SELECT auth_rules.claim('deletable_file_ids', $$
 $$);
 
 -- commentable_file_ids: files user can comment on (comment or edit permission)
+-- Uses descendant expansion with LIMIT to prevent explosion on huge folders
 SELECT auth_rules.claim('commentable_file_ids', $$
   -- Files user owns
   SELECT owner_id AS user_id, id FROM public.files
@@ -151,7 +154,7 @@ SELECT auth_rules.claim('commentable_file_ids', $$
   JOIN public.group_members ON group_members.group_id = shares.shared_with_group_id
   WHERE shares.resource_type = 'file' AND shares.permission IN ('comment', 'edit')
   UNION
-  -- Files in folders shared with comment or edit permission (including all subfolders)
+  -- Files in folders shared with comment or edit permission (capped at 100k folders)
   SELECT shares.shared_with_user_id AS user_id, files.id
   FROM public.shares
   JOIN LATERAL (
@@ -161,12 +164,12 @@ SELECT auth_rules.claim('commentable_file_ids', $$
       SELECT f.id FROM public.folders f
       JOIN folder_tree ft ON f.parent_id = ft.id
     )
-    SELECT id FROM folder_tree
+    SELECT id FROM folder_tree LIMIT 100000
   ) descendant_folders ON true
   JOIN public.files ON files.folder_id = descendant_folders.id
   WHERE shares.resource_type = 'folder' AND shares.shared_with_user_id IS NOT NULL AND shares.permission IN ('comment', 'edit')
   UNION
-  -- Files in folders shared with groups with comment or edit permission (including all subfolders)
+  -- Files in folders shared with groups with comment or edit permission (capped)
   SELECT group_members.user_id, files.id
   FROM public.shares
   JOIN public.group_members ON group_members.group_id = shares.shared_with_group_id
@@ -177,18 +180,19 @@ SELECT auth_rules.claim('commentable_file_ids', $$
       SELECT f.id FROM public.folders f
       JOIN folder_tree ft ON f.parent_id = ft.id
     )
-    SELECT id FROM folder_tree
+    SELECT id FROM folder_tree LIMIT 100000
   ) descendant_folders ON true
   JOIN public.files ON files.folder_id = descendant_folders.id
   WHERE shares.resource_type = 'folder' AND shares.permission IN ('comment', 'edit')
 $$);
 
 -- accessible_folder_ids: folders user can access (including subfolders of shared folders)
+-- Uses descendant expansion with LIMIT to prevent explosion on huge folders
 SELECT auth_rules.claim('accessible_folder_ids', $$
   -- Folders user owns
   SELECT owner_id AS user_id, id FROM public.folders
   UNION
-  -- Folders directly shared with user + all their subfolders
+  -- Folders directly shared with user + subfolders (capped at 100k to prevent timeout)
   SELECT shared_with_user_id AS user_id, descendant.id
   FROM public.shares
   JOIN LATERAL (
@@ -198,11 +202,11 @@ SELECT auth_rules.claim('accessible_folder_ids', $$
       SELECT f.id, f.parent_id FROM public.folders f
       JOIN folder_tree ft ON f.parent_id = ft.id
     )
-    SELECT id FROM folder_tree
+    SELECT id FROM folder_tree LIMIT 100000
   ) descendant ON true
   WHERE shares.resource_type = 'folder' AND shares.shared_with_user_id IS NOT NULL
   UNION
-  -- Folders shared with groups user is in + all their subfolders
+  -- Folders shared with groups user is in + subfolders (capped)
   SELECT group_members.user_id, descendant.id
   FROM public.shares
   JOIN public.group_members ON group_members.group_id = shares.shared_with_group_id
@@ -213,7 +217,7 @@ SELECT auth_rules.claim('accessible_folder_ids', $$
       SELECT f.id, f.parent_id FROM public.folders f
       JOIN folder_tree ft ON f.parent_id = ft.id
     )
-    SELECT id FROM folder_tree
+    SELECT id FROM folder_tree LIMIT 100000
   ) descendant ON true
   WHERE shares.resource_type = 'folder'
 $$);

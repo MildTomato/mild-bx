@@ -5,7 +5,6 @@ import { VscFolder } from "react-icons/vsc";
 import type { Folder } from "@/lib/types";
 import { useFileBrowser } from "@/lib/file-browser-context";
 import {
-  useFolderCount,
   folderContentsOptions,
   useRenameFolder,
   useDeleteFolder,
@@ -17,12 +16,12 @@ type FolderRowProps = {
   folder: Folder;
   idx: number;
   isSharedWithMe: boolean;
+  count?: number;
 };
 
-export function FolderRow({ folder, idx, isSharedWithMe }: FolderRowProps) {
+export function FolderRow({ folder, idx, isSharedWithMe, count }: FolderRowProps) {
   const queryClient = useQueryClient();
   const { navigateTo } = useFileBrowser();
-  const { data: count, isPending: countPending } = useFolderCount(folder.id);
   const renameMutation = useRenameFolder();
   const deleteMutation = useDeleteFolder();
 
@@ -39,10 +38,10 @@ export function FolderRow({ folder, idx, isSharedWithMe }: FolderRowProps) {
       icon={<VscFolder className="text-muted-foreground" />}
       metadata={
         <span className="text-muted-foreground w-32 text-right inline-flex items-center justify-end">
-          {countPending ? (
-            <span className="inline-block w-16 h-3 bg-border rounded animate-pulse" />
+          {count !== undefined ? (
+            `${formatCount(count)} items`
           ) : (
-            `${formatCount(count ?? 0)} items`
+            <span className="inline-block w-16 h-3 bg-border rounded animate-pulse" />
           )}
         </span>
       }

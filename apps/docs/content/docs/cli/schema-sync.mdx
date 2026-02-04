@@ -1,0 +1,167 @@
+---
+title: Schema Sync
+description: Keep your database schema in sync with your codebase
+---
+
+The CLI uses declarative schema management — you define what your schema should look like, and the CLI figures out how to get there.
+
+## How It Works
+
+1. You write SQL files in `supabase/schema/`
+2. The CLI compares your files to the remote database
+3. It generates and applies the necessary migrations
+
+No manual migration files to manage.
+
+## Schema Directory
+
+Put your schema files in `supabase/schema/`:
+
+```
+supabase/
+└── schema/
+    ├── tables.sql
+    ├── functions.sql
+    ├── policies.sql
+    └── triggers.sql
+```
+
+File organization is up to you — the CLI processes all `.sql` files in the directory.
+
+## Writing Schema Files
+
+Write standard PostgreSQL DDL:
+
+```sql title="supabase/schema/tables.sql"
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE posts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  content TEXT,
+  published BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX posts_user_id_idx ON posts(user_id);
+```
+
+## Syncing Changes
+
+Push your schema to the remote database:
+
+```bash
+supa project push
+```
+
+The CLI shows a diff of what will change:
+
+```
+Schema changes:
+  + CREATE TABLE posts (...)
+  + CREATE INDEX posts_user_id_idx ON posts(user_id)
+
+Apply these changes? (y/n)
+```
+
+## Preview Mode
+
+See what would change without applying:
+
+```bash
+supa project push --plan
+```
+
+This is useful for reviewing changes before deployment.
+
+## Dev Mode
+
+For continuous syncing during development:
+
+```bash
+supa dev
+```
+
+This watches your schema files and automatically syncs changes as you save.
+
+Options:
+
+```bash
+# Custom debounce interval
+supa dev --debounce 500
+
+# Skip seeding after changes
+supa dev --no-seed
+
+# Show detailed diff output
+supa dev --verbose
+```
+
+## Pulling Remote Schema
+
+Fetch the current schema from your project:
+
+```bash
+supa project pull
+```
+
+This updates your local schema files to match the remote database.
+
+## Type Generation
+
+The CLI generates TypeScript types after schema changes:
+
+```bash
+supa project pull --types-only
+```
+
+Specify which schemas to include:
+
+```bash
+supa project pull --schemas public,auth
+```
+
+## Seed Data
+
+Define seed data in `supabase/seeds/`:
+
+```sql title="supabase/seeds/users.sql"
+INSERT INTO users (email) VALUES
+  ('alice@example.com'),
+  ('bob@example.com');
+```
+
+Run seeds manually:
+
+```bash
+supa project seed
+```
+
+Or include them in push:
+
+```bash
+supa project push --seed
+```
+
+## Conflict Resolution
+
+When local and remote schemas conflict, the CLI shows the differences and asks how to proceed:
+
+- **Accept remote** — Overwrite local files with remote state
+- **Accept local** — Push local changes, overwriting remote
+- **Abort** — Cancel and resolve manually
+
+## Best Practices
+
+**Keep schema files focused** — Group related objects (tables, indexes, policies) together.
+
+**Use version control** — Commit your schema files alongside your application code.
+
+**Review diffs** — Always use `--plan` in production to review changes before applying.
+
+**Test in preview** — Use preview profiles to test schema changes before production.

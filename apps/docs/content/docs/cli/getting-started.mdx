@@ -1,0 +1,125 @@
+---
+title: Getting Started
+description: Set up the Supabase CLI for your project
+---
+
+This guide walks you through setting up the CLI and connecting it to your Supabase project.
+
+## Prerequisites
+
+You need:
+- Node.js 20 or later
+- A Supabase account and project
+- Your Supabase access token
+
+## Install the CLI
+
+Install globally with npm:
+
+```bash
+npm install -g @supabase/cli
+```
+
+Or with pnpm:
+
+```bash
+pnpm add -g @supabase/cli
+```
+
+Verify the installation:
+
+```bash
+supa --version
+```
+
+## Authenticate
+
+Get your access token from the [Supabase dashboard](https://supabase.com/dashboard/account/tokens) and set it:
+
+```bash
+export SUPABASE_ACCESS_TOKEN=sbp_xxxxx
+```
+
+Or add it to your `.env` file:
+
+```bash title=".env"
+SUPABASE_ACCESS_TOKEN=sbp_xxxxx
+```
+
+## Initialize Your Project
+
+Run the init wizard in your project directory:
+
+```bash
+supa init
+```
+
+The wizard will prompt you to:
+1. Select your organization
+2. Select or create a project
+3. Choose a workflow profile
+4. Configure schema management
+
+This creates a `supabase/config.json` file with your project settings.
+
+## Project Structure
+
+After initialization, your project looks like this:
+
+```
+your-project/
+├── supabase/
+│   ├── config.json      # Project configuration
+│   ├── schema/          # SQL schema files
+│   └── seeds/           # Seed data files
+└── .env                 # Environment variables
+```
+
+## Development Workflow
+
+Start the dev server to watch for changes:
+
+```bash
+supa dev
+```
+
+This watches your schema and config files, automatically syncing changes to your project.
+
+Make a schema change:
+
+```sql title="supabase/schema/tables.sql"
+CREATE TABLE posts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  content TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+The CLI detects the change and syncs it to your project.
+
+## Push and Pull
+
+Pull the current state from your project:
+
+```bash
+supa project pull
+```
+
+Push local changes to your project:
+
+```bash
+supa project push
+```
+
+Use `--plan` to preview changes without applying them:
+
+```bash
+supa project push --plan
+```
+
+## Next Steps
+
+- [Workflow Profiles](/docs/cli/workflow-profiles) — Learn about solo, staged, and preview workflows
+- [Schema Sync](/docs/cli/schema-sync) — Deep dive into schema management
+- [Command Reference](/docs/cli/reference) — Full command documentation

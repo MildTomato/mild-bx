@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 import type { Folder } from "@/lib/types";
 import { useFileBrowser } from "@/lib/file-browser-context";
-import { useFolderContents, useFolder } from "@/lib/queries";
+import { useFolderContents, useFolder, useSequentialFolderCounts } from "@/lib/queries";
 import { useSortedItems, type ListItem } from "@/hooks/use-sorted-items";
 import { VirtualList } from "./virtual-list";
 import { FolderRow } from "./folder-row";
@@ -56,6 +56,13 @@ export function FileList() {
   // Only show "shared with me" styling at root level - inside folders, the banner indicates shared status
   const isInsideAnyFolder = currentFolder !== null;
   const allItems = useSortedItems(folders, files, user?.id, isInsideAnyFolder);
+
+  // Fetch folder counts sequentially (one at a time) to avoid overwhelming the database
+  const folderIds = useMemo(
+    () => allItems.filter((item) => item.type === "folder").map((item) => item.data.id),
+    [allItems]
+  );
+  const { counts: folderCounts } = useSequentialFolderCounts(folderIds);
 
   // Wait for both content and user to load to avoid flash of incorrect shared state
   if (contentLoading || !user) {
@@ -113,7 +120,14 @@ export function FileList() {
             return <SectionHeader label={item.label} isSharedSection={item.isSharedSection} />;
           }
           if (item.type === "folder") {
-            return <FolderRow folder={item.data} idx={idx} isSharedWithMe={item.isSharedWithMe} />;
+            return (
+              <FolderRow
+                folder={item.data}
+                idx={idx}
+                isSharedWithMe={item.isSharedWithMe}
+                count={folderCounts[item.data.id]}
+              />
+            );
           }
           return <FileRow file={item.data} idx={idx} isSharedWithMe={item.isSharedWithMe} />;
         }}

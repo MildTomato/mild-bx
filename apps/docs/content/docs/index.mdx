@@ -1,0 +1,111 @@
+---
+title: Auth Rules
+description: Declarative authorization for Supabase
+---
+
+Auth Rules lets you define who can access what in your Supabase app using simple SQL. Write rules once, and your API automatically enforces them.
+
+## The Problem with RLS
+
+Row Level Security can be frustrating:
+
+- **Silent failures** — Queries return empty results instead of telling you why
+- **Hidden logic** — Authorization rules scattered across policies
+- **Row-only** — No way to control which columns are exposed
+- **Hard to audit** — Difficult to see what access rules exist
+
+## How Auth Rules Helps
+
+With Auth Rules, you define access in two parts:
+
+**Claims** describe what users have access to (their orgs, teams, roles):
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('org_ids', $$
+  SELECT user_id, org_id FROM org_members
+$$);
+```
+
+**Rules** describe what data users can see or modify:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'org_id', 'title'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+```
+
+That's it. Your API now only returns documents from organizations the user belongs to.
+
+## What You Get
+
+- **Column control** — Specify exactly which fields to expose
+- **Clear errors** — Write operations fail with meaningful messages
+- **Auditable rules** — See all access rules with `SELECT * FROM auth_rules.list_rules()`
+- **No client changes** — Your existing Supabase queries work as-is
+
+## Example: Organization Access
+
+You have users, organizations, and documents. Users should only see documents in orgs they belong to.
+
+Define the relationship between users and orgs:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('org_ids', $$
+  SELECT user_id, org_id FROM org_members
+$$);
+```
+
+Define what users can do with documents:
+
+```sql title="rules.sql"
+-- Users can read documents in their orgs
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'org_id', 'title', 'content'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+
+-- Users can create documents in their orgs
+SELECT auth_rules.rule('documents',
+  auth_rules.insert(),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+
+-- Users can only delete their own documents
+SELECT auth_rules.rule('documents',
+  auth_rules.delete(),
+  auth_rules.eq('created_by', auth_rules.user_id())
+);
+```
+
+Your client code stays the same:
+
+```typescript title="app.ts"
+// Only returns documents from user's orgs
+const { data } = await supabase.from('documents').select('*')
+
+// Fails with clear error if user isn't in that org
+await supabase.from('documents').insert({ org_id: 'other-org', title: 'Test' })
+```
+
+## Next Steps
+
+<Cards>
+  <Card title="Basic Usage" href="/docs/basic-usage" />
+  <Card title="Claims" href="/docs/claims" />
+  <Card title="Role-Based Access" href="/docs/check-claim" />
+  <Card title="Advanced Patterns" href="/docs/advanced" />
+</Cards>
+
+---
+
+## How It Works (Technical)
+
+Under the hood, Auth Rules creates views in a `data_api` schema. PostgREST checks this schema first, so your clients get the secured view automatically. Your original tables in `public` stay unchanged.
+
+```
+public.*              Your tables (unchanged)
+data_api.*            Generated views with authorization
+auth_rules_claims.*   User relationship views
+auth_rules.*          System functions
+```

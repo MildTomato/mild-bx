@@ -5,17 +5,15 @@
 -- Uses LIMIT to cap expensive queries on huge folders.
 -- SECURITY INVOKER = runs as the calling user, respects all permissions.
 
-CREATE OR REPLACE FUNCTION data_api.get_folder_item_count(p_folder_id UUID, p_limit INT DEFAULT 10000001)
+CREATE OR REPLACE FUNCTION data_api.get_folder_item_count(p_folder_id UUID, p_limit INT DEFAULT 5001)
 RETURNS BIGINT
 LANGUAGE sql
 STABLE
 SECURITY INVOKER
 AS $$
   WITH RECURSIVE descendant_folders AS (
-    -- Direct child folders
     SELECT id FROM data_api.folders WHERE parent_id = p_folder_id
     UNION ALL
-    -- Nested folders
     SELECT f.id FROM data_api.folders f
     JOIN descendant_folders d ON f.parent_id = d.id
   ),

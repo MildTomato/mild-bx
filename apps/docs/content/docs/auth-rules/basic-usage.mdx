@@ -1,0 +1,163 @@
+---
+title: Basic Usage
+description: Common authorization patterns
+---
+
+This page covers the most common authorization patterns you'll need. Each example shows what you want to achieve and the rules to make it happen.
+
+## User Owns Their Data
+
+The simplest pattern: users can only see their own records.
+
+Use `auth_rules.user_id()` to match the authenticated user:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('profiles',
+  auth_rules.select('id', 'user_id', 'bio', 'avatar_url'),
+  auth_rules.eq('user_id', auth_rules.user_id())
+);
+```
+
+Now `GET /profiles` returns only the current user's profile.
+
+## Organization Membership
+
+Users can see data in organizations they belong to.
+
+First, define which orgs each user can access:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('org_ids', $$
+  SELECT user_id, org_id FROM org_members
+$$);
+```
+
+Then use that claim in your rule:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'org_id', 'title', 'content'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+```
+
+Users now see documents from all their orgs. Filtering by org still works:
+
+```typescript title="app.ts"
+// All documents from user's orgs
+await supabase.from('documents').select('*')
+
+// Documents from a specific org (only if user is a member)
+await supabase.from('documents').select('*').eq('org_id', 'org-123')
+```
+
+## Team Membership
+
+Same pattern works for teams, projects, or any entity:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('team_ids', $$
+  SELECT user_id, team_id FROM team_members
+$$);
+```
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('projects',
+  auth_rules.select('id', 'team_id', 'name', 'status'),
+  auth_rules.eq('team_id', auth_rules.one_of('team_ids'))
+);
+```
+
+## Creating Records
+
+For inserts, you typically want to ensure users can only create records in orgs/teams they belong to, and that they're recorded as the creator.
+
+Combine multiple conditions to validate the insert:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.insert(),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids')),
+  auth_rules.eq('created_by', auth_rules.user_id())
+);
+```
+
+If a user tries to create a document in an org they don't belong to, they get a clear error:
+
+```typescript title="app.ts"
+// Works - user is in this org
+await supabase.from('documents').insert({
+  org_id: 'my-org',
+  title: 'Report',
+  created_by: currentUser.id
+})
+
+// Fails with "Not a member of this organization"
+await supabase.from('documents').insert({
+  org_id: 'other-org',
+  title: 'Report',
+  created_by: currentUser.id
+})
+```
+
+## Updating Records
+
+For updates, specify which records users can modify:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.update(),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids')),
+  auth_rules.eq('created_by', auth_rules.user_id())
+);
+```
+
+Users can only update documents they created in orgs they belong to.
+
+## Deleting Records
+
+Restrict deletes to the record owner:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.delete(),
+  auth_rules.eq('created_by', auth_rules.user_id())
+);
+```
+
+## Public and Private Data
+
+Some data is public, some requires membership. Use `or_` to combine conditions:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'org_id', 'title', 'is_public'),
+  auth_rules.or_(
+    auth_rules.eq('is_public', true),
+    auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+  )
+);
+```
+
+Unauthenticated users see only public documents. Authenticated users see public documents plus documents from their orgs.
+
+## Quick Reference
+
+Common patterns at a glance:
+
+| What you want | Rule |
+|---------------|------|
+| User's own data | `auth_rules.eq('user_id', auth_rules.user_id())` |
+| Org membership | `auth_rules.eq('org_id', auth_rules.one_of('org_ids'))` |
+| Team membership | `auth_rules.eq('team_id', auth_rules.one_of('team_ids'))` |
+| Public + private | `auth_rules.or_(eq('is_public', true), ...)` |
+
+## Error Codes
+
+Write operations (insert, update, delete) return meaningful HTTP errors:
+
+| Error | HTTP Status | Meaning |
+|-------|-------------|---------|
+| `P0002` | 404 | Record doesn't exist or you don't have access |
+| `42501` | 403 | You don't have permission for this action |
+| `22023` | 400 | Invalid parameter |

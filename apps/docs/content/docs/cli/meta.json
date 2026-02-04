@@ -1,0 +1,13 @@
+{
+  "title": "CLI",
+  "root": true,
+  "pages": [
+    "index",
+    "---Guides---",
+    "getting-started",
+    "workflow-profiles",
+    "schema-sync",
+    "---Reference---",
+    "...reference"
+  ]
+}

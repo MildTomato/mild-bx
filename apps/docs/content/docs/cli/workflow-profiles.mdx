@@ -1,0 +1,118 @@
+---
+title: Workflow Profiles
+description: Choose how you deploy changes to Supabase
+---
+
+Workflow profiles define how the CLI handles deployments. Choose a profile that matches your team's development process.
+
+## Available Profiles
+
+| Profile | Best For | Description |
+|---------|----------|-------------|
+| `solo` | Individual developers | Direct deployments to production |
+| `staged` | Small teams | Staging environment for testing |
+| `preview` | Larger teams | Isolated preview environments |
+| `preview-git` | CI/CD workflows | Branch-based preview environments |
+
+## Solo Profile
+
+The simplest workflow — changes go directly to your production project.
+
+```bash
+supa project profile --set solo
+```
+
+When you run `supa project push`, changes apply immediately to production.
+
+Use this when:
+- You're the only developer
+- You have a separate test project
+- You want fast iteration
+
+## Staged Profile
+
+Adds a staging environment between development and production.
+
+```bash
+supa project profile --set staged
+```
+
+Workflow:
+1. `supa project push` deploys to staging
+2. Test your changes in staging
+3. Promote to production when ready
+
+Use this when:
+- You want to test before production
+- Multiple developers share a staging environment
+
+## Preview Profile
+
+Creates isolated preview environments for each feature.
+
+```bash
+supa project profile --set preview
+```
+
+Each push creates a new preview environment that doesn't affect staging or production.
+
+Use this when:
+- You want isolated testing per feature
+- Team members need separate environments
+- You're reviewing pull requests
+
+## Preview-Git Profile
+
+Automatically creates preview environments based on git branches.
+
+```bash
+supa project profile --set preview-git
+```
+
+The CLI watches your git branch and automatically:
+- Creates a preview environment for each branch
+- Syncs changes when files change
+- Cleans up when branches are deleted
+
+Use this when:
+- You have CI/CD pipelines
+- You want automatic preview deployments
+- You're using GitHub/GitLab branch workflows
+
+## Checking Your Profile
+
+View your current profile:
+
+```bash
+supa project profile
+```
+
+Output:
+
+```
+Current workflow profile: solo
+
+Profiles:
+  solo        - Direct production deployments
+  staged      - Staging environment for testing
+  preview     - Isolated preview environments
+  preview-git - Branch-based preview environments
+```
+
+## Changing Profiles
+
+Switch profiles at any time:
+
+```bash
+supa project profile --set staged
+```
+
+The new profile takes effect immediately for subsequent commands.
+
+## Profile Behavior Summary
+
+| Action | solo | staged | preview | preview-git |
+|--------|------|--------|---------|-------------|
+| `push` | → Production | → Staging | → Preview | → Branch Preview |
+| `pull` | ← Production | ← Staging | ← Preview | ← Branch Preview |
+| `dev` | Watches + pushes | Watches + pushes | Watches + pushes | Auto branch switching |

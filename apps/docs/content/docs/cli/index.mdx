@@ -1,0 +1,51 @@
+---
+title: CLI
+description: Command-line tools for managing Supabase projects
+---
+
+The `supa` CLI helps you manage Supabase projects from the terminal. Sync schemas, manage configurations, and deploy changes across environments.
+
+## Installation
+
+```bash
+npm install -g @supabase/cli
+```
+
+## Quick Start
+
+Initialize a project:
+
+```bash
+supa init
+```
+
+Start development mode (watches for changes):
+
+```bash
+supa dev
+```
+
+Push changes to your project:
+
+```bash
+supa project push
+```
+
+## Authentication
+
+Set your access token:
+
+```bash
+export SUPABASE_ACCESS_TOKEN=your-token
+```
+
+The CLI also loads tokens from `.env`, `supabase/.env`, and `.env.local` files.
+
+## Next Steps
+
+<Cards>
+  <Card title="Getting Started" href="/docs/cli/getting-started" />
+  <Card title="Workflow Profiles" href="/docs/cli/workflow-profiles" />
+  <Card title="Schema Sync" href="/docs/cli/schema-sync" />
+  <Card title="Command Reference" href="/docs/cli/reference" />
+</Cards>

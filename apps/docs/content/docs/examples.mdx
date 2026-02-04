@@ -1,0 +1,273 @@
+---
+title: Examples
+description: Real-world patterns for common access control scenarios
+---
+
+## File Storage (Dropbox-style)
+
+A complete example with files, folders, sharing, and comments.
+
+### Tables
+
+```sql
+CREATE TABLE folders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  parent_id UUID REFERENCES folders(id),
+  owner_id UUID NOT NULL,
+  name TEXT NOT NULL
+);
+
+CREATE TABLE files (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  folder_id UUID REFERENCES folders(id),
+  owner_id UUID NOT NULL,
+  name TEXT NOT NULL,
+  content TEXT
+);
+
+CREATE TABLE shares (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  resource_type TEXT NOT NULL CHECK (resource_type IN ('file', 'folder')),
+  resource_id UUID NOT NULL,
+  shared_with_user_id UUID,
+  permission TEXT NOT NULL CHECK (permission IN ('view', 'comment', 'edit')),
+  created_by UUID NOT NULL
+);
+```
+
+### Claims
+
+```sql
+-- Files user can access (owned, shared, or in shared folder)
+SELECT auth_rules.claim('accessible_file_ids', $$
+  -- Files user owns
+  SELECT owner_id AS user_id, id FROM files
+  UNION
+  -- Files shared directly with user
+  SELECT shared_with_user_id AS user_id, resource_id AS id
+  FROM shares WHERE resource_type = 'file'
+  UNION
+  -- Files in folders user owns
+  SELECT f.owner_id AS user_id, files.id
+  FROM files JOIN folders f ON files.folder_id = f.id
+  UNION
+  -- Files in shared folders (recursive)
+  SELECT shares.shared_with_user_id AS user_id, files.id
+  FROM shares
+  JOIN LATERAL (
+    WITH RECURSIVE tree AS (
+      SELECT id FROM folders WHERE id = shares.resource_id
+      UNION ALL
+      SELECT f.id FROM folders f JOIN tree ON f.parent_id = tree.id
+    )
+    SELECT id FROM tree
+  ) desc ON true
+  JOIN files ON files.folder_id = desc.id
+  WHERE shares.resource_type = 'folder'
+$$);
+
+-- Files user can edit
+SELECT auth_rules.claim('editable_file_ids', $$
+  SELECT owner_id AS user_id, id FROM files
+  UNION
+  SELECT shared_with_user_id AS user_id, resource_id AS id
+  FROM shares
+  WHERE resource_type = 'file' AND permission = 'edit'
+$$);
+```
+
+### Rules
+
+```sql
+-- SELECT: see accessible files
+SELECT auth_rules.rule('files',
+  auth_rules.select('id', 'folder_id', 'owner_id', 'name', 'content'),
+  auth_rules.eq('id', auth_rules.one_of('accessible_file_ids'))
+);
+
+-- INSERT: create files you own
+SELECT auth_rules.rule('files',
+  auth_rules.insert(),
+  auth_rules.eq('owner_id', auth_rules.user_id_marker())
+);
+
+-- UPDATE: edit files you can edit
+SELECT auth_rules.rule('files',
+  auth_rules.update(),
+  auth_rules.eq('id', auth_rules.one_of('editable_file_ids'))
+);
+
+-- DELETE: only owners can delete
+SELECT auth_rules.rule('files',
+  auth_rules.delete(),
+  auth_rules.eq('owner_id', auth_rules.user_id_marker())
+);
+```
+
+---
+
+## Multi-tenant SaaS
+
+Organization-based access with roles.
+
+### Tables
+
+```sql
+CREATE TABLE organizations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL
+);
+
+CREATE TABLE org_members (
+  org_id UUID REFERENCES organizations(id),
+  user_id UUID NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('member', 'admin', 'owner')),
+  UNIQUE(org_id, user_id)
+);
+
+CREATE TABLE projects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id UUID REFERENCES organizations(id),
+  name TEXT NOT NULL
+);
+
+CREATE TABLE audit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id UUID REFERENCES organizations(id),
+  action TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+### Claims
+
+```sql
+-- Orgs user belongs to
+SELECT auth_rules.claim('org_ids', $$
+  SELECT user_id, org_id FROM org_members
+$$);
+
+-- Orgs where user is admin
+SELECT auth_rules.claim('admin_org_ids', $$
+  SELECT user_id, org_id
+  FROM org_members
+  WHERE role IN ('admin', 'owner')
+$$);
+```
+
+### Rules
+
+```sql
+-- All members see projects
+SELECT auth_rules.rule('projects',
+  auth_rules.select('id', 'org_id', 'name'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+
+-- Only admins can create projects
+SELECT auth_rules.rule('projects',
+  auth_rules.insert(),
+  auth_rules.eq('org_id', auth_rules.one_of('admin_org_ids'))
+);
+
+-- Only admins see audit logs
+SELECT auth_rules.rule('audit_logs',
+  auth_rules.select('id', 'org_id', 'action', 'created_at'),
+  auth_rules.eq('org_id', auth_rules.one_of('admin_org_ids'))
+);
+```
+
+---
+
+## Social Network (Twitter-style)
+
+Posts with public/private visibility and following.
+
+### Tables
+
+```sql
+CREATE TABLE profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id),
+  username TEXT UNIQUE NOT NULL,
+  is_private BOOLEAN DEFAULT false
+);
+
+CREATE TABLE follows (
+  follower_id UUID REFERENCES profiles(id),
+  following_id UUID REFERENCES profiles(id),
+  PRIMARY KEY (follower_id, following_id)
+);
+
+CREATE TABLE posts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  author_id UUID REFERENCES profiles(id),
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+### Claims
+
+```sql
+-- Users whose posts I can see
+SELECT auth_rules.claim('viewable_author_ids', $$
+  -- Public profiles
+  SELECT auth.uid() AS user_id, id AS author_id
+  FROM profiles WHERE NOT is_private
+  UNION
+  -- My own profile
+  SELECT id AS user_id, id AS author_id FROM profiles
+  UNION
+  -- Private profiles I follow
+  SELECT f.follower_id AS user_id, f.following_id AS author_id
+  FROM follows f
+  JOIN profiles p ON p.id = f.following_id
+  WHERE p.is_private
+$$);
+```
+
+### Rules
+
+```sql
+-- See posts from viewable authors
+SELECT auth_rules.rule('posts',
+  auth_rules.select('id', 'author_id', 'content', 'created_at'),
+  auth_rules.eq('author_id', auth_rules.one_of('viewable_author_ids'))
+);
+
+-- Create your own posts
+SELECT auth_rules.rule('posts',
+  auth_rules.insert(),
+  auth_rules.eq('author_id', auth_rules.user_id_marker())
+);
+
+-- Delete your own posts
+SELECT auth_rules.rule('posts',
+  auth_rules.delete(),
+  auth_rules.eq('author_id', auth_rules.user_id_marker())
+);
+```
+
+---
+
+## Using with Supabase JS
+
+```typescript
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(url, anonKey)
+
+// Query the data_api view (not public table)
+const { data: files } = await supabase
+  .schema('data_api')  // Important: use data_api schema
+  .from('files')
+  .select('*')
+
+// Or configure default schema in client
+const supabase = createClient(url, anonKey, {
+  db: { schema: 'data_api' }
+})
+
+// Now all queries use data_api by default
+const { data } = await supabase.from('files').select('*')
+```

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import {
   queryOptions,
   infiniteQueryOptions,
@@ -10,7 +11,7 @@ import type { FolderPage, Folder, File, Share, SharePermission, ShareableUser, C
 import { supabase } from './supabase'
 
 const PAGE_SIZE = 50
-const COUNT_LIMIT = 10_000_001 // 10M + 1 to detect "more than 10M"
+const COUNT_LIMIT = 5_001 // 5k + 1 to detect "more than 5k"
 
 /**
  * Format a count for display with good precision:
@@ -23,32 +24,14 @@ const COUNT_LIMIT = 10_000_001 // 10M + 1 to detect "more than 10M"
  */
 export function formatCount(count: number): string {
   if (count >= COUNT_LIMIT) {
-    return '10M+'
+    return '5k+'
   }
   if (count < 1_000) {
     return count.toString()
   }
-  if (count < 10_000) {
-    // 1.0K - 9.9K
-    const k = count / 1_000
-    return `${k.toFixed(1)}K`
-  }
-  if (count < 100_000) {
-    // 10K - 99K
-    const k = Math.round(count / 1_000)
-    return `${k}K`
-  }
-  if (count < 1_000_000) {
-    // 100K - 999K
-    const k = Math.round(count / 10_000) * 10
-    return `${k}K`
-  }
-  if (count < 10_000_000) {
-    // 1.0M - 9.9M
-    const m = count / 1_000_000
-    return `${m.toFixed(1)}M`
-  }
-  return '10M+'
+  // 1.0k - 5.0k
+  const k = count / 1_000
+  return `${k.toFixed(1)}k`
 }
 
 async function fetchFolderPage(
@@ -141,6 +124,51 @@ export function useFolderContents(folderId: string | null) {
 
 export function useFolderCount(folderId: string) {
   return useQuery(folderCountOptions(folderId))
+}
+
+// Sequential folder counts - fetches one at a time to avoid overwhelming the database
+export function useSequentialFolderCounts(folderIds: string[]) {
+  const queryClient = useQueryClient()
+  const [counts, setCounts] = useState<Record<string, number>>({})
+  const [pendingId, setPendingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchSequentially() {
+      for (const folderId of folderIds) {
+        if (cancelled) break
+
+        // Skip if already cached
+        const cached = queryClient.getQueryData<number>(['folder-count', folderId])
+        if (cached !== undefined) {
+          setCounts(prev => ({ ...prev, [folderId]: cached }))
+          continue
+        }
+
+        setPendingId(folderId)
+        try {
+          const count = await queryClient.fetchQuery(folderCountOptions(folderId))
+          if (!cancelled) {
+            setCounts(prev => ({ ...prev, [folderId]: count }))
+          }
+        } catch {
+          // On error, set to 0
+          if (!cancelled) {
+            setCounts(prev => ({ ...prev, [folderId]: 0 }))
+          }
+        }
+      }
+      if (!cancelled) {
+        setPendingId(null)
+      }
+    }
+
+    fetchSequentially()
+    return () => { cancelled = true }
+  }, [folderIds.join(','), queryClient])
+
+  return { counts, pendingId }
 }
 
 export function useFolder(folderId: string | null) {
@@ -262,11 +290,15 @@ export function useRenameFile() {
   return useMutation({
     mutationKey: ['rename-file'],
     mutationFn: async (data: { id: string; name: string }) => {
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from('files')
         .update({ name: data.name })
         .eq('id', data.id)
+        .select('id')
       if (error) throw error
+      if (!updated || updated.length === 0) {
+        throw new Error('Permission denied: cannot rename this file')
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['folder-contents'] })

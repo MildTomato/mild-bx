@@ -1,0 +1,57 @@
+---
+title: How Auth Rules Works
+description: Technical details about the Auth Rules system
+---
+
+This section explains how Auth Rules works under the hood. You don't need to understand these details to use Auth Rules, but they're helpful for debugging, customization, or contributing.
+
+## Overview
+
+Auth Rules is built on three PostgreSQL concepts:
+
+1. **Views** — Generated views that wrap your tables with WHERE clauses
+2. **Triggers** — INSTEAD OF triggers on views that validate writes
+3. **Security definer functions** — Functions that run with elevated privileges to check claims
+
+When you call `auth_rules.rule()`, the system:
+
+1. Parses your rule definition into a JSON structure
+2. Stores it in `auth_rules.rules` table
+3. Generates SQL code for views/triggers
+4. Executes that SQL to create the database objects
+
+## Schema Layout
+
+Auth Rules uses four schemas:
+
+| Schema | Purpose |
+|--------|---------|
+| `public` | Your tables (unchanged) |
+| `data_api` | Generated views that enforce authorization |
+| `auth_rules_claims` | Claims views (user relationships) |
+| `auth_rules` | System tables and functions |
+
+## PostgREST Integration
+
+PostgREST is configured to check `data_api` before `public`:
+
+```ini title="postgrest.conf"
+db-schemas = "data_api, public"
+db-extra-search-path = "auth, auth_rules, auth_rules_claims"
+```
+
+When a client requests `/documents`:
+
+1. PostgREST looks for `data_api.documents` (view) — found
+2. Uses the view, which wraps `public.documents` with auth logic
+3. Returns only rows the user has access to
+
+Tables without rules fall through to `public` schema normally.
+
+## Next Steps
+
+<Cards>
+  <Card title="Architecture" href="/docs/internals/architecture" />
+  <Card title="Generated Code" href="/docs/internals/generated-code" />
+  <Card title="DSL Reference" href="/docs/internals/dsl-reference" />
+</Cards>

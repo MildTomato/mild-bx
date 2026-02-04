@@ -1,0 +1,10 @@
+{
+  "title": "Internals",
+  "defaultOpen": true,
+  "pages": [
+    "index",
+    "architecture",
+    "generated-code",
+    "dsl-reference"
+  ]
+}

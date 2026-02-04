@@ -1,0 +1,159 @@
+---
+title: Architecture
+description: How Auth Rules components fit together
+---
+
+This page explains how the different parts of Auth Rules work together.
+
+## System Tables
+
+Auth Rules stores its configuration in two tables:
+
+The `auth_rules.claims` table stores claim definitions:
+
+```sql title="schema.sql"
+CREATE TABLE auth_rules.claims (
+  claim_name TEXT PRIMARY KEY,
+  sql TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+The `auth_rules.rules` table stores rule definitions:
+
+```sql title="schema.sql"
+CREATE TABLE auth_rules.rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  table_name TEXT NOT NULL,
+  operation TEXT NOT NULL,  -- 'select', 'insert', 'update', 'delete'
+  columns TEXT[],           -- for select rules
+  filters JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(table_name, operation)
+);
+```
+
+## Flow: Defining a Claim
+
+When you call `auth_rules.claim()`:
+
+```sql
+SELECT auth_rules.claim('org_ids', 'SELECT user_id, org_id FROM org_members');
+```
+
+The system:
+
+1. **Stores the definition** in `auth_rules.claims`
+2. **Creates a view** in `auth_rules_claims` schema:
+
+```sql title="generated.sql"
+CREATE VIEW auth_rules_claims.org_ids
+WITH (security_invoker = false)
+AS SELECT user_id, org_id FROM org_members;
+```
+
+The `security_invoker = false` setting means the view runs with the owner's privileges (postgres), not the calling user's. This allows the view to read tables that `authenticated` users can't access directly.
+
+## Flow: Defining a Rule
+
+When you call `auth_rules.rule()`:
+
+```sql
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'org_id', 'title'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+```
+
+The system:
+
+1. **Parses the DSL** — Each function like `select()`, `eq()`, `one_of()` returns a JSONB object
+2. **Stores the rule** in `auth_rules.rules`
+3. **Generates SQL** based on the operation:
+   - SELECT → Creates a view
+   - INSERT/UPDATE/DELETE → Creates INSTEAD OF triggers
+
+## View Generation (SELECT)
+
+For SELECT rules, a view is created with WHERE clauses:
+
+```sql title="generated.sql"
+CREATE VIEW data_api.documents
+WITH (security_invoker = false)
+AS SELECT id, org_id, title
+FROM public.documents
+WHERE org_id IN (
+  SELECT org_id FROM auth_rules_claims.org_ids
+  WHERE user_id = auth.uid()
+);
+```
+
+Key points:
+
+- Only specified columns are exposed
+- `security_invoker = false` allows querying claims views
+- WHERE clause filters rows based on user's claims
+
+## Trigger Generation (INSERT/UPDATE/DELETE)
+
+For write operations, INSTEAD OF triggers validate before executing:
+
+```sql title="generated.sql"
+CREATE FUNCTION data_api.documents_insert_trigger()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  -- Validate org_id is in user's claims
+  IF NOT EXISTS (
+    SELECT 1 FROM auth_rules_claims.org_ids
+    WHERE user_id = auth.uid() AND org_id = NEW.org_id
+  ) THEN
+    RAISE EXCEPTION 'Not a member of this organization'
+      USING ERRCODE = '42501';
+  END IF;
+
+  -- Perform the actual insert
+  INSERT INTO public.documents SELECT NEW.*;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER documents_insert
+INSTEAD OF INSERT ON data_api.documents
+FOR EACH ROW EXECUTE FUNCTION data_api.documents_insert_trigger();
+```
+
+This provides explicit error messages instead of silent failures.
+
+## Require Functions
+
+For more explicit error handling in views, Auth Rules provides `require` functions:
+
+```sql title="internals.sql"
+-- Check claim membership
+auth_rules.require('org_ids', 'org_id', some_value)
+-- Returns TRUE if authorized, raises exception if not
+
+-- Check user ID
+auth_rules.require_user('owner_id', some_value)
+-- Returns TRUE if value matches auth.uid(), raises exception if not
+```
+
+These are marked `VOLATILE` to ensure PostgreSQL evaluates them after other WHERE conditions.
+
+## Cleanup
+
+The `auth_rules.generated_objects` table tracks what was created:
+
+```sql title="schema.sql"
+CREATE TABLE auth_rules.generated_objects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  rule_id UUID REFERENCES auth_rules.rules(id) ON DELETE CASCADE,
+  object_type TEXT NOT NULL,  -- 'view', 'trigger', 'function'
+  object_schema TEXT NOT NULL,
+  object_name TEXT NOT NULL
+);
+```
+
+When you call `auth_rules.drop_rules('table_name')`, it uses this table to find and remove all generated objects.

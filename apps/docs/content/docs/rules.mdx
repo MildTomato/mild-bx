@@ -1,0 +1,161 @@
+---
+title: Rules
+description: Define access rules for CRUD operations
+---
+
+Rules define what operations users can perform on your data. Each rule specifies:
+
+1. **Table** - Which table the rule applies to
+2. **Operation** - SELECT, INSERT, UPDATE, or DELETE
+3. **Columns** - Which columns are accessible (for SELECT)
+4. **Filters** - Conditions that must be true
+
+## Anatomy of a Rule
+
+```sql
+SELECT auth_rules.rule(
+  'table_name',           -- Target table
+  auth_rules.select(...), -- Operation
+  auth_rules.eq(...)      -- Filter(s)
+);
+```
+
+## SELECT Rules
+
+SELECT rules control which rows users can read and which columns are exposed.
+
+```sql
+-- Users can see files they have access to
+SELECT auth_rules.rule('files',
+  auth_rules.select('id', 'name', 'content', 'owner_id', 'created_at'),
+  auth_rules.eq('id', auth_rules.one_of('accessible_file_ids'))
+);
+```
+
+This generates:
+- A **view** at `data_api.files` that filters rows
+- Optional **wrapper function** at `data_api.get_files()` for explicit error handling
+
+### Column Selection
+
+Only specified columns are exposed in the view:
+
+```sql
+-- Expose limited columns for the users table
+SELECT auth_rules.rule('users',
+  auth_rules.select('id', 'email')  -- No password, no sensitive data
+);
+```
+
+## INSERT Rules
+
+INSERT rules validate new rows before inserting.
+
+```sql
+-- Users can only create files they own
+SELECT auth_rules.rule('files',
+  auth_rules.insert(),
+  auth_rules.eq('owner_id', auth_rules.user_id_marker())
+);
+```
+
+This generates an `INSTEAD OF INSERT` trigger that:
+1. Validates `owner_id = auth.uid()`
+2. Raises an error if validation fails
+3. Inserts into `public.files` if valid
+
+<Callout type="info">
+You must define a SELECT rule before INSERT/UPDATE/DELETE rules for the same table.
+</Callout>
+
+## UPDATE Rules
+
+UPDATE rules control which rows can be modified.
+
+```sql
+-- Users can update files they can edit
+SELECT auth_rules.rule('files',
+  auth_rules.update(),
+  auth_rules.eq('id', auth_rules.one_of('editable_file_ids'))
+);
+```
+
+This generates an `INSTEAD OF UPDATE` trigger that only updates rows matching the filter.
+
+## DELETE Rules
+
+DELETE rules control which rows can be removed.
+
+```sql
+-- Only owners can delete files
+SELECT auth_rules.rule('files',
+  auth_rules.delete(),
+  auth_rules.eq('owner_id', auth_rules.user_id_marker())
+);
+```
+
+## Combining Filters
+
+### AND (implicit)
+
+Multiple filter arguments are combined with AND:
+
+```sql
+SELECT auth_rules.rule('comments',
+  auth_rules.insert(),
+  auth_rules.eq('user_id', auth_rules.user_id_marker()),     -- AND
+  auth_rules.eq('file_id', auth_rules.one_of('commentable_file_ids'))
+);
+```
+
+### AND (explicit)
+
+```sql
+SELECT auth_rules.rule('comments',
+  auth_rules.insert(),
+  auth_rules.and_(
+    auth_rules.eq('user_id', auth_rules.user_id_marker()),
+    auth_rules.eq('file_id', auth_rules.one_of('commentable_file_ids'))
+  )
+);
+```
+
+### OR
+
+```sql
+-- Can see shares you created OR shares with you
+SELECT auth_rules.rule('shares',
+  auth_rules.select('id', 'resource_type', 'resource_id', 'permission'),
+  auth_rules.or_(
+    auth_rules.eq('created_by', auth_rules.user_id_marker()),
+    auth_rules.eq('shared_with_user_id', auth_rules.user_id_marker())
+  )
+);
+```
+
+## Managing Rules
+
+### List all rules
+
+```sql
+SELECT * FROM auth_rules.list_rules();
+```
+
+### Drop rules for a table
+
+```sql
+SELECT auth_rules.drop_rules('table_name');
+```
+
+## Generated Objects
+
+When you define a rule, Auth Rules generates:
+
+| Operation | Generated Objects |
+|-----------|-------------------|
+| SELECT | View + optional wrapper function |
+| INSERT | INSTEAD OF INSERT trigger |
+| UPDATE | INSTEAD OF UPDATE trigger |
+| DELETE | INSTEAD OF DELETE trigger |
+
+All generated objects are in the `data_api` schema and have appropriate grants for `authenticated` users.

@@ -143,11 +143,18 @@ CREATE OR REPLACE FUNCTION auth_rules._gen_update_trigger(p_table TEXT, p_filter
 RETURNS TEXT LANGUAGE plpgsql AS $$
 DECLARE
   where_parts TEXT[] := ARRAY['id = OLD.id'];
+  set_parts TEXT;
   f JSONB;
   col TEXT;
   val JSONB;
   vtype TEXT;
 BEGIN
+  -- Build SET clause from all columns in the table
+  SELECT string_agg(format('%I = NEW.%I', column_name, column_name), ', ')
+  INTO set_parts
+  FROM information_schema.columns
+  WHERE table_schema = 'public' AND table_name = p_table;
+
   FOR f IN SELECT * FROM jsonb_array_elements(p_filters) LOOP
     IF f->>'type' = 'eq' THEN
       col := f->>'column';
@@ -166,14 +173,14 @@ BEGIN
   RETURN format($f$
 CREATE OR REPLACE FUNCTION data_api.%I_update_trigger() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $t$
 BEGIN
-  UPDATE public.%I SET id = NEW.id WHERE %s;
+  UPDATE public.%I SET %s WHERE %s;
   IF NOT FOUND THEN RAISE EXCEPTION 'Not found or not authorized' USING ERRCODE = 'P0002'; END IF;
   RETURN NEW;
 END;
 $t$;
 DROP TRIGGER IF EXISTS %I_update ON data_api.%I;
 CREATE TRIGGER %I_update INSTEAD OF UPDATE ON data_api.%I FOR EACH ROW EXECUTE FUNCTION data_api.%I_update_trigger();
-$f$, p_table, p_table, array_to_string(where_parts, ' AND '), p_table, p_table, p_table, p_table, p_table);
+$f$, p_table, p_table, set_parts, array_to_string(where_parts, ' AND '), p_table, p_table, p_table, p_table, p_table);
 END;
 $$;
 

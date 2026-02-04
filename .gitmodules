@@ -10,3 +10,6 @@
 [submodule "external/auth"]
 	path = external/auth
 	url = https://github.com/supabase/auth.git
+[submodule "external/vercel"]
+	path = external/vercel
+	url = https://github.com/vercel/vercel.git

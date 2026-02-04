@@ -9,6 +9,7 @@ import { devCommand } from "./commands/dev.js";
 import { seedCommand, seedStatusCommand } from "./commands/seed.js";
 import { apiKeysCommand } from "./commands/api-keys.js";
 import { profileCommand } from "./commands/profile.js";
+import { extractCLISpec } from "./lib/cli-spec.js";
 import {
   loadProjectConfig,
   getProfileOrAuto,

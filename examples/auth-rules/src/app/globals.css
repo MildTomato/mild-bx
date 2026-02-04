@@ -9,15 +9,13 @@
   --accent: #0a0a0a;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0a0a0a;
-    --bg-secondary: #141414;
-    --fg: #fafafa;
-    --fg-muted: #888;
-    --border: #222;
-    --accent: #fafafa;
-  }
+:root.dark {
+  --bg: #0a0a0a;
+  --bg-secondary: #141414;
+  --fg: #fafafa;
+  --fg-muted: #888;
+  --border: #222;
+  --accent: #fafafa;
 }
 
 @theme inline {
@@ -47,4 +45,9 @@ body {
 ::selection {
   background: var(--fg);
   color: var(--bg);
+}
+
+.virtual-item {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 32px;
 }

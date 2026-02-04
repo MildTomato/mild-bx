@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
 import {
   VscFile,
   VscFileCode,
@@ -11,16 +10,8 @@ import {
   VscMarkdown,
   VscTable,
 } from "react-icons/vsc";
-
-type File = {
-  id: string;
-  name: string;
-  folder_id: string | null;
-  content: string | null;
-  owner_id: string;
-  size: number;
-  created_at: string;
-};
+import type { File } from "@/lib/types";
+import { useRenameFile, useDeleteFile } from "@/lib/queries";
 
 function formatSize(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -85,6 +76,10 @@ export function FileRow({
   const [renameValue, setRenameValue] = useState(file.name);
   const [error, setError] = useState("");
 
+  // React Query mutation hooks
+  const renameMutation = useRenameFile();
+  const deleteMutation = useDeleteFile();
+
   async function handleRename() {
     if (!renameValue.trim() || renameValue === file.name) {
       setIsRenaming(false);
@@ -92,22 +87,19 @@ export function FileRow({
       return;
     }
 
-    const { error } = await supabase
-      .from("files")
-      .update({ name: renameValue.trim() })
-      .eq("id", file.id);
-
-    if (error) {
-      setError(error.message);
-    } else {
+    try {
+      await renameMutation.mutateAsync({ id: file.id, name: renameValue.trim() });
       setIsRenaming(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to rename");
     }
   }
 
   async function handleDelete() {
-    const { error } = await supabase.from("files").delete().eq("id", file.id);
-    if (error) {
-      setError(error.message);
+    try {
+      await deleteMutation.mutateAsync(file.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete");
     }
   }
 

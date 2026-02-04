@@ -340,12 +340,18 @@ $$;
 -- =============================================================================
 -- These functions are called in view WHERE clauses. They validate access and
 -- raise explicit errors instead of silently filtering rows.
+--
+-- IMPORTANT: These functions are marked VOLATILE to force PostgreSQL to evaluate
+-- them AFTER other WHERE conditions (like IN clauses). Without VOLATILE, the
+-- query planner may reorder conditions and call require() on rows that would
+-- be filtered out anyway, causing spurious "invalid" errors when indexes exist.
 
 -- Generic require for claim-based checks (one_of)
 -- Usage: WHERE auth_rules.require('org_ids', 'org_id', org_id)
 -- The claim view must have a column matching 'col' (e.g. org_ids view has org_id column)
+-- SECURITY DEFINER so it runs with postgres privileges and can query claim views
 CREATE OR REPLACE FUNCTION auth_rules.require(claim TEXT, col TEXT, val UUID)
-RETURNS BOOLEAN LANGUAGE plpgsql STABLE AS $$
+RETURNS BOOLEAN LANGUAGE plpgsql VOLATILE SECURITY DEFINER AS $$
 DECLARE
   has_access BOOLEAN;
 BEGIN
@@ -366,8 +372,9 @@ $$;
 
 -- Require for user_id checks
 -- Usage: WHERE auth_rules.require_user('user_id', user_id)
+-- SECURITY DEFINER for consistency with require()
 CREATE OR REPLACE FUNCTION auth_rules.require_user(col TEXT, val UUID)
-RETURNS BOOLEAN LANGUAGE plpgsql STABLE AS $$
+RETURNS BOOLEAN LANGUAGE plpgsql VOLATILE SECURITY DEFINER AS $$
 BEGIN
   IF val IS DISTINCT FROM auth.uid() THEN
     RAISE EXCEPTION '% invalid', col USING ERRCODE = '42501';
@@ -402,10 +409,12 @@ BEGIN
 
       CASE vtype
         WHEN 'user_id' THEN
-          RETURN format('auth_rules.require_user(%L, %I)', col, col);
+          -- Filter to rows where column matches authenticated user
+          RETURN format('%I = auth.uid()', col);
         WHEN 'one_of' THEN
+          -- Filter to rows where column is in user's claim
           claim := val->>'claim';
-          RETURN format('auth_rules.require(%L, %L, %I)', claim, col, col);
+          RETURN format('%I IN (SELECT %I FROM auth_rules_claims.%I WHERE user_id = auth.uid())', col, col, claim);
         WHEN 'literal' THEN
           RETURN format('%I = %L', col, val->>'value');
         WHEN 'check' THEN
@@ -421,7 +430,8 @@ BEGIN
       col := filter->>'column';
       claim := filter->>'claim';
       IF filter->'check' IS NULL THEN
-        RETURN format('auth_rules.require(%L, %L, %I)', claim, col, col);
+        -- Filter to rows where column is in user's claim
+        RETURN format('%I IN (SELECT %I FROM auth_rules_claims.%I WHERE user_id = auth.uid())', col, col, claim);
       ELSE
         -- TODO: add require_check function for role-based checks
         RETURN format('%I IN (SELECT %I FROM auth_rules_claims.%I WHERE user_id = auth.uid() AND %I = ANY(%L::text[]))',

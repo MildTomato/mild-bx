@@ -22,10 +22,12 @@ BEGIN
 
       CASE vtype
         WHEN 'user_id' THEN
-          RETURN format('auth_rules.require_user(%L, %I)', col, col);
+          -- Filter to rows where column matches authenticated user
+          RETURN format('%I = auth.uid()', col);
         WHEN 'one_of' THEN
+          -- Filter to rows where column is in user's claim
           claim := val->>'claim';
-          RETURN format('auth_rules.require(%L, %L, %I)', claim, col, col);
+          RETURN format('%I IN (SELECT %I FROM auth_rules_claims.%I WHERE user_id = auth.uid())', col, col, claim);
         WHEN 'literal' THEN
           RETURN format('%I = %L', col, val->>'value');
         WHEN 'check' THEN
@@ -41,7 +43,8 @@ BEGIN
       col := filter->>'column';
       claim := filter->>'claim';
       IF filter->'check' IS NULL THEN
-        RETURN format('auth_rules.require(%L, %L, %I)', claim, col, col);
+        -- Filter to rows where column is in user's claim
+        RETURN format('%I IN (SELECT %I FROM auth_rules_claims.%I WHERE user_id = auth.uid())', col, col, claim);
       ELSE
         -- TODO: add require_check function for role-based checks
         RETURN format('%I IN (SELECT %I FROM auth_rules_claims.%I WHERE user_id = auth.uid() AND %I = ANY(%L::text[]))',

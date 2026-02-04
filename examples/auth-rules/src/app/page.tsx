@@ -1,37 +1,26 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useTransition, useMemo } from "react";
+import { useTheme } from "next-themes";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
+import type { Folder, File } from "@/lib/types";
 import { FolderRow } from "@/components/FolderRow";
 import { FileRow } from "@/components/FileRow";
-
-type Folder = {
-  id: string;
-  name: string;
-  parent_id: string | null;
-  owner_id: string;
-};
-
-type File = {
-  id: string;
-  name: string;
-  folder_id: string | null;
-  content: string | null;
-  owner_id: string;
-  size: number;
-  created_at: string;
-};
+import { VirtualList } from "@/components/VirtualList";
+import {
+  useFolderContents,
+  useCreateFolder,
+  useCreateFile,
+  useUpdateFileContent,
+} from "@/lib/queries";
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [contentLoading, setContentLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [files, setFiles] = useState<File[]>([]);
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [breadcrumbs, setBreadcrumbs] = useState<Folder[]>([]);
   const [showNewFolderInput, setShowNewFolderInput] = useState(false);
@@ -42,6 +31,43 @@ export default function Home() {
   const [isEditing, setIsEditing] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { theme, setTheme } = useTheme();
+
+  // React 18 useTransition for non-urgent folder navigation
+  const [isPending, startTransition] = useTransition();
+
+  // React Query hooks
+  const {
+    data,
+    isPending: contentLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useFolderContents(currentFolder);
+
+  const createFolderMutation = useCreateFolder();
+  const createFileMutation = useCreateFile();
+  const updateFileContentMutation = useUpdateFileContent();
+
+  // Flatten paginated data for virtual list
+  const { folders, files } = useMemo(() => {
+    if (!data?.pages) return { folders: [], files: [] };
+    const allFolders: Folder[] = [];
+    const allFiles: File[] = [];
+    for (const page of data.pages) {
+      allFolders.push(...page.folders);
+      allFiles.push(...page.files);
+    }
+    return { folders: allFolders, files: allFiles };
+  }, [data?.pages]);
+
+  // Combined items for virtual scrolling
+  const allItems = useMemo(() => {
+    return [
+      ...folders.map((f) => ({ type: "folder" as const, data: f })),
+      ...files.map((f) => ({ type: "file" as const, data: f })),
+    ];
+  }, [folders, files]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -53,39 +79,12 @@ export default function Home() {
     });
   }, []);
 
+  // Load breadcrumbs when folder changes
   useEffect(() => {
     if (!user) return;
-    
+
     let cancelled = false;
-    
-    // Load contents and breadcrumbs in parallel
-    let foldersQuery = supabase
-      .from("folders")
-      .select("id, name, parent_id, owner_id")
-      .order("name");
-    let filesQuery = supabase
-      .from("files")
-      .select("id, name, folder_id, content, owner_id, size, created_at")
-      .order("name");
 
-    if (currentFolder) {
-      foldersQuery = foldersQuery.eq("parent_id", currentFolder);
-      filesQuery = filesQuery.eq("folder_id", currentFolder);
-    } else {
-      foldersQuery = foldersQuery.is("parent_id", null);
-      filesQuery = filesQuery.is("folder_id", null);
-    }
-
-    // Wait for both queries before updating state
-    Promise.all([foldersQuery, filesQuery]).then(([foldersRes, filesRes]) => {
-      if (!cancelled) {
-        setFolders(foldersRes.data ?? []);
-        setFiles(filesRes.data ?? []);
-        setContentLoading(false);
-      }
-    });
-    
-    // Breadcrumbs loaded independently
     async function loadBreadcrumbs() {
       const crumbs: Folder[] = [];
       let id = currentFolder;
@@ -103,8 +102,10 @@ export default function Home() {
       if (!cancelled) setBreadcrumbs(crumbs);
     }
     loadBreadcrumbs();
-    
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+    };
   }, [user, currentFolder]);
 
   useEffect(() => {
@@ -121,29 +122,6 @@ export default function Home() {
     }
   }, [userMenuOpen]);
 
-  async function refreshContents() {
-    let foldersQuery = supabase
-      .from("folders")
-      .select("id, name, parent_id, owner_id")
-      .order("name");
-    let filesQuery = supabase
-      .from("files")
-      .select("id, name, folder_id, content, owner_id, size, created_at")
-      .order("name");
-
-    if (currentFolder) {
-      foldersQuery = foldersQuery.eq("parent_id", currentFolder);
-      filesQuery = filesQuery.eq("folder_id", currentFolder);
-    } else {
-      foldersQuery = foldersQuery.is("parent_id", null);
-      filesQuery = filesQuery.is("folder_id", null);
-    }
-
-    const [foldersRes, filesRes] = await Promise.all([foldersQuery, filesQuery]);
-    setFolders(foldersRes.data ?? []);
-    setFiles(filesRes.data ?? []);
-  }
-
   async function signIn() {
     setError("");
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -159,58 +137,43 @@ export default function Home() {
   async function signOut() {
     await supabase.auth.signOut();
     setCurrentFolder(null);
-    setFolders([]);
-    setFiles([]);
     setBreadcrumbs([]);
   }
 
   function navigateTo(folderId: string | null) {
-    setContentLoading(true);
-    setFolders([]);
-    setFiles([]);
-    setSelectedFile(null);
-    setCurrentFolder(folderId);
+    startTransition(() => {
+      setSelectedFile(null);
+      setCurrentFolder(folderId);
+    });
   }
 
   async function createFolder() {
     if (!newItemName.trim() || !user) return;
-    const { error } = await supabase.from("folders").insert({
-      id: crypto.randomUUID(),
-      name: newItemName.trim(),
-      parent_id: currentFolder,
-      owner_id: user.id,
-    });
-    if (error) {
-      setError(error.message);
-    } else {
+    try {
+      await createFolderMutation.mutateAsync({
+        name: newItemName.trim(),
+        parentId: currentFolder,
+        ownerId: user.id,
+      });
       setNewItemName("");
       setShowNewFolderInput(false);
-      refreshContents();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create folder");
     }
   }
 
   async function createFile() {
     if (!newItemName.trim() || !user) return;
-    const rand = Math.random();
-    const size = rand < 0.7
-      ? Math.floor(Math.random() * 1048576) + 1024
-      : rand < 0.9
-        ? Math.floor(Math.random() * 9437184) + 1048576
-        : Math.floor(Math.random() * 94371840) + 10485760;
-    const { error } = await supabase.from("files").insert({
-      id: crypto.randomUUID(),
-      name: newItemName.trim(),
-      folder_id: currentFolder,
-      owner_id: user.id,
-      content: "",
-      size,
-    });
-    if (error) {
-      setError(error.message);
-    } else {
+    try {
+      await createFileMutation.mutateAsync({
+        name: newItemName.trim(),
+        folderId: currentFolder,
+        ownerId: user.id,
+      });
       setNewItemName("");
       setShowNewFileInput(false);
-      refreshContents();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create file");
     }
   }
 
@@ -222,15 +185,15 @@ export default function Home() {
 
   async function saveFileContent() {
     if (!selectedFile) return;
-    const { error } = await supabase
-      .from("files")
-      .update({ content: fileContent })
-      .eq("id", selectedFile.id);
-    if (error) {
-      setError(error.message);
-    } else {
+    try {
+      await updateFileContentMutation.mutateAsync({
+        id: selectedFile.id,
+        content: fileContent,
+      });
       setSelectedFile({ ...selectedFile, content: fileContent });
       setIsEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save file");
     }
   }
 
@@ -296,6 +259,7 @@ export default function Home() {
               </button>
             </span>
           ))}
+          {isPending && <span className="text-fg-muted ml-2">...</span>}
         </div>
         <div className="relative">
           <button onClick={() => setUserMenuOpen(!userMenuOpen)} className="text-fg-muted hover:text-fg">
@@ -303,6 +267,18 @@ export default function Home() {
           </button>
           {userMenuOpen && (
             <div className="absolute right-0 top-full mt-1 bg-bg border border-border rounded shadow-lg py-1 z-50 min-w-[150px]">
+              <div className="px-4 py-2 text-fg-muted text-xs uppercase tracking-wide">Theme</div>
+              {(["light", "dark", "system"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTheme(t)}
+                  className="w-full px-4 py-2 text-left hover:bg-bg-secondary flex items-center gap-2"
+                >
+                  <span className={`w-3 h-3 rounded-full border ${theme === t ? "border-accent bg-accent" : "border-fg-muted"}`} />
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </button>
+              ))}
+              <div className="border-t border-border my-1" />
               <button
                 onClick={() => { signOut(); setUserMenuOpen(false); }}
                 className="w-full px-4 py-2 text-left hover:bg-bg-secondary text-red-500"
@@ -330,10 +306,10 @@ export default function Home() {
         {error && <span className="text-red-500 ml-4">{error}</span>}
       </div>
 
-      <div className="flex-1 flex">
-        <main className={`flex-1 ${selectedFile ? "border-r border-border" : ""}`}>
+      <div className="flex-1 flex overflow-hidden">
+        <main className={`flex-1 flex flex-col ${selectedFile ? "border-r border-border" : ""}`}>
           {(showNewFolderInput || showNewFileInput) && (
-            <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-bg-secondary rounded">
+            <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-bg-secondary rounded shrink-0">
               <span className="text-fg-muted">{showNewFolderInput ? "📁" : "📄"}</span>
               <input
                 ref={inputRef}
@@ -390,29 +366,37 @@ export default function Home() {
                 </div>
               ))}
             </div>
-          ) : folders.length === 0 && files.length === 0 && !showNewFolderInput && !showNewFileInput ? (
+          ) : allItems.length === 0 && !showNewFolderInput && !showNewFileInput ? (
             <p className="text-fg-muted p-3 px-4">Empty folder</p>
           ) : (
-            <div>
-              {folders.map((folder, idx) => (
-                <FolderRow
-                  key={folder.id}
-                  folder={folder}
-                  idx={idx}
-                  onNavigate={navigateTo}
-                />
-              ))}
-              {files.map((file, idx) => (
-                <FileRow
-                  key={file.id}
-                  file={file}
-                  idx={idx}
-                  foldersCount={folders.length}
-                  isSelected={selectedFile?.id === file.id}
-                  onSelect={openFile}
-                />
-              ))}
-            </div>
+            <VirtualList
+              items={allItems}
+              hasNextPage={hasNextPage ?? false}
+              fetchNextPage={fetchNextPage}
+              isFetchingNextPage={isFetchingNextPage}
+              getItemKey={(item) => item.data.id}
+              renderItem={(item, idx) => {
+                if (item.type === "folder") {
+                  return (
+                    <FolderRow
+                      folder={item.data}
+                      idx={idx}
+                      onNavigate={navigateTo}
+                    />
+                  );
+                } else {
+                  return (
+                    <FileRow
+                      file={item.data}
+                      idx={idx}
+                      foldersCount={folders.length}
+                      isSelected={selectedFile?.id === item.data.id}
+                      onSelect={openFile}
+                    />
+                  );
+                }
+              }}
+            />
           )}
         </main>
 

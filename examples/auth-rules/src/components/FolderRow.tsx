@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { VscFolder } from "react-icons/vsc";
-
-type Folder = {
-  id: string;
-  name: string;
-  parent_id: string | null;
-  owner_id: string;
-};
+import type { Folder } from "@/lib/types";
+import {
+  useFolderCount,
+  folderContentsOptions,
+  useRenameFolder,
+  useDeleteFolder,
+  formatCount,
+} from "@/lib/queries";
 
 export function FolderRow({
   folder,
@@ -20,37 +21,20 @@ export function FolderRow({
   idx: number;
   onNavigate: (folderId: string) => void;
 }) {
-  const [count, setCount] = useState<number | null>(null);
+  const queryClient = useQueryClient();
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(folder.name);
   const [error, setError] = useState("");
 
-  // Fetch count on mount
-  useEffect(() => {
-    let cancelled = false;
+  // React Query hooks
+  const { data: count, isPending: countPending } = useFolderCount(folder.id);
+  const renameMutation = useRenameFolder();
+  const deleteMutation = useDeleteFolder();
 
-    async function fetchCount() {
-      const [subfolders, files] = await Promise.all([
-        supabase
-          .from("folders")
-          .select("id", { count: "exact", head: true })
-          .eq("parent_id", folder.id),
-        supabase
-          .from("files")
-          .select("id", { count: "exact", head: true })
-          .eq("folder_id", folder.id),
-      ]);
-
-      if (!cancelled) {
-        setCount((subfolders.count ?? 0) + (files.count ?? 0));
-      }
-    }
-
-    fetchCount();
-    return () => {
-      cancelled = true;
-    };
-  }, [folder.id]);
+  // Prefetch folder contents on hover (Vercel best practice)
+  const prefetch = () => {
+    queryClient.prefetchInfiniteQuery(folderContentsOptions(folder.id));
+  };
 
   async function handleRename() {
     if (!renameValue.trim() || renameValue === folder.name) {
@@ -59,32 +43,27 @@ export function FolderRow({
       return;
     }
 
-    const { error } = await supabase
-      .from("folders")
-      .update({ name: renameValue.trim() })
-      .eq("id", folder.id);
-
-    if (error) {
-      setError(error.message);
-    } else {
+    try {
+      await renameMutation.mutateAsync({ id: folder.id, name: renameValue.trim() });
       setIsRenaming(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to rename");
     }
   }
 
   async function handleDelete() {
-    const { error } = await supabase
-      .from("folders")
-      .delete()
-      .eq("id", folder.id);
-
-    if (error) {
-      setError(error.message);
+    try {
+      await deleteMutation.mutateAsync(folder.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete");
     }
   }
 
   return (
     <div
       className={`group flex items-center gap-2 px-4 py-1 cursor-pointer ${idx % 2 === 0 ? "bg-bg-secondary/50" : ""}`}
+      onMouseEnter={prefetch}
+      onFocus={prefetch}
     >
       <VscFolder className="text-fg-muted shrink-0" />
 
@@ -113,11 +92,11 @@ export function FolderRow({
         </button>
       )}
 
-      <span className="text-fg-muted w-16 text-right inline-flex items-center justify-end">
-        {count === null ? (
-          <span className="inline-block w-12 h-3 bg-border rounded animate-pulse" />
+      <span className="text-fg-muted w-24 text-right inline-flex items-center justify-end">
+        {countPending ? (
+          <span className="inline-block w-16 h-3 bg-border rounded animate-pulse" />
         ) : (
-          `${count} items`
+          `${formatCount(count ?? 0)} items`
         )}
       </span>
 

@@ -50,8 +50,10 @@ const FILE_PRIORITY: Record<string, number> = {
   domains: 2,
   tables: 3,
   table: 3,
-  indexes: 4,
-  index: 4,
+  rules: 4, // auth_rules.rule() creates views that functions may reference
+  claims: 4, // auth_rules claims setup
+  indexes: 4.5,
+  index: 4.5,
   functions: 5,
   function: 5,
   views: 5, // Views depend on tables

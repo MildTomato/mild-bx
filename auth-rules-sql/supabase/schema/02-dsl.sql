@@ -142,12 +142,17 @@ $$;
 -- =============================================================================
 -- These functions are called in view WHERE clauses. They validate access and
 -- raise explicit errors instead of silently filtering rows.
+--
+-- IMPORTANT: These functions are marked VOLATILE to force PostgreSQL to evaluate
+-- them AFTER other WHERE conditions (like IN clauses). Without VOLATILE, the
+-- query planner may reorder conditions and call require() on rows that would
+-- be filtered out anyway, causing spurious "invalid" errors when indexes exist.
 
 -- Generic require for claim-based checks (one_of)
 -- Usage: WHERE auth_rules.require('org_ids', 'org_id', org_id)
 -- The claim view must have a column matching 'col' (e.g. org_ids view has org_id column)
 CREATE OR REPLACE FUNCTION auth_rules.require(claim TEXT, col TEXT, val UUID)
-RETURNS BOOLEAN LANGUAGE plpgsql STABLE AS $$
+RETURNS BOOLEAN LANGUAGE plpgsql VOLATILE AS $$
 DECLARE
   has_access BOOLEAN;
 BEGIN
@@ -169,7 +174,7 @@ $$;
 -- Require for user_id checks
 -- Usage: WHERE auth_rules.require_user('user_id', user_id)
 CREATE OR REPLACE FUNCTION auth_rules.require_user(col TEXT, val UUID)
-RETURNS BOOLEAN LANGUAGE plpgsql STABLE AS $$
+RETURNS BOOLEAN LANGUAGE plpgsql VOLATILE AS $$
 BEGIN
   IF val IS DISTINCT FROM auth.uid() THEN
     RAISE EXCEPTION '% invalid', col USING ERRCODE = '42501';

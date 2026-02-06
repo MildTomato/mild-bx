@@ -8,10 +8,142 @@ import { createPlan, applyPlan } from "@supabase/pg-delta";
 import { supabase as supabaseIntegration } from "@supabase/pg-delta/integrations/supabase";
 import pg from "pg";
 import type { Pool, QueryResult, QueryConfig } from "pg";
-import { PGlite } from "@electric-sql/pglite";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { C } from "@/lib/colors.js";
+
+// PGlite is lazy-loaded because it has WASM files that don't bundle correctly
+// with Bun's compile. We ship the WASM files alongside the binary and load them manually.
+type PGliteType = import("@electric-sql/pglite").PGlite;
+let PGliteClass: typeof import("@electric-sql/pglite").PGlite | null = null;
+let cachedWasmModule: WebAssembly.Module | null = null;
+let cachedFsBundle: Uint8Array | null = null;
+
+class PGliteNotAvailableError extends Error {
+  constructor(detail?: string) {
+    super(
+      "Schema diffing requires PGlite assets.\n" +
+      (detail ? `${detail}\n\n` : "") +
+      "Ensure pglite.wasm and pglite.data are in the same directory as the binary,\n" +
+      "or install via npm: npm install -g @supabase-dx/cli"
+    );
+    this.name = "PGliteNotAvailableError";
+  }
+}
+
+/**
+ * Export the error class so callers can check for it
+ */
+export { PGliteNotAvailableError };
+
+/**
+ * Find PGlite assets directory - checks multiple locations
+ */
+function findPGliteAssets(): { wasmPath: string; dataPath: string } | null {
+  const candidates: string[] = [];
+
+  // 1. Next to the executable (for compiled binary distribution)
+  const execDir = dirname(process.execPath);
+  candidates.push(join(execDir, "pglite"));
+
+  // 2. Relative to this source file (for development / pnpm)
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  // From dist/lib/ or src/lib/, go up to cli/bin/pglite
+  candidates.push(join(__dirname, "..", "..", "bin", "pglite"));
+  // From dist/, go up to cli/bin/pglite
+  candidates.push(join(__dirname, "..", "bin", "pglite"));
+
+  // 3. In node_modules (for npm install with externalized pglite)
+  candidates.push(join(__dirname, "..", "..", "node_modules", "@electric-sql", "pglite", "dist"));
+  candidates.push(join(__dirname, "..", "node_modules", "@electric-sql", "pglite", "dist"));
+
+  // Check each candidate
+  for (const dir of candidates) {
+    const wasmPath = join(dir, "pglite.wasm");
+    const dataPath = join(dir, "pglite.data");
+    if (existsSync(wasmPath) && existsSync(dataPath)) {
+      log(`[pglite] Found assets in ${dir}`);
+      return { wasmPath, dataPath };
+    }
+  }
+
+  log(`[pglite] Assets not found in any of: ${candidates.join(", ")}`);
+  return null;
+}
+
+/**
+ * Load PGlite WASM and data files from disk
+ */
+async function loadPGliteAssets(): Promise<{ wasmModule: WebAssembly.Module; fsBundle: Uint8Array }> {
+  if (cachedWasmModule && cachedFsBundle) {
+    return { wasmModule: cachedWasmModule, fsBundle: cachedFsBundle };
+  }
+
+  const assets = findPGliteAssets();
+  if (!assets) {
+    throw new PGliteNotAvailableError("Could not find pglite.wasm and pglite.data");
+  }
+
+  const [wasmBytes, dataBytes] = await Promise.all([
+    readFileSync(assets.wasmPath),
+    readFileSync(assets.dataPath),
+  ]);
+
+  cachedWasmModule = await WebAssembly.compile(wasmBytes);
+  cachedFsBundle = dataBytes;
+
+  return { wasmModule: cachedWasmModule, fsBundle: cachedFsBundle };
+}
+
+/**
+ * Check if we're running in Bun (where PGlite's default loading fails)
+ */
+function isRunningInBun(): boolean {
+  return typeof Bun !== "undefined";
+}
+
+/**
+ * Lazy-load PGlite, with support for standalone binary and Bun runtime
+ */
+async function getPGlite(): Promise<PGliteType> {
+  if (!PGliteClass) {
+    try {
+      const module = await import("@electric-sql/pglite");
+      PGliteClass = module.PGlite;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes("$bunfs") || msg.includes("ENOENT") || msg.includes("Cannot find package")) {
+        throw new PGliteNotAvailableError(msg);
+      }
+      throw error;
+    }
+  }
+
+  // In Bun, PGlite's default asset loading fails - load from disk first
+  if (isRunningInBun()) {
+    const assets = findPGliteAssets();
+    if (assets) {
+      const { wasmModule, fsBundle } = await loadPGliteAssets();
+      return await PGliteClass.create({
+        wasmModule,
+        fsBundle: new Blob([fsBundle]),
+      });
+    }
+    // No assets found - will fail, but let it try (gives better error)
+  }
+
+  // Normal path (Node.js or Bun with assets not found)
+  try {
+    return await PGliteClass.create();
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("$bunfs") || msg.includes("ENOENT") || msg.includes("pglite")) {
+      throw new PGliteNotAvailableError(msg);
+    }
+    throw error;
+  }
+}
 
 /**
  * Verbose logging flag - set via setVerbose()
@@ -26,11 +158,29 @@ export function setVerbose(value: boolean): void {
 }
 
 /**
- * Log message only in verbose mode
+ * Log message only in verbose mode (dim/secondary color)
  */
-function log(message: string): void {
+function log(message: string, ...args: unknown[]): void {
   if (verbose) {
-    console.error(message);
+    console.error(`${C.secondary}${message}${C.reset}`, ...args);
+  }
+}
+
+/**
+ * Log warning message only in verbose mode (yellow)
+ */
+function logWarning(message: string, ...args: unknown[]): void {
+  if (verbose) {
+    console.error(`${C.warning}${message}${C.reset}`, ...args);
+  }
+}
+
+/**
+ * Log error message only in verbose mode (red)
+ */
+function logError(message: string, ...args: unknown[]): void {
+  if (verbose) {
+    console.error(`${C.error}${message}${C.reset}`, ...args);
   }
 }
 
@@ -202,10 +352,39 @@ function findVendorDir(subpath: string): string | null {
 }
 
 /**
- * Find the auth migrations directory (from submodule)
+ * Find the auth migrations directory (bundled or from submodule)
  */
 function findAuthMigrationsDir(): string | null {
-  return findVendorDir("supabase-auth/migrations");
+  const candidates: string[] = [];
+
+  // 1. Next to executable (for compiled binary)
+  const execDir = dirname(process.execPath);
+  candidates.push(join(execDir, "auth-migrations"));
+
+  // 2. Relative to this source file (for development / pnpm)
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  candidates.push(join(__dirname, "..", "..", "bin", "auth-migrations"));
+  candidates.push(join(__dirname, "..", "bin", "auth-migrations"));
+
+  // Check bundled locations first
+  for (const dir of candidates) {
+    if (existsSync(dir)) {
+      const files = readdirSync(dir).filter((f) => f.endsWith(".up.sql"));
+      if (files.length > 0) {
+        log(`[pglite] Found auth migrations in ${dir}`);
+        return dir;
+      }
+    }
+  }
+
+  // 3. Fall back to vendor submodule (for development)
+  const vendorDir = findVendorDir("supabase-auth/migrations");
+  if (vendorDir) {
+    log(`[pglite] Found auth migrations in vendor: ${vendorDir}`);
+    return vendorDir;
+  }
+
+  return null;
 }
 
 /**
@@ -473,16 +652,21 @@ let cachedConnectionString: string | null = null;
  * pg-delta sets up its own type parsers in postgres-config.js, so we don't need transformations
  */
 function getSupabasePool(connectionString: string): Pool {
+  log(`[pg-pool] Creating pool with connection string: ${sanitizeConnectionString(connectionString)}`);
+
   // Reuse existing pool if connection string matches
   if (cachedSupabasePool && cachedConnectionString === connectionString) {
+    log("[pg-pool] Reusing cached pool");
     return cachedSupabasePool;
   }
 
   // Close existing pool if different connection string
   if (cachedSupabasePool) {
+    log("[pg-pool] Closing previous pool");
     cachedSupabasePool.end().catch(() => {});
   }
 
+  log("[pg-pool] Creating new pg.Pool instance");
   // Create new pool with conservative limits for Supabase
   cachedSupabasePool = new pg.Pool({
     connectionString,
@@ -848,7 +1032,7 @@ export async function diffSchemaWithPgDelta(
   schemaDir: string,
 ): Promise<DiffResult> {
   log("[pg-delta] Creating PGlite instance...");
-  const pglite = await PGlite.create();
+  const pglite = await getPGlite();
 
   try {
     // Create schemas first
@@ -931,11 +1115,13 @@ export async function diffSchemaWithPgDelta(
 
     // Create Pool adapters for both databases
     const pglitePool = createPGlitePool(pglite);
-    const supabasePool = getSupabasePool(connectionString);
 
     log("[pg-delta] Creating migration plan...");
     log("[pg-delta] Source: PGlite (desired state)");
-    log("[pg-delta] Target:", sanitizeConnectionString(connectionString));
+    log("[pg-delta] Target connection string length:", connectionString?.length || 0);
+    log("[pg-delta] Target (sanitized):", sanitizeConnectionString(connectionString));
+
+    const supabasePool = getSupabasePool(connectionString);
 
     // pg-delta: source = current state, target = desired state
     // But we want: source = PGlite (desired), target = Supabase (current)
@@ -1023,7 +1209,7 @@ export async function applySchemaWithPgDelta(
   log("[pg-delta] Statements:", diffResult.statements.length);
 
   // We need PGlite again to apply the plan (pg-delta verifies fingerprints)
-  const pglite = await PGlite.create();
+  const pglite = await getPGlite();
 
   try {
     // Create schemas first
@@ -1292,7 +1478,7 @@ export async function pullSchemaWithPgDelta(
   schemaDir: string,
 ): Promise<PullResult> {
   log("[pg-delta] Starting schema pull...");
-  const pglite = await PGlite.create();
+  const pglite = await getPGlite();
 
   try {
     // Create schemas

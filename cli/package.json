@@ -7,7 +7,7 @@
     "supa": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsup && bun build src/index.ts --compile --minify --outfile bin/supa --target=bun && codesign -s - -f bin/supa",
+    "build": "tsup && bun build src/index.ts --compile --minify --outfile bin/supa --target=bun && codesign -s - -f bin/supa && mkdir -p bin/pglite bin/auth-migrations && cp node_modules/@electric-sql/pglite/dist/pglite.wasm node_modules/@electric-sql/pglite/dist/pglite.data bin/pglite/ && cp ../vendor/supabase-auth/migrations/*.up.sql bin/auth-migrations/",
     "dev": "tsup --watch",
     "start": "node dist/index.js",
     "test": "vitest run",

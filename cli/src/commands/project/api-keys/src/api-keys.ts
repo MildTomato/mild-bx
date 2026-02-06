@@ -28,7 +28,7 @@ function formatKeyType(type: string | null | undefined): string {
     case "publishable":
       return chalk.green("publishable");
     case "secret":
-      return chalk.yellow("secret");
+      return chalk.red("secret");
     default:
       return type;
   }
@@ -50,9 +50,9 @@ function printTable(keys: ApiKey[], reveal: boolean) {
 
   // Header
   console.log(
-    chalk.bold.cyan("Name".padEnd(nameW)) +
-    chalk.bold.cyan("Type".padEnd(typeW)) +
-    chalk.bold.cyan("Key".padEnd(keyW))
+    chalk.dim("NAME".padEnd(nameW)) +
+    chalk.dim("TYPE".padEnd(typeW)) +
+    chalk.dim("KEY".padEnd(keyW))
   );
   console.log(chalk.dim("─".repeat(nameW + typeW + keyW)));
 
@@ -129,12 +129,15 @@ export async function apiKeysCommand(options: ApiKeysOptions): Promise<void> {
     const client = createClient(token);
     const apiKeys = await client.getProjectApiKeys(projectRef, reveal);
 
+    spinner.stop();
+
     if (apiKeys.length === 0) {
-      spinner.stop(chalk.yellow("No API keys found"));
+      console.log(chalk.yellow("No API keys found"));
       return;
     }
 
-    spinner.stop(`API Keys for ${chalk.cyan(projectRef)}`);
+    console.log();
+    console.log(chalk.bold(`API Keys for ${chalk.cyan(projectRef)}`));
     console.log();
     printTable(apiKeys, reveal);
 
@@ -142,6 +145,7 @@ export async function apiKeysCommand(options: ApiKeysOptions): Promise<void> {
       console.log();
       console.log(chalk.dim("Tip: Use --reveal to show full API keys"));
     }
+    console.log();
   } catch (error) {
     spinner.stop(chalk.red("Failed to load API keys"));
     console.error(chalk.red(error instanceof Error ? error.message : "Unknown error"));

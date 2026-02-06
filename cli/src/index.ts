@@ -7,10 +7,12 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { getCommand, suggestCommand, commandSpecs } from "@/commands/index.js";
 import { renderHelp } from "@/util/commands/help.js";
 import type { Command } from "@/util/commands/types.js";
 import { getAccessTokenAsync } from "@/lib/config.js";
+import { C } from "@/lib/colors.js";
 
 const CLI_NAME = "supa";
 const CLI_VERSION = "0.0.1";
@@ -20,11 +22,21 @@ const CLI_DESCRIPTION = "Supabase DX CLI - experimental developer experience too
 // Environment setup
 // ─────────────────────────────────────────────────────────────
 
-// Load .env files silently
-function loadEnvFile(path: string) {
+// Load .env files silently (or verbosely if verbose flag is set)
+function loadEnvFile(path: string, verbose = false) {
   try {
-    if (!existsSync(path)) return;
-    const content = readFileSync(path, "utf-8");
+    const fullPath = join(process.cwd(), path);
+    if (verbose) {
+      console.error(`${C.secondary}[env] Checking ${fullPath}${C.reset}`);
+    }
+    if (!existsSync(fullPath)) {
+      if (verbose) {
+        console.error(`${C.secondary}[env] File does not exist${C.reset}`);
+      }
+      return;
+    }
+    const content = readFileSync(fullPath, "utf-8");
+    let loaded = 0;
     for (const line of content.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith("#")) continue;
@@ -33,17 +45,21 @@ function loadEnvFile(path: string) {
         const value = valueParts.join("=").replace(/^["']|["']$/g, "");
         if (!process.env[key]) {
           process.env[key] = value;
+          loaded++;
         }
       }
     }
-  } catch {
-    // Ignore errors
+    if (verbose && loaded > 0) {
+      console.error(`${C.secondary}[env] Loaded ${loaded} variables from ${fullPath}${C.reset}`);
+    }
+  } catch (err) {
+    // Always show errors (in red)
+    console.error(`${C.error}[env] Failed to load ${path}:${C.reset}`, err);
   }
 }
 
-loadEnvFile(".env");
-loadEnvFile("supabase/.env");
-loadEnvFile(".env.local");
+// Note: .env loading moved to main() function so it runs at command execution time,
+// not module init time (which doesn't work correctly in compiled binaries)
 
 // ─────────────────────────────────────────────────────────────
 // Root command definition
@@ -93,6 +109,25 @@ async function checkAuth(commandName: string): Promise<boolean> {
 
 async function main(): Promise<number> {
   const argv = process.argv.slice(2);
+  const isVerbose = argv.includes("--verbose");
+
+  // Load .env files at runtime (not module init time)
+  if (isVerbose) {
+    console.error(`${C.secondary}[env] cwd: ${process.cwd()}${C.reset}`);
+  }
+  loadEnvFile(".env", isVerbose);
+  loadEnvFile("supabase/.env", isVerbose);
+  loadEnvFile(".env.local", isVerbose);
+
+  if (isVerbose) {
+    const pwd = process.env.SUPABASE_DB_PASSWORD;
+    if (pwd) {
+      const last4 = pwd.length >= 4 ? pwd.slice(-4) : pwd;
+      console.error(`${C.secondary}[env] SUPABASE_DB_PASSWORD last 4 digits: ...${last4}${C.reset}`);
+    } else {
+      console.error(`${C.secondary}[env] SUPABASE_DB_PASSWORD not set${C.reset}`);
+    }
+  }
 
   // Handle --version early (can appear anywhere)
   if (argv.includes("--version") || argv.includes("-V")) {

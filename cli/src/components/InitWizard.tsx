@@ -368,12 +368,8 @@ export async function runInitWizard(): Promise<InitResult> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Done - return result, init.tsx handles the success screen
+  // Done - return result, init.ts handles the success screen
   // ─────────────────────────────────────────────────────────────
-
-  console.log(S_BAR);
-  console.log(`${chalk.dim("└")}`);
-  console.log();
 
   return {
     ref: finalProject.ref,

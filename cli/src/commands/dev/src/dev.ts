@@ -956,11 +956,14 @@ export async function devCommand(options: DevOptions): Promise<void> {
     } else {
       spinner.stop(msg);
     }
-    // Show detail as nested text with appropriate color
+    // Show detail as nested text with appropriate color (handle multiline)
     if (detail) {
       clearLine();
       const color = status === "error" ? C.error : status === "warning" ? C.warning : C.secondary;
-      console.log(`${S_BAR}  ${color}${detail}${C.reset}`);
+      const lines = detail.split("\n");
+      for (const line of lines) {
+        console.log(`${S_BAR}  ${color}${line}${C.reset}`);
+      }
       lastActivity = Date.now();
     }
     startHeartbeat();
@@ -1004,6 +1007,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
   });
   console.log(S_BAR);
   console.log(`${S_BAR}  ${C.secondary}Project:${C.reset}  ${projectRef}`);
+  console.log(`${S_BAR}  ${C.secondary}Dashboard:${C.reset} https://supabase.com/dashboard/project/${projectRef}`);
   console.log(`${S_BAR}  ${C.secondary}Profile:${C.reset}  ${profile?.name || "default"}`);
   console.log(`${S_BAR}  ${C.secondary}Branch:${C.reset}   ${currentBranch}`);
   console.log(`${S_BAR}  ${C.secondary}Schema:${C.reset}   ${relative(cwd, schemaDir)}`);
@@ -1326,6 +1330,9 @@ export async function devCommand(options: DevOptions): Promise<void> {
     }
   }, typesIntervalMs);
 
+  // Visual separator between summary and first step
+  console.log(S_BAR);
+
   // Initial sync - apply any pending schema changes
   startStep("Syncing schema");
   try {
@@ -1381,11 +1388,15 @@ export async function devCommand(options: DevOptions): Promise<void> {
         }
       } else {
         completeStep("Sync failed", undefined, "error", result.output);
+        process.exitCode = 1;
+        return;
       }
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     completeStep("Sync failed", undefined, "error", msg);
+    process.exitCode = 1;
+    return;
   }
 
   // Start heartbeat

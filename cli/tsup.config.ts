@@ -9,7 +9,7 @@ export default defineConfig({
   sourcemap: true,
   dts: false,
   shims: true,
-  external: ["react", "react-devtools-core"],
+  external: ["react", "react-devtools-core", "@electric-sql/pglite", "@electric-sql/pglite-socket"],
   esbuildOptions(options) {
     options.jsx = "automatic";
     // Path aliases (esbuild resolves these at build time)

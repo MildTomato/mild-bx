@@ -22,6 +22,7 @@ import { WORKFLOW_PROFILES } from "@/lib/workflow-profiles.js";
 import type { WorkflowProfile, SchemaManagement, ConfigSource } from "@/lib/config-types.js";
 import { runInitWizard, type InitResult } from "@/components/InitWizard.js";
 import { createSpinner } from "@/lib/spinner.js";
+import { S_BAR } from "@/components/command-header.js";
 
 interface InitOptions {
   yes?: boolean;
@@ -219,6 +220,12 @@ export async function initCommand(options: InitOptions): Promise<void> {
 
   spinner?.stop("Project config fetched");
 
+  // Close the timeline from the wizard
+  if (!options.json && process.stdin.isTTY) {
+    console.log(S_BAR);
+    console.log(`${chalk.dim("└")}`);
+  }
+
   // Dry run - just show what would happen
   if (options.dryRun) {
     if (options.json) {
@@ -340,7 +347,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
     console.log(chalk.dim("  API Credentials"));
     console.log(`  ${chalk.dim("URL:")} ${chalk.cyan(apiUrl)}`);
     console.log(`  ${chalk.dim("Anon Key:")} ${anonKey || chalk.dim("[Keys still initializing]")}`);
-    console.log(`  ${chalk.dim("Secret Key:")} ${chalk.dim('[hidden] run "supa keys"')}`);
+    console.log(`  ${chalk.dim("Secret Key:")} ${chalk.dim('[hidden] run "supa project api-keys --reveal"')}`);
     console.log();
     console.log(chalk.dim("  Usage"));
     console.log(`  ${chalk.dim("createClient(")}${chalk.cyan(`"${apiUrl}"`)}${chalk.dim(', "<ANON_KEY>")')}`);

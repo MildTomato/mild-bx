@@ -1,0 +1,24 @@
+{
+  "$schema": "../../../cli/config-schema/config.schema.json",
+  "project_id": "aklzkbetfwyjoaqldbcw",
+  "workflow_profile": "solo",
+  "schema_management": "declarative",
+  "config_source": "code",
+  "api": {
+    "schemas": [
+      "public",
+      "graphql_public"
+    ],
+    "extra_search_path": [
+      "public",
+      "extensions"
+    ],
+    "max_rows": 1000
+  },
+  "auth": {
+    "site_url": "http://localhost:3000",
+    "jwt_expiry": 3600,
+    "enable_signup": true,
+    "enable_anonymous_sign_ins": false
+  }
+}

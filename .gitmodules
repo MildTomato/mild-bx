@@ -16,3 +16,6 @@
 [submodule "external/skills"]
 	path = external/skills
 	url = https://github.com/vercel-labs/skills.git
+[submodule "external/supabase-cli"]
+	path = external/supabase-cli
+	url = https://github.com/supabase/cli.git

@@ -41,10 +41,20 @@ Log in to your Supabase account:
 supa login
 ```
 
-This opens your browser to authenticate. After logging in, enter the verification
-code shown in your terminal.
+```ansi
+$ supa login
 
-For CI/CD environments or scripts, use a token directly:
+  Opening browser to authenticate...
+
+  ◆  Enter the verification code from your browser:
+  │  ▪▪▪▪▪▪
+  └
+
+  ✓  Logged in as you@example.com
+  ✓  Token stored in system keychain
+```
+
+For CI/CD environments, use a token directly:
 
 ```bash
 supa login --token sbp_xxxxx
@@ -61,15 +71,42 @@ Run the init wizard in your project directory:
 supa init
 ```
 
-The wizard guides you through:
+```ansi
+$ supa init
 
-1. Selecting your organization
-2. Selecting an existing project or creating a new one
-3. Choosing a workflow profile (solo, staged, or preview)
-4. Configuring schema management
+  ◆  Select organization
+  │  ● My Team
+  │  ○ Personal
+  └
 
-After initialization, the CLI creates a `supabase/` directory with your project
-configuration and displays your API credentials.
+  ◆  What would you like to do?
+  │  ● Link to existing project
+  │  ○ Create new project
+  └
+
+  ◆  Select project
+  │  ● my-app (us-east-1)
+  │  ○ staging-db (eu-west-1)
+  └
+
+  ◆  Select workflow profile
+  │  ● solo     — Direct production deployments
+  │  ○ staged   — Staging environment for testing
+  │  ○ preview  — Isolated preview environments
+  └
+
+  ✓  Linked to project my-app
+
+  Created:
+    supabase/config.json
+    supabase/schema/
+    supabase/migrations/
+    supabase/types/database.ts
+
+  Your API credentials:
+    URL:  https://abc123xyz.supabase.co
+    Anon: eyJhbGciOiJIUzI1NiIsInR5cCI6...
+```
 
 ### Non-interactive initialization
 
@@ -106,8 +143,20 @@ Start the dev server to watch for changes:
 supa dev
 ```
 
-This watches your schema and config files, automatically syncing changes to your
-project.
+```ansi
+$ supa dev
+
+  ✓  Connected to my-app
+  ◐  Watching for changes...
+
+  │ supabase/schema/public/posts.sql changed
+  │ + CREATE TABLE posts
+  ✓  Synced 1 change
+
+  │ supabase/schema/public/posts.sql changed
+  │ + ALTER TABLE posts ADD COLUMN author_id UUID
+  ✓  Synced 1 change
+```
 
 Create a schema file:
 

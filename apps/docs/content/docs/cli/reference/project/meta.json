@@ -1,0 +1,13 @@
+{
+  "title": "Project",
+  "pages": [
+    "index",
+    "pull",
+    "push",
+    "dev",
+    "seed",
+    "seed-status",
+    "api-keys",
+    "profile"
+  ]
+}

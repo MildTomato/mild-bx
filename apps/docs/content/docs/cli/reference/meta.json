@@ -1,0 +1,14 @@
+{
+  "pages": [
+    "index",
+    "login",
+    "logout",
+    "init",
+    "dev",
+    "orgs",
+    "---Projects---",
+    "...projects",
+    "---Project---",
+    "...project"
+  ]
+}

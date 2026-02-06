@@ -20,10 +20,10 @@ const DOCS_OUTPUT_DIR = join(process.cwd(), "..", "apps", "docs", "content", "do
 const COMMANDS_DIR = join(process.cwd(), "src", "commands");
 
 /**
- * Get the docs slug for a command
+ * Get the URL path for a command
  */
-function getCommandSlug(command: Command, parent?: Command): string {
-  return parent ? `${parent.name}-${command.name}` : command.name;
+function getCommandPath(command: Command, parent?: Command): string {
+  return parent ? `${parent.name}/${command.name}` : command.name;
 }
 
 /**
@@ -121,8 +121,8 @@ function commandToMdx(command: Command, parent?: Command): string {
       lines.push("| Command | Description |");
       lines.push("|---------|-------------|");
       for (const sub of visibleSubs) {
-        const subSlug = getCommandSlug(sub, command);
-        lines.push(`| [\`${sub.name}\`](/docs/cli/reference/${subSlug}) | ${sub.description} |`);
+        const subPath = getCommandPath(sub, command);
+        lines.push(`| [\`${sub.name}\`](/docs/cli/reference/${subPath}) | ${sub.description} |`);
       }
       lines.push("");
     }
@@ -186,17 +186,47 @@ function commandToMdx(command: Command, parent?: Command): string {
  * Write MDX file for a command
  */
 function writeCommandDoc(command: Command, parent?: Command): void {
-  const slug = getCommandSlug(command, parent);
-  const filePath = join(DOCS_OUTPUT_DIR, `${slug}.mdx`);
+  const hasSubcommands = command.subcommands && command.subcommands.length > 0;
+  const docsDir = getDocsDir(command, parent);
+  const hasDocsDir = existsSync(docsDir);
+
+  let filePath: string;
+  let displayPath: string;
+
+  if (parent) {
+    // Subcommand: goes in parent's folder
+    filePath = join(DOCS_OUTPUT_DIR, parent.name, `${command.name}.mdx`);
+    displayPath = `${parent.name}/${command.name}.mdx`;
+  } else if (hasSubcommands) {
+    // Parent command with subcommands: create folder, use index.mdx
+    filePath = join(DOCS_OUTPUT_DIR, command.name, "index.mdx");
+    displayPath = `${command.name}/index.mdx`;
+  } else {
+    // Simple command without subcommands
+    filePath = join(DOCS_OUTPUT_DIR, `${command.name}.mdx`);
+    displayPath = `${command.name}.mdx`;
+  }
 
   mkdirSync(dirname(filePath), { recursive: true });
 
   const content = commandToMdx(command, parent);
   writeFileSync(filePath, content);
 
-  const docsDir = getDocsDir(command, parent);
-  const hasDocsDir = existsSync(docsDir);
-  console.log(`  ${slug}.mdx${hasDocsDir ? " (+docs/)" : ""}`);
+  console.log(`  ${displayPath}${hasDocsDir ? " (+docs/)" : ""}`);
+
+  // Write meta.json for folders with subcommands
+  if (!parent && hasSubcommands) {
+    const visibleSubs = command.subcommands!.filter((s) => !s.hidden);
+    // Title case the command name
+    const title = command.name.charAt(0).toUpperCase() + command.name.slice(1);
+    const folderMeta = {
+      title,
+      pages: ["index", ...visibleSubs.map((s) => s.name)],
+    };
+    const metaPath = join(DOCS_OUTPUT_DIR, command.name, "meta.json");
+    writeFileSync(metaPath, JSON.stringify(folderMeta, null, 2) + "\n");
+    console.log(`  ${command.name}/meta.json`);
+  }
 
   // Process subcommands recursively
   if (command.subcommands) {
@@ -239,6 +269,33 @@ function writeIndexDoc(): void {
   console.log("  index.mdx");
 }
 
+/**
+ * Generate meta.json for sidebar organization
+ * Top-level commands only - folders handle their own subcommands
+ */
+function writeMetaJson(): void {
+  const filePath = join(DOCS_OUTPUT_DIR, "meta.json");
+
+  const pages: string[] = ["index"];
+
+  for (const cmd of commandSpecs) {
+    if (cmd.hidden) continue;
+
+    if (cmd.subcommands?.length) {
+      // Add separator header then spread folder contents
+      const title = cmd.name.charAt(0).toUpperCase() + cmd.name.slice(1);
+      pages.push(`---${title}---`);
+      pages.push(`...${cmd.name}`);
+    } else {
+      pages.push(cmd.name);
+    }
+  }
+
+  const meta = { pages };
+  writeFileSync(filePath, JSON.stringify(meta, null, 2) + "\n");
+  console.log("  meta.json");
+}
+
 // Main
 console.log("Generating CLI docs from command specs...");
 console.log("");
@@ -247,6 +304,7 @@ if (!existsSync(DOCS_OUTPUT_DIR)) {
   mkdirSync(DOCS_OUTPUT_DIR, { recursive: true });
 }
 
+writeMetaJson();
 writeIndexDoc();
 
 for (const command of commandSpecs) {

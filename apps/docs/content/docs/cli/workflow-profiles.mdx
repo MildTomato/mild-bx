@@ -18,6 +18,12 @@ Workflow profiles define how the CLI handles deployments. Choose a profile that 
 
 The simplest workflow — changes go directly to your production project.
 
+```mermaid
+flowchart LR
+    L[Local] -->|push| P[Production]
+    P -->|pull| L
+```
+
 ```bash
 supa project profile --set solo
 ```
@@ -32,6 +38,13 @@ Use this when:
 ## Staged Profile
 
 Adds a staging environment between development and production.
+
+```mermaid
+flowchart LR
+    L[Local] -->|push| S[Staging]
+    S -->|promote| P[Production]
+    S -->|pull| L
+```
 
 ```bash
 supa project profile --set staged
@@ -50,6 +63,14 @@ Use this when:
 
 Creates isolated preview environments for each feature.
 
+```mermaid
+flowchart LR
+    L[Local] -->|push| PR1[Preview 1]
+    L -->|push| PR2[Preview 2]
+    PR1 -->|promote| P[Production]
+    PR2 -->|promote| P
+```
+
 ```bash
 supa project profile --set preview
 ```
@@ -64,6 +85,18 @@ Use this when:
 ## Preview-Git Profile
 
 Automatically creates preview environments based on git branches.
+
+```mermaid
+flowchart LR
+    subgraph Git
+        M[main]
+        F1[feature-a]
+        F2[feature-b]
+    end
+    F1 -->|auto| P1[Preview A]
+    F2 -->|auto| P2[Preview B]
+    M -->|merge| P[Production]
+```
 
 ```bash
 supa project profile --set preview-git

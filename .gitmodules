@@ -7,18 +7,18 @@
 [submodule "vendor/supabase-postgres"]
 	path = vendor/supabase-postgres
 	url = https://github.com/supabase/postgres.git
-[submodule "external/auth"]
-	path = external/auth
-	url = https://github.com/supabase/auth.git
-[submodule "external/vercel"]
-	path = external/vercel
-	url = https://github.com/vercel/vercel.git
-[submodule "external/skills"]
-	path = external/skills
-	url = https://github.com/vercel-labs/skills.git
 [submodule "external/clack"]
 	path = external/clack
 	url = https://github.com/natemoo-re/clack.git
 [submodule "external/supabase-cli"]
 	path = external/supabase-cli
 	url = https://github.com/supabase/cli.git
+[submodule "external/auth"]
+	path = external/auth
+	url = https://github.com/supabase/auth.git
+[submodule "external/skills"]
+	path = external/skills
+	url = https://github.com/vercel-labs/skills.git
+[submodule "external/vercel"]
+	path = external/vercel
+	url = https://github.com/vercel/vercel.git

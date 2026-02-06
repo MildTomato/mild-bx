@@ -8,6 +8,7 @@ import { seedSubcommand } from "./seed/command.js";
 import { seedStatusSubcommand } from "./seed-status/command.js";
 import { apiKeysSubcommand } from "./api-keys/command.js";
 import { profileSubcommand } from "./profile/command.js";
+import { authProviderSubcommand } from "./auth-provider/command.js";
 import { devCommand } from "@/commands/dev/command.js";
 import type { Command } from "@/util/commands/types.js";
 
@@ -24,6 +25,7 @@ export const projectCommand = {
     seedStatusSubcommand,
     apiKeysSubcommand,
     profileSubcommand,
+    authProviderSubcommand,
   ],
   options: [],
   examples: [

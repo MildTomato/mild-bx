@@ -1,0 +1,33 @@
+---
+title: "supa auth-provider disable"
+description: "Disable an OAuth provider"
+generated: true
+---
+
+## Usage
+
+```bash
+supa auth-provider disable <provider> [options]
+```
+
+## Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `provider` | Yes |  |
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `--dry-run` | boolean | Preview changes without applying them |
+| `-p, --profile <NAME>` | string | Profile to use |
+| `--json` | boolean | Output as JSON |
+
+## Examples
+
+### Disable Google provider
+
+```bash
+supa project auth-provider disable google
+```

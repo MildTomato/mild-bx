@@ -8,6 +8,7 @@
     "seed",
     "seed-status",
     "api-keys",
-    "profile"
+    "profile",
+    "auth-provider"
   ]
 }

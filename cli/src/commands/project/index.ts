@@ -10,6 +10,7 @@ import seed from "./seed/index.js";
 import seedStatus from "./seed-status/index.js";
 import apiKeys from "./api-keys/index.js";
 import profile from "./profile/index.js";
+import authProvider from "./auth-provider/index.js";
 import dev from "@/commands/dev/index.js";
 
 export { projectCommand };
@@ -40,6 +41,9 @@ export default async function project(argv: string[]): Promise<number> {
       return apiKeys(rest);
     case "profile":
       return profile(rest);
+    case "auth-provider":
+    case "auth":
+      return authProvider(rest);
     default:
       // Check for common mistakes
       if (subcommand === "--set") {

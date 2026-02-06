@@ -3,9 +3,9 @@ import { cn } from '@/lib/cn';
 
 function LogoText() {
   return (
-    <Link href="/" className="font-medium text-fd-foreground hover:text-fd-foreground/90 transition-colors">
+    <span className="font-medium text-fd-foreground">
       Mild BX
-    </Link>
+    </span>
   );
 }
 

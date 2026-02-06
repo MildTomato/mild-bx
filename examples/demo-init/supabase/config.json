@@ -19,6 +19,18 @@
     "site_url": "http://localhost:3000",
     "jwt_expiry": 3600,
     "enable_signup": true,
-    "enable_anonymous_sign_ins": false
+    "enable_anonymous_sign_ins": false,
+    "external": {
+      "google": {
+        "enabled": true,
+        "client_id": "123",
+        "secret": "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+      },
+      "github": {
+        "enabled": true,
+        "client_id": "123",
+        "secret": "env(SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET)"
+      }
+    }
   }
 }

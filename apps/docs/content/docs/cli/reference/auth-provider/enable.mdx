@@ -1,0 +1,33 @@
+---
+title: "supa auth-provider enable"
+description: "Enable an OAuth provider"
+generated: true
+---
+
+## Usage
+
+```bash
+supa auth-provider enable <provider> [options]
+```
+
+## Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `provider` | Yes |  |
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `--dry-run` | boolean | Preview changes without applying them |
+| `-p, --profile <NAME>` | string | Profile to use |
+| `--json` | boolean | Output as JSON |
+
+## Examples
+
+### Enable Google provider
+
+```bash
+supa project auth-provider enable google
+```

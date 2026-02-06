@@ -1,0 +1,46 @@
+---
+title: "supa auth-provider add"
+description: "Configure an OAuth provider"
+generated: true
+---
+
+## Usage
+
+```bash
+supa auth-provider add [provider] [options]
+```
+
+## Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `provider` | No |  |
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `--client-id` | string | OAuth client ID |
+| `--secret` | string | OAuth client secret |
+| `--secret-from-env` | string | Read secret from environment variable |
+| `--url` | string | Provider URL (for Azure, GitLab, Keycloak, WorkOS) |
+| `--redirect-uri` | string | Custom redirect URI (optional, defaults to Supabase callback) |
+| `--skip-nonce-check` | boolean | Skip nonce validation |
+| `--dry-run` | boolean | Preview changes without applying them |
+| `-p, --profile <NAME>` | string | Profile to use |
+| `--json` | boolean | Output as JSON |
+| `-y, --yes` | boolean | Skip confirmation prompts |
+
+## Examples
+
+### Interactive provider setup
+
+```bash
+supa project auth-provider add
+```
+
+### Configure GitHub provider
+
+```bash
+supa project auth-provider add github --client-id abc123 --secret xyz789
+```

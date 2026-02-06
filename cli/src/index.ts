@@ -108,7 +108,7 @@ async function checkAuth(commandName: string): Promise<boolean> {
 // ─────────────────────────────────────────────────────────────
 
 async function main(): Promise<number> {
-  const argv = process.argv.slice(2);
+  let argv = process.argv.slice(2);
   const isVerbose = argv.includes("--verbose");
 
   // Load .env files at runtime (not module init time)
@@ -128,6 +128,9 @@ async function main(): Promise<number> {
       console.error(`${C.secondary}[env] SUPABASE_DB_PASSWORD not set${C.reset}`);
     }
   }
+
+  // Strip --verbose from argv (already consumed above)
+  argv = argv.filter(arg => arg !== "--verbose" && arg !== "-v");
 
   // Handle --version early (can appear anywhere)
   if (argv.includes("--version") || argv.includes("-V")) {

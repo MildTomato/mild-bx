@@ -1,6 +1,6 @@
-@import 'tailwindcss';
-@import 'fumadocs-ui/css/neutral.css';
-@import 'fumadocs-ui/css/preset.css';
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
 
 /* Darker dark mode */
 .dark {
@@ -14,8 +14,8 @@
 }
 
 html {
-  font-size: 14px;
-  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 16px;
+  font-family: "Geist", system-ui, sans-serif;
 }
 
 /* Limit main content width */
@@ -24,7 +24,11 @@ article {
 }
 
 /* Headers not bold */
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-weight: 400;
 }
-

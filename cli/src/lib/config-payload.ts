@@ -10,6 +10,44 @@ type UpdatePostgrestBody = components["schemas"]["V1UpdatePostgrestConfigBody"];
 type UpdateAuthBody = components["schemas"]["UpdateAuthConfigBody"];
 
 /**
+ * Resolve environment variable references in config values
+ * If value matches env(VAR_NAME), returns process.env[VAR_NAME]
+ * Otherwise returns value as-is
+ */
+export function resolveEnvRef(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+
+  const envMatch = value.match(/^env\(([A-Z_][A-Z0-9_]*)\)$/);
+  if (!envMatch) return value;
+
+  const envVarName = envMatch[1];
+  const envValue = process.env[envVarName];
+
+  if (envValue === undefined) {
+    throw new Error(`Environment variable ${envVarName} is not set`);
+  }
+
+  return envValue;
+}
+
+/**
+ * Apply resolveEnvRef to all string values in an object recursively
+ */
+function resolveEnvRefsInObject(obj: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(obj)) {
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      result[key] = resolveEnvRefsInObject(value as Record<string, unknown>);
+    } else {
+      result[key] = resolveEnvRef(value);
+    }
+  }
+
+  return result;
+}
+
+/**
  * Build PostgREST config update payload from config.json api section
  */
 export function buildPostgrestPayload(
@@ -30,7 +68,10 @@ export function buildPostgrestPayload(
     payload.max_rows = api.max_rows;
   }
 
-  return Object.keys(payload).length > 0 ? payload : null;
+  // Resolve environment variable references
+  return Object.keys(payload).length > 0
+    ? (resolveEnvRefsInObject(payload) as UpdatePostgrestBody)
+    : null;
 }
 
 /**
@@ -139,7 +180,10 @@ export function buildAuthPayload(config: ProjectConfig): UpdateAuthBody | null {
     }
   }
 
-  return Object.keys(payload).length > 0 ? (payload as UpdateAuthBody) : null;
+  // Resolve environment variable references in all string values
+  return Object.keys(payload).length > 0
+    ? (resolveEnvRefsInObject(payload) as UpdateAuthBody)
+    : null;
 }
 
 /**

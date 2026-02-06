@@ -1,0 +1,41 @@
+---
+title: "supa projects"
+description: "Manage projects"
+---
+
+List and create Supabase projects.
+
+Running `supa projects` without a subcommand defaults to `supa projects list`.
+
+## Usage
+
+```bash
+supa projects
+```
+
+## Subcommands
+
+| Command | Description |
+|---------|-------------|
+| [`list`](/docs/cli/reference/projects-list) | List all projects |
+| [`new`](/docs/cli/reference/projects-new) | Create a new project |
+
+## Examples
+
+### List all projects
+
+```bash
+supa projects list
+```
+
+### List projects for an org
+
+```bash
+supa projects list --org my-org
+```
+
+### Create a new project
+
+```bash
+supa projects new
+```

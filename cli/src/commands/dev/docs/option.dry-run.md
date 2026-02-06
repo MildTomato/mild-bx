@@ -1,0 +1,1 @@
+Shows what would be synced without applying changes. Useful for debugging sync issues or understanding what the watcher detects.

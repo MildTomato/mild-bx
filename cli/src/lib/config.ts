@@ -4,18 +4,281 @@
  * Supports multiple config formats:
  * - supabase/config.json (with JSON Schema support)
  * - supabase/config.toml (legacy)
+ *
+ * Access token resolution (matches supabase-cli):
+ * 1. SUPABASE_ACCESS_TOKEN env var
+ * 2. OS keyring for current profile
+ * 3. OS keyring for legacy key "access-token"
+ * 4. ~/.supabase/access-token file
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, dirname } from "node:path";
 import { parse as parseToml } from "toml";
 import { z } from "zod";
+import { credentialStore } from "./credentials.js";
 
 /**
- * Get access token from environment variable
+ * Access token format: sbp_[a-f0-9]{40} or sbp_oauth_[a-f0-9]{40}
+ */
+const ACCESS_TOKEN_PATTERN = /^sbp_(oauth_)?[a-f0-9]{40}$/;
+
+/**
+ * Legacy keyring key for backwards compatibility
+ */
+const LEGACY_ACCESS_TOKEN_KEY = "access-token";
+
+/**
+ * Default profile name
+ */
+const DEFAULT_PROFILE = "supabase";
+
+/**
+ * Path to access token file (shared with supabase-cli)
+ */
+function getAccessTokenPath(): string {
+  return join(homedir(), ".supabase", "access-token");
+}
+
+/**
+ * Get the current profile name
+ * Checks: --profile flag (via env), ./supabase/.temp/profile file, or default
+ */
+export function getCurrentProfileName(): string {
+  // Check env var (set by --profile flag)
+  const envProfile = process.env.SUPABASE_PROFILE;
+  if (envProfile) {
+    return envProfile;
+  }
+
+  // Check project-local profile file
+  const profilePath = join(process.cwd(), "supabase", ".temp", "profile");
+  if (existsSync(profilePath)) {
+    try {
+      const profile = readFileSync(profilePath, "utf-8").trim();
+      if (profile) {
+        return profile;
+      }
+    } catch {
+      // Ignore read errors
+    }
+  }
+
+  return DEFAULT_PROFILE;
+}
+
+/**
+ * Get access token (async version with keyring support)
+ *
+ * Priority (matches supabase-cli):
+ * 1. SUPABASE_ACCESS_TOKEN env var
+ * 2. OS keyring for current profile
+ * 3. OS keyring for legacy key "access-token"
+ * 4. ~/.supabase/access-token file
+ */
+export async function getAccessTokenAsync(): Promise<string | undefined> {
+  // 1. Env var takes precedence
+  const envToken = process.env.SUPABASE_ACCESS_TOKEN;
+  if (envToken) {
+    return envToken;
+  }
+
+  // 2. Try keyring for current profile
+  const profileName = getCurrentProfileName();
+  const profileToken = await credentialStore.get(profileName);
+  if (profileToken && ACCESS_TOKEN_PATTERN.test(profileToken)) {
+    return profileToken;
+  }
+
+  // 3. Try keyring for legacy key
+  if (profileName !== LEGACY_ACCESS_TOKEN_KEY) {
+    const legacyToken = await credentialStore.get(LEGACY_ACCESS_TOKEN_KEY);
+    if (legacyToken && ACCESS_TOKEN_PATTERN.test(legacyToken)) {
+      return legacyToken;
+    }
+  }
+
+  // 4. File fallback (shared with supabase-cli)
+  const tokenPath = getAccessTokenPath();
+  if (existsSync(tokenPath)) {
+    try {
+      const token = readFileSync(tokenPath, "utf-8").trim();
+      if (ACCESS_TOKEN_PATTERN.test(token)) {
+        return token;
+      }
+    } catch {
+      // Ignore read errors
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Get access token (sync version - only checks env and file)
+ * Use getAccessTokenAsync() for full keyring support
+ *
+ * Priority:
+ * 1. SUPABASE_ACCESS_TOKEN env var
+ * 2. ~/.supabase/access-token file
  */
 export function getAccessToken(): string | undefined {
-  return process.env.SUPABASE_ACCESS_TOKEN;
+  // Env var takes precedence
+  const envToken = process.env.SUPABASE_ACCESS_TOKEN;
+  if (envToken) {
+    return envToken;
+  }
+
+  // File fallback (shared with supabase-cli)
+  const tokenPath = getAccessTokenPath();
+  if (existsSync(tokenPath)) {
+    try {
+      const token = readFileSync(tokenPath, "utf-8").trim();
+      if (ACCESS_TOKEN_PATTERN.test(token)) {
+        return token;
+      }
+    } catch {
+      // Ignore read errors
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Check if user is logged in (has valid access token)
+ */
+export async function isLoggedInAsync(): Promise<boolean> {
+  return (await getAccessTokenAsync()) !== undefined;
+}
+
+/**
+ * Check if user is logged in (sync - only checks env and file)
+ */
+export function isLoggedIn(): boolean {
+  return getAccessToken() !== undefined;
+}
+
+/**
+ * Validate access token format
+ */
+export function isValidAccessToken(token: string): boolean {
+  return ACCESS_TOKEN_PATTERN.test(token);
+}
+
+/**
+ * Save access token (async - uses keyring with file fallback)
+ * Stores in OS keyring for current profile, falls back to file
+ */
+export async function saveAccessTokenAsync(token: string): Promise<void> {
+  if (!isValidAccessToken(token)) {
+    throw new Error("Invalid access token format. Must be like `sbp_0102...1920`.");
+  }
+
+  const profileName = getCurrentProfileName();
+
+  // Try keyring first
+  try {
+    await credentialStore.set(profileName, token);
+    return;
+  } catch {
+    // Fall back to file
+  }
+
+  // File fallback
+  saveAccessTokenToFile(token);
+}
+
+/**
+ * Save access token to file only
+ */
+function saveAccessTokenToFile(token: string): void {
+  const tokenPath = getAccessTokenPath();
+  const tokenDir = dirname(tokenPath);
+
+  // Create directory if it doesn't exist
+  if (!existsSync(tokenDir)) {
+    mkdirSync(tokenDir, { recursive: true, mode: 0o700 });
+  }
+
+  // Write token with restrictive permissions (owner read/write only)
+  writeFileSync(tokenPath, token, { mode: 0o600 });
+}
+
+/**
+ * Save access token (sync - file only)
+ */
+export function saveAccessToken(token: string): void {
+  if (!isValidAccessToken(token)) {
+    throw new Error("Invalid access token format. Must be like `sbp_0102...1920`.");
+  }
+  saveAccessTokenToFile(token);
+}
+
+/**
+ * Delete access token (async - clears keyring and file)
+ * Returns true if any token was deleted
+ */
+export async function deleteAccessTokenAsync(): Promise<boolean> {
+  let deleted = false;
+
+  // Delete from file
+  const tokenPath = getAccessTokenPath();
+  if (existsSync(tokenPath)) {
+    try {
+      unlinkSync(tokenPath);
+      deleted = true;
+    } catch {
+      // Ignore errors
+    }
+  }
+
+  // Delete legacy keyring key
+  try {
+    if (await credentialStore.delete(LEGACY_ACCESS_TOKEN_KEY)) {
+      deleted = true;
+    }
+  } catch {
+    // Ignore errors
+  }
+
+  // Delete current profile from keyring
+  const profileName = getCurrentProfileName();
+  try {
+    if (await credentialStore.delete(profileName)) {
+      deleted = true;
+    }
+  } catch {
+    // Ignore errors
+  }
+
+  return deleted;
+}
+
+/**
+ * Delete access token (sync - file only)
+ */
+export function deleteAccessToken(): boolean {
+  const tokenPath = getAccessTokenPath();
+
+  if (!existsSync(tokenPath)) {
+    return false;
+  }
+
+  try {
+    unlinkSync(tokenPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get a helpful message when not logged in
+ */
+export function getLoginHint(): string {
+  return "Not logged in. Run `supa login` or set SUPABASE_ACCESS_TOKEN environment variable.";
 }
 
 // Profile configuration schema (our DX-specific profiles)
@@ -192,7 +455,14 @@ export function getProfileOrAuto(
   }
 
   // Fall back to first profile
-  return getProfile(config);
+  const profile = getProfile(config);
+  if (profile) return profile;
+
+  // No profiles block: use project_id as default so push/pull work without a profile
+  if (getProjectId(config)) {
+    return { name: "default" };
+  }
+  return null;
 }
 
 /**

@@ -11,5 +11,6 @@ export const C = {
   error: "\x1b[31m", // Errors (red)
   success: "\x1b[32m", // Success (green)
   warning: "\x1b[33m", // Warnings (yellow)
+  magenta: "\x1b[35m", // Spinner/active (magenta)
   bold: "\x1b[1m",
 } as const;

@@ -1,0 +1,106 @@
+---
+title: Getting Started
+description: Set up Auth Rules in your Supabase project
+---
+
+## Prerequisites
+
+- A Supabase project
+- Access to run SQL in the SQL Editor or via migrations
+
+## Installation
+
+Run the following SQL files in order to set up the Auth Rules system:
+
+### 1. Create Schemas
+
+```sql
+-- Create the auth_rules schemas
+CREATE SCHEMA IF NOT EXISTS auth_rules;
+CREATE SCHEMA IF NOT EXISTS auth_rules_claims;
+CREATE SCHEMA IF NOT EXISTS data_api;
+
+-- Grant usage to authenticated users
+GRANT USAGE ON SCHEMA data_api TO anon, authenticated;
+GRANT USAGE ON SCHEMA auth_rules_claims TO authenticated;
+```
+
+### 2. Create Core Tables
+
+```sql
+-- Store claim definitions
+CREATE TABLE auth_rules.claims (
+  claim_name TEXT PRIMARY KEY,
+  sql TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Store rule definitions
+CREATE TABLE auth_rules.rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  table_name TEXT NOT NULL,
+  operation TEXT NOT NULL,
+  columns TEXT[],
+  filters JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(table_name, operation)
+);
+
+-- Track generated objects for cleanup
+CREATE TABLE auth_rules.generated_objects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  rule_id UUID REFERENCES auth_rules.rules(id) ON DELETE CASCADE,
+  object_type TEXT NOT NULL,
+  object_schema TEXT NOT NULL,
+  object_name TEXT NOT NULL
+);
+```
+
+### 3. Install DSL Functions
+
+Copy the DSL functions from `02-dsl.sql`, `03-compiler.sql`, and `04-rule.sql` into your project.
+
+## Your First Rule
+
+Let's create a simple rule for a `posts` table where users can only see their own posts.
+
+### 1. Create the table
+
+```sql
+CREATE TABLE public.posts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id UUID NOT NULL DEFAULT auth.uid(),
+  title TEXT NOT NULL,
+  content TEXT
+);
+```
+
+### 2. Define a SELECT rule
+
+```sql
+SELECT auth_rules.rule('posts',
+  auth_rules.select('id', 'owner_id', 'title', 'content'),
+  auth_rules.eq('owner_id', auth_rules.user_id_marker())
+);
+```
+
+This creates a `data_api.posts` view that only shows rows where `owner_id` matches the authenticated user.
+
+### 3. Query from your app
+
+```typescript
+// Instead of querying public.posts directly
+const { data } = await supabase
+  .from('posts')  // This now queries data_api.posts
+  .select('*');
+
+// Users only see their own posts!
+```
+
+## Next Steps
+
+- Learn about [Claims](/docs/claims) for complex permission patterns
+- See the full [DSL Reference](/docs/dsl)
+- Check out [Examples](/docs/examples) for real-world patterns

@@ -1,0 +1,214 @@
+---
+title: CLI Audit Report
+description: Audit of CLI commands against CLI design guidelines
+---
+
+# CLI Commands Audit Report
+
+This report audits our CLI commands against the [CLI Guidelines](https://clig.dev/), focusing on critical and high-impact rules for AI agent integration and general usability.
+
+<Callout type="info">
+**Last Updated:** February 2026 - All P1 issues have been fixed.
+</Callout>
+
+## Executive Summary
+
+| Command | `--json` | `--plan`/`--dry-run` | Exit Codes | TTY Check | Structured Errors | `--yes` Flag |
+|---------|----------|---------------------|------------|-----------|-------------------|--------------|
+| `orgs` | ✅ | N/A | ✅ | ✅ | ✅ | N/A |
+| `projects list` | ✅ | N/A | ✅ | ✅ | ✅ | N/A |
+| `projects new` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `dev` | ✅ | ✅ | ✅ | ✅ | ✅ | N/A |
+| `seed` | ✅ | ✅ | ✅ | ✅ | ✅ | N/A |
+| `api-keys` | ✅ | N/A | ✅ | ✅ | ✅ | N/A |
+| `profile` | ✅ | N/A | ✅ | N/A | ✅ | N/A |
+| `init` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `push` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `pull` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+**Legend:** ✅ Compliant | ⚠️ Partial | ❌ Missing | N/A Not Applicable
+
+---
+
+## Why This Matters
+
+These guidelines ensure our CLI works well for:
+- **AI agents** (like Claude Code, GitHub Copilot) that need structured output
+- **CI/CD pipelines** that need reliable exit codes and non-interactive modes
+- **Scripts** that pipe output between commands
+- **Humans** who expect consistent, helpful behavior
+
+---
+
+## Detailed Findings
+
+### 1. AI Agent Integration (CRITICAL)
+
+#### `--json` Support ✅ ALL PASS
+All commands support `--json` flag for machine-readable output. This is essential for AI agents and scripts that need to parse command output.
+
+#### Structured Errors ✅ ALL PASS
+All commands output structured JSON errors with `status: "error"` and `message` fields when `--json` is used.
+
+#### Dry-Run Support ✅ PASS
+
+All commands that modify state support `--dry-run` or `--plan` to preview changes.
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| `dev` | ✅ | Has `--dry-run` |
+| `push` | ✅ | Has `--plan` |
+| `pull` | ✅ | Has `--plan` |
+| `seed` | ✅ | Has `--dry-run` |
+| `init` | ✅ | Has `--dry-run` - previews files that would be created |
+| `projects new` | ✅ | Has `--dry-run` - shows project details before creation |
+
+#### `--yes` Flag ✅ PASS
+
+Commands with confirmation prompts support `--yes` to skip them in scripts.
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| `push` | ✅ | Has `--yes` and uses it |
+| `pull` | ✅ | Has `--yes` and uses it |
+| `init` | ✅ | Has `--yes` - skips "Run supa dev?" prompt |
+
+#### Progress to stderr ✅ PASS
+
+All commands now use `createSpinner()` from `@/lib/spinner.js` which writes to **stderr**. This keeps stdout clean for machine parsing.
+
+The spinner utility provides the same API as `@clack/prompts` spinner but outputs to stderr.
+
+---
+
+### 2. The Basics (CRITICAL)
+
+#### Exit Codes ✅ PASS
+
+Programs return `0` on success, non-zero on failure. All commands now properly set `process.exitCode = 1` before returning on error paths.
+
+#### stdout vs stderr ⚠️ PARTIAL
+
+- ✅ Errors correctly go to `stderr` via `console.error()`
+- ❌ Progress/spinners incorrectly go to `stdout`
+- ✅ Informational messages use `console.log()` (correct)
+
+---
+
+### 3. Interactivity (HIGH)
+
+#### TTY Detection ✅ PASS
+
+All commands with interactive elements check if they're running in a terminal before showing prompts.
+
+| Command | TTY Check |
+|---------|-----------|
+| `orgs` | ✅ `if (!process.stdin.isTTY)` |
+| `projects` | ✅ `if (!options.json && !process.stdin.isTTY)` |
+| `init` | ✅ `if (options.json \|\| !process.stdin.isTTY)` |
+| `dev` | ✅ Implicit via JSON mode |
+| `push` | ✅ `if (!options.json && !process.stdin.isTTY)` |
+| `pull` | ✅ `if (!options.json && !process.stdin.isTTY)` |
+| `seed` | ✅ `if (!options.json && !process.stdin.isTTY)` |
+| `api-keys` | ✅ `if (!process.stdin.isTTY)` |
+| `profile` | N/A (no interactive prompts) |
+
+---
+
+### 4. Signals & Control (HIGH)
+
+#### Ctrl-C Handling ✅ PASS
+
+- `dev.ts` has proper SIGINT/SIGTERM handlers (lines 1406-1421) for graceful shutdown
+- Other commands are short-lived and don't need explicit handlers
+
+---
+
+### 5. Arguments & Flags (HIGH)
+
+#### No Secrets in Flags ✅ PASS
+
+All commands read secrets from environment variables, not flags:
+- `SUPABASE_ACCESS_TOKEN` - Authentication
+- `SUPABASE_DB_PASSWORD` - Database password
+
+**Why it matters:** Flags appear in shell history, process listings, and logs. Environment variables are more secure.
+
+#### Standard Flag Names ⚠️ PARTIAL
+
+| Flag | Standard | Current | Status |
+|------|----------|---------|--------|
+| Dry-run | `--dry-run` / `-n` | `--plan` | ⚠️ Non-standard but documented |
+| Verbose | `--verbose` / `-v` | `--verbose` | ✅ |
+| Yes | `--yes` / `-y` | `--yes` | ✅ |
+| JSON | `--json` | `--json` | ✅ |
+
+---
+
+## Priority Recommendations
+
+### ~~P0 - Critical (Fixed)~~
+
+- ~~**Progress to stderr**: Created `createSpinner()` utility that writes to stderr instead of stdout~~ ✅
+
+### ~~P1 - High (Fixed)~~
+
+All P1 issues have been resolved:
+
+- ~~**Exit codes**: Changed `return` to `process.exitCode = 1` for error paths in `orgs.ts`, `projects.ts`, `api-keys.ts`~~ ✅
+- ~~**TTY checks**: Added explicit TTY checks to `push`, `pull`, `seed`, `api-keys`~~ ✅
+- ~~**`--yes` flag for pull**: Added `--yes` flag~~ ✅
+- ~~**Unused `--yes` flags**: Implemented in `init` (skips "Run supa dev?" prompt)~~ ✅
+
+### ~~P2 - Medium (Fixed)~~
+
+- ~~**`--dry-run` for init**: Added - previews files that would be created~~ ✅
+- ~~**`--dry-run` for projects new**: Added - shows project details before creation~~ ✅
+
+All audit items have been resolved.
+
+---
+
+## Code Patterns Used
+
+These patterns are now implemented across all commands:
+
+### Exit codes with return
+
+```typescript
+if (!token) {
+  console.error("Not logged in.");
+  process.exitCode = 1;
+  return;
+}
+```
+
+### TTY check before interactive mode
+
+```typescript
+if (!options.json && !process.stdin.isTTY) {
+  console.error("Error: Interactive mode requires a TTY.");
+  console.error("Use --json for non-interactive output.");
+  process.exit(1);
+}
+```
+
+### --yes flag to skip confirmations
+
+```typescript
+if (hasChanges && !options.yes) {
+  const proceed = await p.confirm({ message: "Apply changes?" });
+  if (p.isCancel(proceed) || !proceed) {
+    p.cancel("Cancelled");
+    process.exit(0);
+  }
+}
+```
+
+---
+
+## References
+
+- [Command Line Interface Guidelines](https://clig.dev/)
+- [12 Factor CLI Apps](https://medium.com/@jdxcode/12-factor-cli-apps-dd3c227a0e46)
+- [POSIX Utility Conventions](https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap12.html)

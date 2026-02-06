@@ -1,0 +1,37 @@
+---
+title: "supa project seed"
+description: "Run seed files against the database"
+---
+
+Run seed files to populate your database with data.
+
+Executes `supabase/seed.sql` against your remote database. Use this to populate development or staging environments with test data.
+
+## Usage
+
+```bash
+supa project seed [options]
+```
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `-p, --profile <NAME>` | string | Profile to use |
+| `--dry-run` | boolean | Show what would be seeded without applying |
+| `-v, --verbose` | boolean | Show detailed logging |
+| `--json` | boolean | Output as JSON |
+
+## Examples
+
+### Apply seed files
+
+```bash
+supa project seed
+```
+
+### Preview seed files
+
+```bash
+supa project seed --dry-run
+```

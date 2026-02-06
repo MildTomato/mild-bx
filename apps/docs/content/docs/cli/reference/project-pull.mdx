@@ -1,0 +1,49 @@
+---
+title: "supa project pull"
+description: "Pull remote state to local (remote → local)"
+---
+
+Pull schema and configuration from your remote project to local.
+
+Fetches the current state of your hosted project and updates your local `supabase/` directory. Use this to get changes made by teammates or to bootstrap from an existing project.
+
+## Usage
+
+```bash
+supa project pull [options]
+```
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `-p, --profile <NAME>` | string | Profile to use |
+| `--plan` | boolean | Show what would happen without making changes |
+| `--types-only` | boolean | Only generate TypeScript types |
+| `--schemas <SCHEMAS>` | string | Schemas to include for type generation (default: public) |
+| `--json` | boolean | Output as JSON |
+| `-v, --verbose` | boolean | Show detailed pg-delta logging |
+
+### `--types-only`
+
+Skip schema sync and only regenerate TypeScript types from the current remote schema. Fast way to update types after making changes in the dashboard.
+
+## Examples
+
+### Pull remote state
+
+```bash
+supa project pull
+```
+
+### Preview what would be pulled
+
+```bash
+supa project pull --plan
+```
+
+### Only regenerate types
+
+```bash
+supa project pull --types-only
+```

@@ -1,0 +1,48 @@
+---
+title: "supa project api-keys"
+description: "List API keys for the project"
+---
+
+Display API keys for the linked project.
+
+Shows your `anon` (public) and `service_role` (secret) keys. Keys are masked by default—use `--reveal` to show full values.
+
+## Usage
+
+```bash
+supa project api-keys [options]
+```
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `-p, --profile <NAME>` | string | Profile to use |
+| `--reveal` | boolean | Show full API keys (not masked) |
+| `--json` | boolean | Output as JSON |
+
+### `--reveal`
+
+Shows the full API key values instead of masked versions. Use with caution—avoid exposing keys in shared terminals or logs.
+
+## Examples
+
+### List API keys (masked)
+
+```bash
+supa project api-keys
+```
+
+### Show full API keys
+
+```bash
+supa project api-keys --reveal
+```
+
+### Get keys as JSON
+
+Useful for scripting—pipe to `jq` to extract specific keys like `jq -r '.anon'`.
+
+```bash
+supa project api-keys --json --reveal
+```

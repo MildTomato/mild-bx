@@ -1,0 +1,1 @@
+Shows the full API key values instead of masked versions. Use with caution—avoid exposing keys in shared terminals or logs.

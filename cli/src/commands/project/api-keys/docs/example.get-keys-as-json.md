@@ -1,0 +1,1 @@
+Useful for scripting—pipe to `jq` to extract specific keys like `jq -r '.anon'`.

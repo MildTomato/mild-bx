@@ -1,0 +1,1 @@
+For CI/CD pipelines or scripts where you can't use interactive prompts.

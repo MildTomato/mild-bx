@@ -1,0 +1,54 @@
+---
+title: "supa project push"
+description: "Push local changes to remote (local → remote)"
+---
+
+Sync your local schema and configuration to your remote Supabase project.
+
+This command compares your local `supabase/` directory with the remote and generates the necessary migrations. It's the inverse of [`supa project pull`](/docs/cli/reference/project-pull).
+
+## Usage
+
+```bash
+supa project push [options]
+```
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `-p, --profile <NAME>` | string | Profile to use |
+| `--plan` | boolean | Show what would happen without making changes |
+| `-y, --yes` | boolean | Skip confirmation prompt |
+| `--migrations-only` | boolean | Only apply migrations |
+| `--config-only` | boolean | Only apply config changes (api, auth settings) |
+| `--json` | boolean | Output as JSON |
+| `-v, --verbose` | boolean | Show detailed pg-delta logging |
+
+### `--plan`
+
+Always preview before pushing to production. This shows the exact SQL that will run without executing it.
+
+Review carefully—schema changes can be destructive (dropping columns, tables, etc).
+
+## Examples
+
+### Push all changes
+
+```bash
+supa project push
+```
+
+### Preview changes without applying
+
+```bash
+supa project push --plan
+```
+
+### Push without confirmation
+
+For CI/CD pipelines. Combine with `--plan` in a previous step to review changes before deploying.
+
+```bash
+supa project push --yes
+```

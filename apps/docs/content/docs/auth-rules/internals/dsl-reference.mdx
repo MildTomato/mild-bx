@@ -1,0 +1,302 @@
+---
+title: DSL reference
+description: Complete reference for Auth Rules functions
+---
+
+This is the complete reference for all Auth Rules DSL functions.
+
+## Claim functions
+
+### auth_rules.claim()
+
+Define a claim that maps users to values they can access.
+
+```sql
+SELECT auth_rules.claim(name TEXT, sql TEXT);
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | TEXT | Unique claim name |
+| `sql` | TEXT | Query returning `(user_id, <value>, ...)` |
+
+Example:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('org_ids', $$
+  SELECT user_id, org_id FROM org_members
+$$);
+```
+
+### auth_rules.drop_claim()
+
+Remove a claim and its generated view.
+
+```sql
+SELECT auth_rules.drop_claim(name TEXT);
+```
+
+### auth_rules.list_claims()
+
+List all defined claims.
+
+```sql
+SELECT * FROM auth_rules.list_claims();
+```
+
+Returns: `claim_name`, `sql`
+
+---
+
+## Rule functions
+
+### auth_rules.rule()
+
+Define an access rule for a table.
+
+```sql
+SELECT auth_rules.rule(table_name TEXT, VARIADIC parts JSONB[]);
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `table_name` | TEXT | Target table name (in `public` schema) |
+| `parts` | JSONB[] | Operation markers and filters |
+
+Example:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'title'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+```
+
+### auth_rules.drop_rules()
+
+Remove all rules and generated objects for a table.
+
+```sql
+SELECT auth_rules.drop_rules(table_name TEXT);
+```
+
+### auth_rules.list_rules()
+
+List all defined rules.
+
+```sql
+SELECT * FROM auth_rules.list_rules();
+```
+
+Returns: `table_name`, `operation`, `columns`, `filters`
+
+---
+
+## Operation markers
+
+### auth_rules.select()
+
+Mark rule as SELECT and specify visible columns.
+
+```sql
+auth_rules.select(VARIADIC columns TEXT[])
+```
+
+Example:
+
+```sql title="rules.sql"
+auth_rules.select('id', 'name', 'created_at')
+```
+
+### auth_rules.insert()
+
+Mark rule as INSERT.
+
+```sql
+auth_rules.insert()
+```
+
+### auth_rules.update()
+
+Mark rule as UPDATE.
+
+```sql
+auth_rules.update()
+```
+
+### auth_rules.delete()
+
+Mark rule as DELETE.
+
+```sql
+auth_rules.delete()
+```
+
+---
+
+## Filter functions
+
+### auth_rules.eq()
+
+Filter where column equals a value.
+
+```sql
+auth_rules.eq(column_name TEXT, value JSONB|UUID|TEXT|BOOLEAN)
+```
+
+The value can be:
+
+- `auth_rules.user_id()` — Match authenticated user
+- `auth_rules.one_of('claim')` — Match any value in claim
+- A literal value (UUID, TEXT, BOOLEAN)
+
+Examples:
+
+```sql title="rules.sql"
+-- Match authenticated user
+auth_rules.eq('owner_id', auth_rules.user_id())
+
+-- Match claim values
+auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+
+-- Match literal
+auth_rules.eq('status', 'published')
+auth_rules.eq('is_active', true)
+```
+
+### auth_rules.user_id()
+
+Returns a marker representing the authenticated user's ID (`auth.uid()`).
+
+```sql
+auth_rules.user_id()
+```
+
+### auth_rules.one_of()
+
+Reference a claim. The column must be in the user's claim values.
+
+```sql
+auth_rules.one_of(claim_name TEXT)
+```
+
+### auth_rules.in_claim()
+
+Filter where column is in a claim, optionally with a check condition.
+
+```sql
+auth_rules.in_claim(column_name TEXT, claim_name TEXT, check_condition JSONB DEFAULT NULL)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `column_name` | TEXT | Column to filter on |
+| `claim_name` | TEXT | Claim to check membership against |
+| `check_condition` | JSONB | Optional `auth_rules.check()` for role filtering |
+
+Example:
+
+```sql title="rules.sql"
+auth_rules.in_claim('org_id', 'org_ids',
+  auth_rules.check('org_roles', 'role', ARRAY['admin']))
+```
+
+### auth_rules.check()
+
+Check a claim with property filtering (for role-based access).
+
+```sql
+auth_rules.check(claim_name TEXT, property TEXT, allowed_values TEXT[])
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `claim_name` | Claim to check (must have the property column) |
+| `property` | Column name to filter on |
+| `allowed_values` | Array of acceptable values |
+
+Example:
+
+```sql title="rules.sql"
+auth_rules.check('org_roles', 'role', ARRAY['admin', 'owner'])
+```
+
+---
+
+## Combinators
+
+Use these functions to combine multiple conditions.
+
+### auth_rules.or_()
+
+Combine conditions with OR.
+
+```sql
+auth_rules.or_(VARIADIC conditions JSONB[])
+```
+
+Example:
+
+```sql title="rules.sql"
+auth_rules.or_(
+  auth_rules.eq('is_public', true),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+)
+```
+
+### auth_rules.and_()
+
+Combine conditions with AND.
+
+```sql
+auth_rules.and_(VARIADIC conditions JSONB[])
+```
+
+Example:
+
+```sql title="rules.sql"
+auth_rules.and_(
+  auth_rules.eq('status', 'active'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+)
+```
+
+---
+
+## Helper functions
+
+These functions are used internally by Auth Rules.
+
+### auth_rules.require()
+
+Explicit access check that raises an error if value is not in user's claim.
+
+```sql
+auth_rules.require(claim TEXT, column TEXT, value UUID)
+```
+
+Returns `TRUE` if authorized, raises exception `42501` if not.
+
+Used internally in generated views for explicit error handling.
+
+### auth_rules.require_user()
+
+Explicit check that value matches authenticated user.
+
+```sql
+auth_rules.require_user(column TEXT, value UUID)
+```
+
+Returns `TRUE` if `value = auth.uid()`, raises exception `42501` if not.
+
+---
+
+## Error codes
+
+Auth Rules uses these PostgreSQL error codes:
+
+| ERRCODE | HTTP Status | Meaning |
+|---------|-------------|---------|
+| `42501` | 403 Forbidden | Insufficient privilege |
+| `P0002` | 404 Not Found | Row not found or no access |
+| `22023` | 400 Bad Request | Invalid parameter |

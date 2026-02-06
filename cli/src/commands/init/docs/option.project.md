@@ -1,0 +1,1 @@
+Link to an existing project using its reference ID. Find your project ref in the dashboard URL: `https://supabase.com/dashboard/project/<ref>`

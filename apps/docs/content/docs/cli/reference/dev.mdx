@@ -1,0 +1,62 @@
+---
+title: "supa dev"
+description: "Watcher that auto syncs changes to hosted environment [long-running]"
+---
+
+Watch for local changes and sync them to your Supabase project in real-time.
+
+Monitors your `supabase/` directory and automatically pushes changes as you save. Keep this running while you develop for a live sync experience.
+
+## Usage
+
+```bash
+supa dev [options]
+```
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `-p, --profile <NAME>` | string | Profile to use |
+| `--debounce <MS>` | string | Debounce interval for file changes (e.g., 500ms, 1s) |
+| `--types-interval <INTERVAL>` | string | Interval for regenerating types (e.g., 30s, 1m) |
+| `--no-branch-watch` | boolean | Disable git branch watching |
+| `--seed` | boolean | Run seed files after schema sync (also re-seeds on schema changes) |
+| `--no-seed` | boolean | Disable seeding even if enabled in config |
+| `--dry-run` | boolean | Show what would be synced without applying |
+| `-v, --verbose` | boolean | Show detailed pg-delta logging |
+| `--json` | boolean | Output as JSON (events as newline-delimited JSON) |
+
+### `--seed`
+
+Re-runs seed files automatically whenever schema changes are applied. Keeps your dev database populated with test data as you iterate.
+
+### `--dry-run`
+
+Shows what would be synced without applying changes. Useful for debugging sync issues or understanding what the watcher detects.
+
+## Examples
+
+### Start development watcher
+
+```bash
+supa dev
+```
+
+### Watch with specific profile
+
+```bash
+supa dev --profile staging
+```
+
+### Preview changes without applying
+
+```bash
+supa dev --dry-run
+```
+
+### Watch with automatic seeding
+
+```bash
+supa dev --seed
+```

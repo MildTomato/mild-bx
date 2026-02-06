@@ -1,0 +1,1 @@
+Skip schema sync and only regenerate TypeScript types from the current remote schema. Fast way to update types after making changes in the dashboard.

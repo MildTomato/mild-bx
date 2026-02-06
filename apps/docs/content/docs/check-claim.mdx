@@ -1,0 +1,163 @@
+---
+title: Role-Based Access
+description: Control access based on user roles
+---
+
+Sometimes membership isn't enough — you need to know the user's *role* within an organization. Auth Rules handles this with `check()`.
+
+## The Problem
+
+Say you have org members with different roles:
+
+```sql title="schema.sql"
+CREATE TABLE org_members (
+  user_id UUID,
+  org_id UUID,
+  role TEXT  -- 'viewer', 'member', 'admin', 'owner'
+);
+```
+
+All members can view documents, but only admins and owners should see billing. You could create separate claims for each role, but that doesn't scale well.
+
+## The Solution
+
+Create one claim that includes the role:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('org_roles', $$
+  SELECT user_id, org_id, role FROM org_members
+$$);
+```
+
+Then use `check()` to filter by role:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('billing',
+  auth_rules.select('id', 'org_id', 'amount', 'due_date'),
+  auth_rules.in_claim('org_id', 'org_ids',
+    auth_rules.check('org_roles', 'role', ARRAY['admin', 'owner']))
+);
+```
+
+Users only see billing records for orgs where they're an admin or owner.
+
+## How check() Works
+
+The `check()` function filters the claim by a property:
+
+```sql
+auth_rules.check('claim_name', 'property', ARRAY['allowed', 'values'])
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `claim_name` | The claim to check (must have this column) |
+| `property` | Column name to filter on |
+| `allowed values` | Array of acceptable values |
+
+## Example: Role Hierarchy
+
+User has these memberships:
+
+| org_id | role |
+|--------|------|
+| acme | admin |
+| globex | viewer |
+| initech | owner |
+
+With a rule requiring `admin` or `owner`:
+
+```sql title="rules.sql"
+auth_rules.check('org_roles', 'role', ARRAY['admin', 'owner'])
+```
+
+The user can access billing for `acme` and `initech`, but not `globex`.
+
+## Common Use Cases
+
+### Subscription tiers
+
+Only pro and enterprise customers can access certain features:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('org_plans', $$
+  SELECT om.user_id, o.id AS org_id, o.plan
+  FROM org_members om
+  JOIN organizations o ON o.id = om.org_id
+$$);
+```
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('analytics',
+  auth_rules.select('id', 'org_id', 'data'),
+  auth_rules.in_claim('org_id', 'org_ids',
+    auth_rules.check('org_plans', 'plan', ARRAY['pro', 'enterprise']))
+);
+```
+
+### Approval workflows
+
+Only allow actions on approved projects:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('project_status', $$
+  SELECT pm.user_id, p.id AS project_id, p.status
+  FROM project_members pm
+  JOIN projects p ON p.id = pm.project_id
+$$);
+```
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('deployments',
+  auth_rules.insert(),
+  auth_rules.in_claim('project_id', 'project_ids',
+    auth_rules.check('project_status', 'status', ARRAY['approved']))
+);
+```
+
+### Active memberships
+
+Only count active (not suspended) members:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('org_membership', $$
+  SELECT user_id, org_id, role, status FROM org_members
+$$);
+```
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'title'),
+  auth_rules.in_claim('org_id', 'org_ids',
+    auth_rules.check('org_membership', 'status', ARRAY['active']))
+);
+```
+
+## Multiple Checks
+
+You can combine multiple checks. For example, require both admin role AND active status:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('billing',
+  auth_rules.select('id', 'org_id', 'amount'),
+  auth_rules.in_claim('org_id', 'org_ids',
+    auth_rules.check('org_membership', 'role', ARRAY['admin', 'owner']),
+    auth_rules.check('org_membership', 'status', ARRAY['active'])
+  )
+);
+```
+
+## Behavior Note
+
+With `check()`, rows that don't match are filtered out silently. If a user queries billing for an org where they're a viewer, they get an empty result (not an error).
+
+This is the expected behavior for SELECT — you see what you have access to. For writes, you'll get explicit errors if access is denied.
+
+## Performance
+
+Index the columns you're checking:
+
+```sql title="indexes.sql"
+CREATE INDEX idx_org_members_user_role
+ON org_members(user_id, role);
+```

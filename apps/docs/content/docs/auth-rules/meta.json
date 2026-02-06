@@ -1,0 +1,13 @@
+{
+  "title": "Auth Rules",
+  "root": true,
+  "pages": [
+    "index",
+    "basic-usage",
+    "claims",
+    "check-claim",
+    "advanced",
+    "---Internals---",
+    "...internals"
+  ]
+}

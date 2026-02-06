@@ -39,6 +39,9 @@ function log(message: string): void {
  * Lower number = higher priority (runs first)
  */
 const FILE_PRIORITY: Record<string, number> = {
+  init: -2, // Init/system SQL runs first (before schemas)
+  system: -2,
+  misc: -1, // Misc SQL runs before schemas but after init/system
   schemas: 0, // CREATE SCHEMA must come first
   schema: 0,
   extensions: 1,
@@ -47,8 +50,10 @@ const FILE_PRIORITY: Record<string, number> = {
   domains: 2,
   tables: 3,
   table: 3,
-  indexes: 4,
-  index: 4,
+  rules: 4, // auth_rules.rule() creates views that functions may reference
+  claims: 4, // auth_rules claims setup
+  indexes: 4.5,
+  index: 4.5,
   functions: 5,
   function: 5,
   views: 5, // Views depend on tables
@@ -95,6 +100,15 @@ const BUILTIN_SCHEMAS = new Set([
 ]);
 
 /**
+ * Organizational folders that are NOT schemas (just for file organization)
+ */
+const ORGANIZATIONAL_FOLDERS = new Set([
+  "misc",
+  "init",
+  "system",
+]);
+
+/**
  * Find all schema directories (excluding built-in ones)
  * Returns schema names that need to be created
  */
@@ -105,7 +119,9 @@ export function findCustomSchemas(dir: string): string[] {
   const schemas: string[] = [];
 
   for (const entry of entries) {
-    if (entry.isDirectory() && !BUILTIN_SCHEMAS.has(entry.name.toLowerCase())) {
+    const lowerName = entry.name.toLowerCase();
+    // Skip builtin schemas and organizational folders
+    if (entry.isDirectory() && !BUILTIN_SCHEMAS.has(lowerName) && !ORGANIZATIONAL_FOLDERS.has(lowerName)) {
       // Check if directory has any .sql files
       const subDir = join(dir, entry.name);
       const hasSQL = readdirSync(subDir).some((f) => f.endsWith(".sql"));
@@ -543,6 +559,62 @@ function sanitizeError(error: unknown): string {
 }
 
 /**
+ * Get priority for a SQL statement type (lower = runs first)
+ */
+function getStatementPriority(stmt: string): number {
+  const upper = stmt.toUpperCase().trim();
+
+  // Schemas first
+  if (upper.startsWith("CREATE SCHEMA")) return 0;
+
+  // Then grants on schemas
+  if (upper.startsWith("GRANT USAGE ON SCHEMA")) return 1;
+  if (upper.startsWith("GRANT") && upper.includes("SCHEMA")) return 1;
+
+  // Then types/enums
+  if (upper.startsWith("CREATE TYPE")) return 2;
+
+  // Then tables
+  if (upper.startsWith("CREATE TABLE")) return 3;
+
+  // Then indexes on tables
+  if (upper.startsWith("CREATE INDEX") || upper.startsWith("CREATE UNIQUE INDEX"))
+    return 4;
+
+  // Then functions (after tables they might reference)
+  if (upper.startsWith("CREATE FUNCTION") || upper.startsWith("CREATE OR REPLACE FUNCTION"))
+    return 5;
+
+  // Then views (after tables and functions)
+  if (upper.startsWith("CREATE VIEW") || upper.startsWith("CREATE OR REPLACE VIEW"))
+    return 6;
+
+  // Then triggers (after functions and tables)
+  if (upper.startsWith("CREATE TRIGGER") || upper.startsWith("CREATE OR REPLACE TRIGGER"))
+    return 7;
+
+  // Then table alterations (constraints, etc.)
+  if (upper.startsWith("ALTER TABLE")) return 8;
+
+  // Then grants on objects
+  if (upper.startsWith("GRANT")) return 9;
+
+  // Everything else
+  return 50;
+}
+
+/**
+ * Sort statements by dependency order
+ */
+function sortStatementsByDependency(statements: string[]): string[] {
+  return [...statements].sort((a, b) => {
+    const priorityA = getStatementPriority(a);
+    const priorityB = getStatementPriority(b);
+    return priorityA - priorityB;
+  });
+}
+
+/**
  * Extract index name from a DROP INDEX or CREATE INDEX statement
  */
 function extractIndexName(stmt: string): string | null {
@@ -891,20 +963,30 @@ export async function diffSchemaWithPgDelta(
       return { hasChanges: false, statements: [], plan: null };
     }
 
-    log(`[pg-delta] Found ${result.plan.statements.length} changes`);
+    const rawCount = result.plan.statements.length;
+    log(`[pg-delta] Raw plan: ${rawCount} changes`);
 
     // Filter out statements we shouldn't apply (roles, default privileges, system schemas)
     const filteredStatements = filterStatements(result.plan.statements);
     log(`[pg-delta] After filtering: ${filteredStatements.length} changes`);
 
-    if (filteredStatements.length === 0) {
+    // Sort statements by dependency order (schemas -> tables -> functions -> triggers -> etc.)
+    const sortedStatements = sortStatementsByDependency(filteredStatements);
+    log(`[pg-delta] After sorting: ${sortedStatements.length} changes`);
+
+    if (sortedStatements.length === 0) {
+      log(
+        `[pg-delta] No changes to apply (${rawCount} raw diff items were filtered out)`,
+      );
       return { hasChanges: false, statements: [], plan: null };
     }
 
-    // Create a modified plan with filtered statements
+    log(`[pg-delta] Found ${sortedStatements.length} changes to apply`);
+
+    // Create a modified plan with sorted statements
     const filteredPlan = {
       ...result.plan,
-      statements: filteredStatements,
+      statements: sortedStatements,
     };
 
     return {

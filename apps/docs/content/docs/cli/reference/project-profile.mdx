@@ -1,0 +1,41 @@
+---
+title: "supa project profile"
+description: "View or change workflow profile"
+---
+
+View or change the workflow profile for schema syncing.
+
+Profiles control how changes flow between local and remote. Options: `solo` (direct to production), `staged` (through staging), `preview` (per-feature environments).
+
+## Usage
+
+```bash
+supa project profile [options]
+```
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `--set <PROFILE>` | string | Set workflow profile (solo, staged, preview, preview-git) |
+| `--json` | boolean | Output as JSON |
+
+## Examples
+
+### View current profile
+
+```bash
+supa project profile
+```
+
+### Change to solo profile
+
+```bash
+supa project profile --set solo
+```
+
+### Get profile as JSON
+
+```bash
+supa project profile --json
+```

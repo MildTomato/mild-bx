@@ -1,0 +1,221 @@
+---
+title: DSL Reference
+description: Complete reference for Auth Rules DSL functions
+---
+
+## Claim Functions
+
+### `auth_rules.claim(name, sql)`
+
+Define a claim that maps users to values they can access.
+
+```sql
+SELECT auth_rules.claim('org_ids', $$
+  SELECT user_id, org_id FROM org_members
+$$);
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | TEXT | Unique claim name |
+| `sql` | TEXT | Query returning `(user_id, <value>)` |
+
+### `auth_rules.drop_claim(name)`
+
+Remove a claim and its generated view.
+
+```sql
+SELECT auth_rules.drop_claim('org_ids');
+```
+
+### `auth_rules.list_claims()`
+
+List all defined claims.
+
+```sql
+SELECT * FROM auth_rules.list_claims();
+```
+
+---
+
+## Rule Functions
+
+### `auth_rules.rule(table, ...parts)`
+
+Define an access rule for a table. Parts can be operation markers and filters.
+
+```sql
+SELECT auth_rules.rule('files',
+  auth_rules.select('id', 'name'),
+  auth_rules.eq('owner_id', auth_rules.user_id_marker())
+);
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `table` | TEXT | Target table name |
+| `parts` | JSONB[] | Operation and filter definitions |
+
+### `auth_rules.drop_rules(table)`
+
+Remove all rules and generated objects for a table.
+
+```sql
+SELECT auth_rules.drop_rules('files');
+```
+
+### `auth_rules.list_rules()`
+
+List all defined rules.
+
+```sql
+SELECT * FROM auth_rules.list_rules();
+```
+
+---
+
+## Operation Markers
+
+### `auth_rules.select(...columns)`
+
+Mark rule as SELECT and specify visible columns.
+
+```sql
+auth_rules.select('id', 'name', 'created_at')
+```
+
+### `auth_rules.insert()`
+
+Mark rule as INSERT.
+
+```sql
+auth_rules.insert()
+```
+
+### `auth_rules.update()`
+
+Mark rule as UPDATE.
+
+```sql
+auth_rules.update()
+```
+
+### `auth_rules.delete()`
+
+Mark rule as DELETE.
+
+```sql
+auth_rules.delete()
+```
+
+---
+
+## Filter Functions
+
+### `auth_rules.eq(column, value)`
+
+Filter where column equals value. Value can be:
+
+- `auth_rules.user_id_marker()` - Match authenticated user
+- `auth_rules.one_of(claim)` - Match any value in claim
+- Literal UUID, TEXT, or BOOLEAN
+
+```sql
+-- Column must equal authenticated user
+auth_rules.eq('owner_id', auth_rules.user_id_marker())
+
+-- Column must be in user's claim
+auth_rules.eq('id', auth_rules.one_of('accessible_file_ids'))
+
+-- Column must equal literal value
+auth_rules.eq('status', 'published')
+```
+
+### `auth_rules.user_id_marker()`
+
+Marker representing the authenticated user's ID (`auth.uid()`).
+
+```sql
+auth_rules.eq('owner_id', auth_rules.user_id_marker())
+```
+
+### `auth_rules.one_of(claim)`
+
+Reference a claim. The column must be in the user's claim values.
+
+```sql
+auth_rules.eq('id', auth_rules.one_of('accessible_file_ids'))
+```
+
+### `auth_rules.in_claim(column, claim)`
+
+Alternative syntax for claim membership.
+
+```sql
+auth_rules.in_claim('org_id', 'org_ids')
+```
+
+### `auth_rules.check(claim, property, values)`
+
+Check a claim with property filtering (for role-based access).
+
+```sql
+-- org_id must be in user's orgs where role is admin or owner
+auth_rules.check('org_ids', 'role', ARRAY['admin', 'owner'])
+```
+
+---
+
+## Combinators
+
+### `auth_rules.or_(...conditions)`
+
+Combine conditions with OR.
+
+```sql
+auth_rules.or_(
+  auth_rules.eq('created_by', auth_rules.user_id_marker()),
+  auth_rules.eq('shared_with_user_id', auth_rules.user_id_marker())
+)
+```
+
+### `auth_rules.and_(...conditions)`
+
+Combine conditions with AND.
+
+```sql
+auth_rules.and_(
+  auth_rules.eq('user_id', auth_rules.user_id_marker()),
+  auth_rules.eq('file_id', auth_rules.one_of('commentable_file_ids'))
+)
+```
+
+---
+
+## Helper Functions
+
+### `auth_rules.user_id()`
+
+Wrapper for `auth.uid()`.
+
+```sql
+SELECT auth_rules.user_id();  -- Returns current user's UUID
+```
+
+### `auth_rules.require(claim, column, value)`
+
+Explicit access check that raises an error if value is not in user's claim.
+
+```sql
+-- Used internally in generated views for explicit error handling
+WHERE auth_rules.require('org_ids', 'org_id', org_id)
+```
+
+### `auth_rules.require_user(column, value)`
+
+Explicit check that value matches authenticated user.
+
+```sql
+-- Used internally in generated views
+WHERE auth_rules.require_user('owner_id', owner_id)
+```

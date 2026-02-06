@@ -1,0 +1,633 @@
+{
+  "$schema": "https://supabase.com/schemas/cli-spec.json",
+  "name": "supa",
+  "version": "0.0.1",
+  "description": "Supabase DX CLI - experimental developer experience tools",
+  "commands": [
+    {
+      "name": "init",
+      "aliases": [],
+      "description": "Initialize a new supabase project",
+      "arguments": [],
+      "options": [
+        {
+          "name": "yes",
+          "shorthand": "y",
+          "deprecated": false,
+          "description": "Skip prompts and use defaults"
+        },
+        {
+          "name": "org",
+          "shorthand": null,
+          "argument": "SLUG",
+          "deprecated": false,
+          "description": "Organization slug"
+        },
+        {
+          "name": "project",
+          "shorthand": null,
+          "argument": "REF",
+          "deprecated": false,
+          "description": "Link to existing project by ref"
+        },
+        {
+          "name": "name",
+          "shorthand": null,
+          "argument": "NAME",
+          "deprecated": false,
+          "description": "Name for new project (requires --org and --region)"
+        },
+        {
+          "name": "region",
+          "shorthand": null,
+          "argument": "REGION",
+          "deprecated": false,
+          "description": "Region for new project (e.g., us-east-1)"
+        },
+        {
+          "name": "json",
+          "shorthand": null,
+          "deprecated": false,
+          "description": "Output as JSON"
+        }
+      ],
+      "examples": [
+        {
+          "name": "Interactive setup",
+          "value": "supa init"
+        },
+        {
+          "name": "Link to existing project",
+          "value": "supa init --project abc123xyz"
+        },
+        {
+          "name": "Create new project non-interactively",
+          "value": "supa init --org my-org --name my-project --region us-east-1"
+        }
+      ]
+    },
+    {
+      "name": "dev",
+      "aliases": [],
+      "description": "Watcher that auto syncs changes to hosted environment [long-running]",
+      "arguments": [],
+      "options": [
+        {
+          "name": "profile",
+          "shorthand": "p",
+          "argument": "NAME",
+          "deprecated": false,
+          "description": "Profile to use"
+        },
+        {
+          "name": "debounce",
+          "shorthand": null,
+          "argument": "MS",
+          "deprecated": false,
+          "description": "Debounce interval for file changes (e.g., 500ms, 1s)"
+        },
+        {
+          "name": "types-interval",
+          "shorthand": null,
+          "argument": "INTERVAL",
+          "deprecated": false,
+          "description": "Interval for regenerating types (e.g., 30s, 1m)"
+        },
+        {
+          "name": "no-branch-watch",
+          "shorthand": null,
+          "deprecated": false,
+          "description": "Disable git branch watching"
+        },
+        {
+          "name": "seed",
+          "shorthand": null,
+          "deprecated": false,
+          "description": "Run seed files after schema sync (also re-seeds on schema changes)"
+        },
+        {
+          "name": "no-seed",
+          "shorthand": null,
+          "deprecated": false,
+          "description": "Disable seeding even if enabled in config"
+        },
+        {
+          "name": "dry-run",
+          "shorthand": null,
+          "deprecated": false,
+          "description": "Show what would be synced without applying"
+        },
+        {
+          "name": "verbose",
+          "shorthand": "v",
+          "deprecated": false,
+          "description": "Show detailed pg-delta logging"
+        },
+        {
+          "name": "json",
+          "shorthand": null,
+          "deprecated": false,
+          "description": "Output as JSON (events as newline-delimited JSON)"
+        }
+      ],
+      "examples": [
+        {
+          "name": "Start development watcher",
+          "value": "supa dev"
+        },
+        {
+          "name": "Watch with specific profile",
+          "value": "supa dev --profile staging"
+        },
+        {
+          "name": "Preview changes without applying",
+          "value": "supa dev --dry-run"
+        },
+        {
+          "name": "Watch with automatic seeding",
+          "value": "supa dev --seed"
+        }
+      ]
+    },
+    {
+      "name": "orgs",
+      "aliases": [],
+      "description": "List organizations",
+      "arguments": [],
+      "options": [
+        {
+          "name": "json",
+          "shorthand": null,
+          "deprecated": false,
+          "description": "Output as JSON"
+        }
+      ],
+      "examples": [
+        {
+          "name": "List all organizations",
+          "value": "supa orgs"
+        },
+        {
+          "name": "Get organizations as JSON",
+          "value": "supa orgs --json"
+        }
+      ]
+    },
+    {
+      "name": "projects",
+      "aliases": [],
+      "description": "Manage projects",
+      "arguments": [],
+      "subcommands": [
+        {
+          "name": "list",
+          "aliases": [],
+          "description": "List all projects",
+          "default": true,
+          "arguments": [],
+          "options": [
+            {
+              "name": "json",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Output as JSON"
+            },
+            {
+              "name": "org",
+              "shorthand": null,
+              "argument": "SLUG",
+              "deprecated": false,
+              "description": "Filter by organization ID"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "new",
+          "aliases": [
+            "create"
+          ],
+          "description": "Create a new project",
+          "arguments": [],
+          "options": [
+            {
+              "name": "org",
+              "shorthand": null,
+              "argument": "SLUG",
+              "deprecated": false,
+              "description": "Organization ID"
+            },
+            {
+              "name": "region",
+              "shorthand": null,
+              "argument": "REGION",
+              "deprecated": false,
+              "description": "Region (e.g., us-east-1)"
+            },
+            {
+              "name": "name",
+              "shorthand": null,
+              "argument": "NAME",
+              "deprecated": false,
+              "description": "Project name"
+            },
+            {
+              "name": "yes",
+              "shorthand": "y",
+              "deprecated": false,
+              "description": "Skip confirmation prompts"
+            }
+          ],
+          "examples": []
+        }
+      ],
+      "options": [],
+      "examples": [
+        {
+          "name": "List all projects",
+          "value": "supa projects list"
+        },
+        {
+          "name": "List projects for an org",
+          "value": "supa projects list --org my-org"
+        },
+        {
+          "name": "Create a new project",
+          "value": "supa projects new"
+        }
+      ]
+    },
+    {
+      "name": "project",
+      "aliases": [],
+      "description": "Project operations",
+      "arguments": [],
+      "subcommands": [
+        {
+          "name": "pull",
+          "aliases": [],
+          "description": "Pull remote state to local (remote → local)",
+          "arguments": [],
+          "options": [
+            {
+              "name": "profile",
+              "shorthand": "p",
+              "argument": "NAME",
+              "deprecated": false,
+              "description": "Profile to use"
+            },
+            {
+              "name": "plan",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Show what would happen without making changes"
+            },
+            {
+              "name": "types-only",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Only generate TypeScript types"
+            },
+            {
+              "name": "schemas",
+              "shorthand": null,
+              "argument": "SCHEMAS",
+              "deprecated": false,
+              "description": "Schemas to include for type generation (default: public)"
+            },
+            {
+              "name": "json",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Output as JSON"
+            },
+            {
+              "name": "verbose",
+              "shorthand": "v",
+              "deprecated": false,
+              "description": "Show detailed pg-delta logging"
+            }
+          ],
+          "examples": [
+            {
+              "name": "Pull remote state",
+              "value": "supa project pull"
+            },
+            {
+              "name": "Preview what would be pulled",
+              "value": "supa project pull --plan"
+            },
+            {
+              "name": "Only regenerate types",
+              "value": "supa project pull --types-only"
+            }
+          ]
+        },
+        {
+          "name": "push",
+          "aliases": [],
+          "description": "Push local changes to remote (local → remote)",
+          "arguments": [],
+          "options": [
+            {
+              "name": "profile",
+              "shorthand": "p",
+              "argument": "NAME",
+              "deprecated": false,
+              "description": "Profile to use"
+            },
+            {
+              "name": "plan",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Show what would happen without making changes"
+            },
+            {
+              "name": "yes",
+              "shorthand": "y",
+              "deprecated": false,
+              "description": "Skip confirmation prompt"
+            },
+            {
+              "name": "migrations-only",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Only apply migrations"
+            },
+            {
+              "name": "config-only",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Only apply config changes (api, auth settings)"
+            },
+            {
+              "name": "json",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Output as JSON"
+            },
+            {
+              "name": "verbose",
+              "shorthand": "v",
+              "deprecated": false,
+              "description": "Show detailed pg-delta logging"
+            }
+          ],
+          "examples": [
+            {
+              "name": "Push all changes",
+              "value": "supa project push"
+            },
+            {
+              "name": "Preview changes without applying",
+              "value": "supa project push --plan"
+            },
+            {
+              "name": "Push without confirmation",
+              "value": "supa project push --yes"
+            }
+          ]
+        },
+        {
+          "name": "dev",
+          "aliases": [],
+          "description": "Watcher that auto syncs changes to hosted environment [long-running]",
+          "arguments": [],
+          "options": [
+            {
+              "name": "profile",
+              "shorthand": "p",
+              "argument": "NAME",
+              "deprecated": false,
+              "description": "Profile to use"
+            },
+            {
+              "name": "debounce",
+              "shorthand": null,
+              "argument": "MS",
+              "deprecated": false,
+              "description": "Debounce interval for file changes (e.g., 500ms, 1s)"
+            },
+            {
+              "name": "types-interval",
+              "shorthand": null,
+              "argument": "INTERVAL",
+              "deprecated": false,
+              "description": "Interval for regenerating types (e.g., 30s, 1m)"
+            },
+            {
+              "name": "no-branch-watch",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Disable git branch watching"
+            },
+            {
+              "name": "seed",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Run seed files after schema sync (also re-seeds on schema changes)"
+            },
+            {
+              "name": "no-seed",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Disable seeding even if enabled in config"
+            },
+            {
+              "name": "dry-run",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Show what would be synced without applying"
+            },
+            {
+              "name": "verbose",
+              "shorthand": "v",
+              "deprecated": false,
+              "description": "Show detailed pg-delta logging"
+            },
+            {
+              "name": "json",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Output as JSON (events as newline-delimited JSON)"
+            }
+          ],
+          "examples": [
+            {
+              "name": "Start development watcher",
+              "value": "supa dev"
+            },
+            {
+              "name": "Watch with specific profile",
+              "value": "supa dev --profile staging"
+            },
+            {
+              "name": "Preview changes without applying",
+              "value": "supa dev --dry-run"
+            },
+            {
+              "name": "Watch with automatic seeding",
+              "value": "supa dev --seed"
+            }
+          ]
+        },
+        {
+          "name": "seed",
+          "aliases": [],
+          "description": "Run seed files against the database",
+          "arguments": [],
+          "options": [
+            {
+              "name": "profile",
+              "shorthand": "p",
+              "argument": "NAME",
+              "deprecated": false,
+              "description": "Profile to use"
+            },
+            {
+              "name": "dry-run",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Show what would be seeded without applying"
+            },
+            {
+              "name": "verbose",
+              "shorthand": "v",
+              "deprecated": false,
+              "description": "Show detailed logging"
+            },
+            {
+              "name": "json",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Output as JSON"
+            }
+          ],
+          "examples": [
+            {
+              "name": "Apply seed files",
+              "value": "supa project seed"
+            },
+            {
+              "name": "Preview seed files",
+              "value": "supa project seed --dry-run"
+            }
+          ]
+        },
+        {
+          "name": "seed-status",
+          "aliases": [],
+          "description": "Show seed configuration and files",
+          "arguments": [],
+          "options": [
+            {
+              "name": "json",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Output as JSON"
+            }
+          ],
+          "examples": [
+            {
+              "name": "Show seed configuration",
+              "value": "supa project seed-status"
+            }
+          ]
+        },
+        {
+          "name": "api-keys",
+          "aliases": [
+            "keys"
+          ],
+          "description": "List API keys for the project",
+          "arguments": [],
+          "options": [
+            {
+              "name": "profile",
+              "shorthand": "p",
+              "argument": "NAME",
+              "deprecated": false,
+              "description": "Profile to use"
+            },
+            {
+              "name": "reveal",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Show full API keys (not masked)"
+            },
+            {
+              "name": "json",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Output as JSON"
+            }
+          ],
+          "examples": [
+            {
+              "name": "List API keys (masked)",
+              "value": "supa project api-keys"
+            },
+            {
+              "name": "Show full API keys",
+              "value": "supa project api-keys --reveal"
+            },
+            {
+              "name": "Get keys as JSON",
+              "value": "supa project api-keys --json --reveal"
+            }
+          ]
+        },
+        {
+          "name": "profile",
+          "aliases": [],
+          "description": "View or change workflow profile",
+          "arguments": [],
+          "options": [
+            {
+              "name": "set",
+              "shorthand": null,
+              "argument": "PROFILE",
+              "deprecated": false,
+              "description": "Set workflow profile (solo, staged, preview, preview-git)"
+            },
+            {
+              "name": "json",
+              "shorthand": null,
+              "deprecated": false,
+              "description": "Output as JSON"
+            }
+          ],
+          "examples": [
+            {
+              "name": "View current profile",
+              "value": "supa project profile"
+            },
+            {
+              "name": "Change to solo profile",
+              "value": "supa project profile --set solo"
+            },
+            {
+              "name": "Get profile as JSON",
+              "value": "supa project profile --json"
+            }
+          ]
+        }
+      ],
+      "options": [],
+      "examples": [
+        {
+          "name": "Pull remote state",
+          "value": "supa project pull"
+        },
+        {
+          "name": "Push local changes",
+          "value": "supa project push"
+        },
+        {
+          "name": "Start development watcher",
+          "value": "supa project dev"
+        }
+      ]
+    }
+  ]
+}

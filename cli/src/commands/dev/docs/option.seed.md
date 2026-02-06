@@ -1,0 +1,1 @@
+Re-runs seed files automatically whenever schema changes are applied. Keeps your dev database populated with test data as you iterate.

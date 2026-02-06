@@ -4,7 +4,7 @@
  */
 
 import React from "react";
-import { Box, Text } from "ink";
+import { Box, Text, Newline } from "ink";
 
 interface Option {
   short?: string;
@@ -149,6 +149,9 @@ export function Help({
           <Text dimColor>{footer}</Text>
         </Box>
       )}
+
+      {/* Trailing blank line */}
+      <Newline />
     </Box>
   );
 }

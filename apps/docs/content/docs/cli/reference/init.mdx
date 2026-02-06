@@ -1,0 +1,53 @@
+---
+title: "supa init"
+description: "Initialize a new supabase project"
+---
+
+Set up Supabase in the current directory.
+
+Creates the `supabase/` folder structure and links to a project. You can create a new project or connect to an existing one.
+
+Run this once at the root of your repository to get started.
+
+## Usage
+
+```bash
+supa init [options]
+```
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `-y, --yes` | boolean | Skip prompts and use defaults |
+| `--org <SLUG>` | string | Organization slug |
+| `--project <REF>` | string | Link to existing project by ref |
+| `--name <NAME>` | string | Name for new project (requires --org and --region) |
+| `--region <REGION>` | string | Region for new project (e.g., us-east-1) |
+| `--json` | boolean | Output as JSON |
+
+### `--project`
+
+Link to an existing project using its reference ID. Find your project ref in the dashboard URL: `https://supabase.com/dashboard/project/<ref>`
+
+## Examples
+
+### Interactive setup
+
+```bash
+supa init
+```
+
+### Link to existing project
+
+```bash
+supa init --project abc123xyz
+```
+
+### Create new project non-interactively
+
+For CI/CD pipelines or scripts where you can't use interactive prompts.
+
+```bash
+supa init --org my-org --name my-project --region us-east-1
+```

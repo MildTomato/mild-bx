@@ -1,0 +1,211 @@
+---
+title: Generated code
+description: Examples of what Auth Rules generates
+---
+
+This page shows examples of the SQL that Auth Rules generates from your rule
+definitions. Understanding this can help with debugging and optimization.
+
+## SELECT rule
+
+Given this rule:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'org_id', 'title', 'content'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+```
+
+Generated view:
+
+```sql title="generated/data_api.documents.sql"
+CREATE OR REPLACE VIEW data_api.documents
+WITH (security_invoker = false)
+AS SELECT id, org_id, title, content
+FROM public.documents
+WHERE org_id IN (
+  SELECT org_id FROM auth_rules_claims.org_ids
+  WHERE user_id = auth.uid()
+);
+
+GRANT SELECT ON data_api.documents TO anon, authenticated;
+```
+
+## INSERT rule
+
+Given this rule:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.insert(),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids')),
+  auth_rules.eq('created_by', auth_rules.user_id())
+);
+```
+
+Generated trigger function:
+
+```sql title="generated/data_api.documents_insert_trigger.sql"
+CREATE OR REPLACE FUNCTION data_api.documents_insert_trigger()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  -- Validate org_id
+  IF NOT EXISTS (
+    SELECT 1 FROM auth_rules_claims.org_ids
+    WHERE user_id = auth.uid() AND org_id = NEW.org_id
+  ) THEN
+    RAISE EXCEPTION 'Not authorized' USING ERRCODE = '42501';
+  END IF;
+
+  -- Validate created_by
+  IF NEW.created_by IS DISTINCT FROM auth.uid() THEN
+    RAISE EXCEPTION 'created_by must match authenticated user'
+      USING ERRCODE = '42501';
+  END IF;
+
+  INSERT INTO public.documents SELECT NEW.*;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS documents_insert ON data_api.documents;
+CREATE TRIGGER documents_insert
+INSTEAD OF INSERT ON data_api.documents
+FOR EACH ROW EXECUTE FUNCTION data_api.documents_insert_trigger();
+
+GRANT INSERT ON data_api.documents TO authenticated;
+```
+
+## UPDATE rule
+
+Given this rule:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.update(),
+  auth_rules.eq('created_by', auth_rules.user_id())
+);
+```
+
+Generated trigger function:
+
+```sql title="generated/data_api.documents_update_trigger.sql"
+CREATE OR REPLACE FUNCTION data_api.documents_update_trigger()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  UPDATE public.documents
+  SET id = NEW.id
+  WHERE id = OLD.id
+    AND created_by = auth.uid();
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Not found or not authorized'
+      USING ERRCODE = 'P0002';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+```
+
+<Callout type="info">
+The UPDATE trigger validates access via the WHERE clause. The actual column updates are handled by PostgreSQL's INSTEAD OF trigger mechanism, which passes the full NEW record back to the view.
+</Callout>
+
+```sql
+DROP TRIGGER IF EXISTS documents_update ON data_api.documents;
+CREATE TRIGGER documents_update
+INSTEAD OF UPDATE ON data_api.documents
+FOR EACH ROW EXECUTE FUNCTION data_api.documents_update_trigger();
+
+GRANT UPDATE ON data_api.documents TO authenticated;
+```
+
+## DELETE rule
+
+Given this rule:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.delete(),
+  auth_rules.eq('created_by', auth_rules.user_id())
+);
+```
+
+Generated trigger function:
+
+```sql title="generated/data_api.documents_delete_trigger.sql"
+CREATE OR REPLACE FUNCTION data_api.documents_delete_trigger()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  DELETE FROM public.documents
+  WHERE id = OLD.id
+    AND created_by = auth.uid();
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Not found or not authorized'
+      USING ERRCODE = 'P0002';
+  END IF;
+
+  RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS documents_delete ON data_api.documents;
+CREATE TRIGGER documents_delete
+INSTEAD OF DELETE ON data_api.documents
+FOR EACH ROW EXECUTE FUNCTION data_api.documents_delete_trigger();
+
+GRANT DELETE ON data_api.documents TO authenticated;
+```
+
+## OR conditions
+
+Given this rule:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'title', 'is_public'),
+  auth_rules.or_(
+    auth_rules.eq('is_public', true),
+    auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+  )
+);
+```
+
+Generated view:
+
+```sql title="generated/data_api.documents.sql"
+CREATE OR REPLACE VIEW data_api.documents
+WITH (security_invoker = false)
+AS SELECT id, title, is_public
+FROM public.documents
+WHERE (
+  is_public = TRUE
+  OR org_id IN (
+    SELECT org_id FROM auth_rules_claims.org_ids
+    WHERE user_id = auth.uid()
+  )
+);
+```
+
+## Claims view
+
+Given this claim:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('org_ids', $$
+  SELECT user_id, org_id FROM org_members
+$$);
+```
+
+Generated view:
+
+```sql title="generated/auth_rules_claims.org_ids.sql"
+CREATE OR REPLACE VIEW auth_rules_claims.org_ids
+WITH (security_invoker = false)
+AS SELECT user_id, org_id FROM org_members;
+
+GRANT SELECT ON auth_rules_claims.org_ids TO authenticated;
+```

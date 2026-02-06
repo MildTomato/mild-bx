@@ -1,0 +1,182 @@
+---
+title: Claims
+description: Define user relationships for access control
+---
+
+Claims answer the question "what does this user have access to?" They're the
+foundation of Auth Rules — you define relationships once, then reference them
+in your rules.
+
+## Creating a claim
+
+A claim is a SQL query that returns user-to-value mappings. The query must
+return `user_id` as the first column:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('org_ids', $$
+  SELECT user_id, org_id FROM org_members
+$$);
+```
+
+This creates a claim called `org_ids` that maps each user to their organization IDs.
+
+## Using claims in rules
+
+Reference claims with `auth_rules.one_of()`:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'title', 'org_id'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+```
+
+This means "only return documents where `org_id` is one of the user's `org_ids`".
+
+## Claims with multiple columns
+
+Claims can include additional information like roles, which is useful for
+role-based access control. Include the role in your claim:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('org_roles', $$
+  SELECT user_id, org_id, role FROM org_members
+$$);
+```
+
+Then use `check()` to filter by role (see [Role-Based Access](/docs/auth-rules/check-claim)):
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('billing',
+  auth_rules.select('id', 'org_id', 'amount'),
+  auth_rules.in_claim('org_id', 'org_ids',
+    auth_rules.check('org_roles', 'role', ARRAY['admin', 'owner']))
+);
+```
+
+## Common claim patterns
+
+This section covers patterns you'll use frequently.
+
+### Team membership
+
+To map users to their teams:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('team_ids', $$
+  SELECT user_id, team_id FROM team_members
+$$);
+```
+
+### Multiple access paths
+
+Users might access orgs directly or through teams. Use `UNION` to combine
+these paths:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('all_org_ids', $$
+  -- Direct org membership
+  SELECT user_id, org_id FROM org_members
+  UNION
+  -- Via team membership
+  SELECT tm.user_id, t.org_id
+  FROM team_members tm
+  JOIN teams t ON t.id = tm.team_id
+$$);
+```
+
+### Hierarchical teams
+
+If users in a parent team need access to child teams, use a recursive query:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('accessible_team_ids', $$
+  WITH RECURSIVE team_tree AS (
+    -- Direct membership
+    SELECT user_id, team_id FROM team_members
+    UNION
+    -- Child teams
+    SELECT tt.user_id, t.id AS team_id
+    FROM team_tree tt
+    JOIN teams t ON t.parent_team_id = tt.team_id
+  )
+  SELECT DISTINCT user_id, team_id FROM team_tree
+$$);
+```
+
+### Time-limited access
+
+For subscriptions or enrollments with expiration dates, filter by the current
+time:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('active_course_ids', $$
+  SELECT user_id, course_id
+  FROM enrollments
+  WHERE starts_at <= now() AND ends_at >= now()
+$$);
+```
+
+The `now()` is evaluated at query time, so access expires automatically.
+
+## Reusing claims
+
+The same claim can be used across multiple rules. Define the relationship once:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('org_ids', $$
+  SELECT user_id, org_id FROM org_members
+$$);
+```
+
+Use it everywhere:
+
+```sql title="rules.sql"
+-- Documents in user's orgs
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'title'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+
+-- Projects in user's orgs
+SELECT auth_rules.rule('projects',
+  auth_rules.select('id', 'name'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+
+-- Settings for user's orgs
+SELECT auth_rules.rule('org_settings',
+  auth_rules.select('id', 'theme'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+```
+
+## Managing claims
+
+To list all defined claims:
+
+```sql
+SELECT * FROM auth_rules.list_claims();
+```
+
+Remove a claim you no longer need:
+
+```sql
+SELECT auth_rules.drop_claim('old_claim_name');
+```
+
+## Performance tips
+
+Claims query your tables in real-time. For best performance, follow these
+guidelines.
+
+**Index your membership tables** on `user_id`:
+
+```sql title="indexes.sql"
+CREATE INDEX idx_org_members_user ON org_members(user_id);
+CREATE INDEX idx_team_members_user ON team_members(user_id);
+```
+
+**Keep claims simple** when possible. Complex JOINs and recursive CTEs are fine, but simpler queries are faster.
+
+**Changes apply immediately** — when you add a user to an org, they can access that org's data right away. No cache to invalidate.

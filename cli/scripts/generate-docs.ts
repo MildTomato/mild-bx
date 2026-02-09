@@ -30,9 +30,13 @@ function getCommandPath(command: Command, parent?: Command, parentPath?: string)
 }
 
 /**
- * Get the docs directory path for a command
+ * Get the docs directory path for a command.
+ * parentPath resolves deeply nested commands (for example, project/env/pull).
  */
-function getDocsDir(command: Command, parent?: Command): string {
+function getDocsDir(command: Command, parent?: Command, parentPath?: string): string {
+  if (parentPath) {
+    return join(COMMANDS_DIR, ...parentPath.split("/"), command.name, "docs");
+  }
   if (parent) {
     return join(COMMANDS_DIR, parent.name, command.name, "docs");
   }
@@ -42,8 +46,8 @@ function getDocsDir(command: Command, parent?: Command): string {
 /**
  * Read a markdown file from the docs directory if it exists
  */
-function readDocFile(command: Command, parent: Command | undefined, filename: string): string | null {
-  const docsDir = getDocsDir(command, parent);
+function readDocFile(command: Command, parent: Command | undefined, filename: string, parentPath?: string): string | null {
+  const docsDir = getDocsDir(command, parent, parentPath);
   const filePath = join(docsDir, filename);
   if (existsSync(filePath)) {
     return readFileSync(filePath, "utf-8").trim();
@@ -140,6 +144,13 @@ function commandToMdx(command: Command, parent?: Command, parentPath?: string, d
         }
         lines.push("", "---", "");
 
+        // Build the filesystem path for resolving subcommand docs/
+        const commandFsPath = parentPath
+          ? `${parentPath}/${command.name}`
+          : parent
+            ? `${parent.name}/${command.name}`
+            : command.name;
+
         // Full documentation for each subcommand
         for (let i = 0; i < visibleSubs.length; i++) {
           const sub = visibleSubs[i];
@@ -150,6 +161,13 @@ function commandToMdx(command: Command, parent?: Command, parentPath?: string, d
 
           lines.push(`### \`${sub.name}\``, "");
           lines.push(sub.description, "");
+
+          // Intro prose from docs/intro.md
+          const subIntro = readDocFile(sub, command, "intro.md", commandFsPath);
+          if (subIntro) {
+            lines.push("", subIntro, "");
+          }
+
           lines.push("```bash", subUsage, "```", "");
 
           // Arguments for subcommand (use table)
@@ -182,19 +200,35 @@ function commandToMdx(command: Command, parent?: Command, parentPath?: string, d
               lines.push(`| \`${flag}${argStr}\` | ${typeStr} | ${opt.description} |`);
             }
             lines.push("");
+
+            // Option details from docs/option.<name>.md
+            for (const opt of subVisibleOptions) {
+              const optionDoc = readDocFile(sub, command, `option.${opt.name}.md`, commandFsPath);
+              if (optionDoc) {
+                lines.push(`**\`--${opt.name}\`**`, "");
+                lines.push(optionDoc, "");
+              }
+            }
           }
 
-          // Examples for subcommand (from docs/example.*.md or command.examples)
+          // Examples for subcommand
           if (sub.examples && sub.examples.length > 0) {
-            const validExamples = sub.examples.filter((ex) => ex.code);
-            if (validExamples.length > 0) {
-              lines.push("**Examples:**", "");
-              for (const example of validExamples) {
-                lines.push(`\`\`\`bash\n${example.code}\n\`\`\``, "");
-                if (example.description) {
-                  lines.push(example.description, "");
-                }
+            lines.push("**Examples:**", "");
+            for (const example of sub.examples) {
+              const exampleSlug = slugify(example.name);
+
+              // Check for extra docs/example.<slug>.md content
+              const exampleDoc = readDocFile(sub, command, `example.${exampleSlug}.md`, commandFsPath);
+              if (exampleDoc) {
+                lines.push(exampleDoc, "");
               }
+
+              const values = Array.isArray(example.value) ? example.value : [example.value];
+              lines.push("```bash");
+              for (const value of values) {
+                lines.push(value);
+              }
+              lines.push("```", "");
             }
           }
 
@@ -278,7 +312,7 @@ function commandToMdx(command: Command, parent?: Command, parentPath?: string, d
  */
 function writeCommandDoc(command: Command, parent?: Command, parentPath?: string, depth: number = 0): void {
   const hasSubcommands = command.subcommands && command.subcommands.length > 0;
-  const docsDir = getDocsDir(command, parent);
+  const docsDir = getDocsDir(command, parent, parentPath);
   const hasDocsDir = existsSync(docsDir);
 
   // Skip file creation for depth 2+ commands - they're inlined in parent

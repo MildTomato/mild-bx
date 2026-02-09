@@ -14,6 +14,8 @@ export interface CommandHeaderOptions {
   command: string;
   description?: string[];
   showBranding?: boolean;
+  /** Key-value context lines printed below the description (e.g. Project, Profile, Env) */
+  context?: [label: string, value: string][];
 }
 
 /**
@@ -33,7 +35,7 @@ export interface CommandHeaderOptions {
  * │  Description line 1
  */
 export function printCommandHeader(options: CommandHeaderOptions): void {
-  const { command, description, showBranding } = options;
+  const { command, description, showBranding, context } = options;
 
   console.log();
 
@@ -55,6 +57,14 @@ export function printCommandHeader(options: CommandHeaderOptions): void {
         console.log(`${bar}  ${chalk.dim(line)}`);
       }
     }
+  }
+
+  if (context && context.length > 0) {
+    console.log(bar);
+    for (const [label, value] of context) {
+      console.log(`${bar}  ${gray((label + ":").padEnd(10))} ${value}`);
+    }
+    console.log(bar);
   }
 }
 

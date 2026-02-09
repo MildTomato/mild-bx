@@ -321,6 +321,129 @@ export class SupabaseClient {
       { password },
     );
   }
+
+  // Environment Management
+  // TODO: implement when API is available
+
+  /**
+   * List all environments for a project
+   */
+  async listEnvironments(projectRef: string): Promise<
+    Array<{
+      name: string;
+      is_default: boolean;
+      created_at?: string;
+      variable_count?: number;
+    }>
+  > {
+    // TODO: implement when API endpoint is available
+    // Expected endpoint: GET /v1/projects/${projectRef}/environments
+    throw new Error("Environment API not yet implemented");
+  }
+
+  /**
+   * Create a new custom environment
+   */
+  async createEnvironment(
+    projectRef: string,
+    params: { name: string; from?: string },
+  ): Promise<{ name: string; is_default: boolean }> {
+    // TODO: implement when API endpoint is available
+    // Expected endpoint: POST /v1/projects/${projectRef}/environments
+    // Body: { name, from? }
+    throw new Error("Environment API not yet implemented");
+  }
+
+  /**
+   * Delete a custom environment
+   */
+  async deleteEnvironment(projectRef: string, name: string): Promise<void> {
+    // TODO: implement when API endpoint is available
+    // Expected endpoint: DELETE /v1/projects/${projectRef}/environments/${name}
+    throw new Error("Environment API not yet implemented");
+  }
+
+  /**
+   * Seed one environment from another
+   */
+  async seedEnvironment(
+    projectRef: string,
+    name: string,
+    params: {
+      from: string;
+      variables?: Array<{ key: string; value: string; secret: boolean }>;
+    },
+  ): Promise<void> {
+    // TODO: implement when API endpoint is available
+    // Expected endpoint: POST /v1/projects/${projectRef}/environments/${name}/seed
+    // Body: { from, variables? }
+    throw new Error("Environment API not yet implemented");
+  }
+
+  /**
+   * List environment variables for an environment
+   */
+  async listEnvVariables(
+    projectRef: string,
+    envName: string,
+    options?: { branch?: string; decrypt?: boolean },
+  ): Promise<Array<{ key: string; value: string; secret: boolean }>> {
+    // TODO: implement when API endpoint is available
+    // Expected endpoint: GET /v1/projects/${projectRef}/environments/${envName}/variables
+    // Query params: branch?, decrypt?
+    throw new Error("Environment API not yet implemented");
+  }
+
+  /**
+   * Bulk upsert environment variables
+   */
+  async bulkUpsertEnvVariables(
+    projectRef: string,
+    envName: string,
+    params: {
+      variables: Array<{ key: string; value: string; secret: boolean }>;
+      prune?: boolean;
+    },
+  ): Promise<void> {
+    // TODO: implement when API endpoint is available
+    // Expected endpoint: PUT /v1/projects/${projectRef}/environments/${envName}/variables
+    // Body: { variables, prune? }
+    throw new Error("Environment API not yet implemented");
+  }
+
+  /**
+   * Set a single environment variable
+   */
+  async setEnvVariable(
+    projectRef: string,
+    envName: string,
+    params: {
+      key: string;
+      value: string;
+      secret?: boolean;
+      branch?: string;
+    },
+  ): Promise<void> {
+    // TODO: implement when API endpoint is available
+    // Expected endpoint: PUT /v1/projects/${projectRef}/environments/${envName}/variables/${key}
+    // Body: { value, secret?, branch? }
+    throw new Error("Environment API not yet implemented");
+  }
+
+  /**
+   * Delete a single environment variable
+   */
+  async deleteEnvVariable(
+    projectRef: string,
+    envName: string,
+    key: string,
+    options?: { branch?: string },
+  ): Promise<void> {
+    // TODO: implement when API endpoint is available
+    // Expected endpoint: DELETE /v1/projects/${projectRef}/environments/${envName}/variables/${key}
+    // Query params: branch?
+    throw new Error("Environment API not yet implemented");
+  }
 }
 
 export function createClient(token: string): SupabaseClient {

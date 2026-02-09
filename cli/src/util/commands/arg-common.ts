@@ -138,3 +138,49 @@ export const nameOption = {
   deprecated: false,
   description: "Resource name",
 } as const satisfies CommandOption;
+
+/**
+ * --environment / -e: Environment name (development, preview, production, custom)
+ */
+export const environmentOption = {
+  name: "environment",
+  shorthand: "e",
+  type: String,
+  argument: "NAME",
+  deprecated: false,
+  description: "Environment name (default: development)",
+} as const satisfies CommandOption;
+
+/**
+ * --branch / -b: Branch name for branch-specific overrides
+ */
+export const branchOption = {
+  name: "branch",
+  shorthand: "b",
+  type: String,
+  argument: "NAME",
+  deprecated: false,
+  description: "Branch name for environment variable override",
+} as const satisfies CommandOption;
+
+/**
+ * --secret: Mark variable as write-only secret
+ */
+export const secretOption = {
+  name: "secret",
+  shorthand: null,
+  type: Boolean,
+  deprecated: false,
+  description: "Mark variable as write-only secret",
+} as const satisfies CommandOption;
+
+/**
+ * --prune: Remove variables not present locally
+ */
+export const pruneOption = {
+  name: "prune",
+  shorthand: null,
+  type: Boolean,
+  deprecated: false,
+  description: "Remove remote variables not present locally",
+} as const satisfies CommandOption;

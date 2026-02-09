@@ -2,16 +2,9 @@
  * API Keys command - list project API keys
  */
 
-import * as p from "@clack/prompts";
 import chalk from "chalk";
 import { createClient, type ApiKey } from "@/lib/api.js";
-import {
-  requireAuth,
-  loadProjectConfig,
-  getProfileOrAuto,
-  getProjectRef,
-} from "@/lib/config.js";
-import { getCurrentBranch } from "@/lib/git.js";
+import { resolveProjectContext, requireTTY } from "@/lib/resolve-project.js";
 import { createSpinner } from "@/lib/spinner.js";
 
 interface ApiKeysOptions {
@@ -67,35 +60,7 @@ function printTable(keys: ApiKey[], reveal: boolean) {
 }
 
 export async function apiKeysCommand(options: ApiKeysOptions): Promise<void> {
-  const token = await requireAuth({ json: options.json });
-
-  const cwd = process.cwd();
-  const config = loadProjectConfig(cwd);
-
-  if (!config) {
-    if (options.json) {
-      console.log(JSON.stringify({ status: "error", message: "No config found" }));
-    } else {
-      console.error(chalk.red("No supabase/config.json found. Run `supa init` first."));
-    }
-    process.exitCode = 1;
-    return;
-  }
-
-  const branch = getCurrentBranch(cwd) || "main";
-  const profile = getProfileOrAuto(config, options.profile, branch);
-  const projectRef = getProjectRef(config, profile);
-
-  if (!projectRef) {
-    if (options.json) {
-      console.log(JSON.stringify({ status: "error", message: "No project ref" }));
-    } else {
-      console.error(chalk.red("No project ref configured. Run `supa init` first."));
-    }
-    process.exitCode = 1;
-    return;
-  }
-
+  const { projectRef, token } = await resolveProjectContext(options);
   const reveal = options.reveal ?? false;
 
   // JSON mode
@@ -113,13 +78,7 @@ export async function apiKeysCommand(options: ApiKeysOptions): Promise<void> {
     return;
   }
 
-  // Non-TTY check for interactive mode
-  if (!process.stdin.isTTY) {
-    console.error("Error: Interactive mode requires a TTY.");
-    console.error("Use --json for non-interactive output.");
-    process.exitCode = 1;
-    return;
-  }
+  requireTTY();
 
   // Interactive mode
   const spinner = createSpinner();

@@ -69,8 +69,8 @@ export const setSubcommand = {
   aliases: [],
   description: "Set a single environment variable",
   arguments: [
-    { name: "KEY", required: true },
-    { name: "VALUE", required: false },
+    { name: "KEY", required: true, description: "Variable name" },
+    { name: "VALUE", required: false, description: "Variable value (reads from stdin if omitted)" },
   ],
   options: [
     environmentOption,
@@ -100,7 +100,7 @@ export const unsetSubcommand = {
   name: "unset",
   aliases: [],
   description: "Delete an environment variable",
-  arguments: [{ name: "KEY", required: true }],
+  arguments: [{ name: "KEY", required: true, description: "Variable name to delete" }],
   options: [environmentOption, branchOption, yesOption, jsonOption, profileOption],
   examples: [
     {
@@ -153,7 +153,7 @@ export const createSubcommand = {
   name: "create",
   aliases: [],
   description: "Create a custom environment",
-  arguments: [{ name: "NAME", required: true }],
+  arguments: [{ name: "NAME", required: true, description: "Environment name to create" }],
   options: [
     {
       name: "from",
@@ -190,7 +190,7 @@ export const deleteSubcommand = {
   name: "delete",
   aliases: ["remove", "rm"],
   description: "Delete a custom environment",
-  arguments: [{ name: "NAME", required: true }],
+  arguments: [{ name: "NAME", required: true, description: "Environment name to delete" }],
   options: [yesOption, jsonOption, profileOption],
   examples: [
     {
@@ -205,7 +205,7 @@ export const seedSubcommand = {
   name: "seed",
   aliases: [],
   description: "Seed one environment from another",
-  arguments: [{ name: "TARGET", required: true }],
+  arguments: [{ name: "TARGET", required: true, description: "Target environment to seed" }],
   options: [
     {
       name: "from",
@@ -258,16 +258,16 @@ export const envCommand = {
   options: [],
   examples: [
     {
-      name: "Pull variables from development",
-      value: "supa project env pull",
+      name: "Push local .env to production",
+      value: "supa project env push --environment production",
     },
     {
-      name: "Set a variable",
-      value: 'supa project env set API_KEY "value"',
+      name: "Set a secret variable",
+      value: 'supa project env set STRIPE_KEY "sk_live_456" --secret',
     },
     {
-      name: "List all environments",
-      value: "supa project env list-environments",
+      name: "Seed staging from production",
+      value: "supa project env seed staging --from production",
     },
   ],
 } as const satisfies Command;

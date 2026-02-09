@@ -38,6 +38,8 @@ export interface CommandArgument {
   readonly required: boolean;
   /** Whether this argument can be repeated */
   readonly multiple?: true;
+  /** Description shown in help text and docs */
+  readonly description?: string;
 }
 
 /**

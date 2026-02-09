@@ -2,9 +2,8 @@ import * as p from "@clack/prompts";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import chalk from "chalk";
-import { requireAuth, loadProjectConfig, getProfileOrAuto, getProjectRef } from "@/lib/config.js";
 import { createClient } from "@/lib/api.js";
-import { getCurrentBranch } from "@/lib/git.js";
+import { resolveProjectContext } from "@/lib/resolve-project.js";
 import { printCommandHeader, S_BAR } from "@/components/command-header.js";
 import { createSpinner } from "@/lib/spinner.js";
 import { searchSelect, cancelSymbol } from "@/components/search-select.js";
@@ -41,6 +40,8 @@ export async function addAuthProvider(
   const isTTY = process.stdout.isTTY && !options.json;
   const isDryRun = options["dry-run"] || false;
 
+  const { projectRef, token: authToken, cwd } = await resolveProjectContext(options);
+
   const spinner = isTTY ? createSpinner() : null;
 
   if (isTTY) {
@@ -53,44 +54,6 @@ export async function addAuthProvider(
       console.log(`${S_BAR}  ${chalk.yellow("Mode:")} ${chalk.yellow("dry-run")}`);
       console.log(S_BAR);
     }
-  }
-
-  // Authenticate
-  spinner?.start("Authenticating...");
-  const authToken = await requireAuth();
-  spinner?.stop("Authenticated");
-
-  // Load config and get project ref
-  const cwd = process.cwd();
-  const config = loadProjectConfig(cwd);
-  if (!config) {
-    const errorMsg = "No project config found. Run `supa init` to create one, or cd into a directory with a supabase/ folder.";
-    if (options.json) {
-      console.error(JSON.stringify({
-        error: "ConfigNotFound",
-        message: errorMsg,
-        exitCode: EXIT_CODES.CONFIG_NOT_FOUND,
-      }, null, 2));
-    } else {
-      p.log.error(errorMsg);
-    }
-    process.exit(EXIT_CODES.CONFIG_NOT_FOUND);
-  }
-  const branch = getCurrentBranch(cwd) || "main";
-  const profile = getProfileOrAuto(config, options.profile, branch);
-  const projectRef = getProjectRef(config, profile);
-  if (!projectRef) {
-    const errorMsg = "No project ref configured. Run `supa init` to set up your project.";
-    if (options.json) {
-      console.error(JSON.stringify({
-        error: "ProjectRefNotFound",
-        message: errorMsg,
-        exitCode: EXIT_CODES.CONFIG_NOT_FOUND,
-      }, null, 2));
-    } else {
-      p.log.error(errorMsg);
-    }
-    process.exit(EXIT_CODES.CONFIG_NOT_FOUND);
   }
 
   // Select provider

@@ -13,13 +13,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { createClient } from "@/lib/api.js";
-import {
-  requireAuth,
-  loadProjectConfig,
-  getProfileOrAuto,
-  getProjectRef,
-} from "@/lib/config.js";
-import { getCurrentBranch } from "@/lib/git.js";
+import { resolveProjectContext, requireTTY } from "@/lib/resolve-project.js";
 import {
   buildPostgrestPayload,
   buildAuthPayload,
@@ -230,7 +224,6 @@ async function buildPlan(options: {
 }
 
 export async function pushCommand(options: PushOptions) {
-  const cwd = process.cwd();
   const dryRun = options.plan ?? false;
   const yes = options.yes ?? false;
   const migrationsOnly = options.migrationsOnly ?? false;
@@ -238,40 +231,14 @@ export async function pushCommand(options: PushOptions) {
 
   setVerbose(options.verbose ?? false);
 
-  // Load config
-  const config = loadProjectConfig(cwd);
-  if (!config) {
-    if (options.json) {
-      console.log(JSON.stringify({ status: "error", message: "No config found" }));
-    } else {
-      console.error(chalk.red("No supabase/config.json found. Run `supa init` first."));
-    }
-    process.exit(1);
-  }
-
-  // Get profile and project ref
-  const currentBranch = getCurrentBranch(cwd) || undefined;
-  const profile = getProfileOrAuto(config, options.profile, currentBranch);
-  const projectRef = getProjectRef(config, profile);
-  const token = await requireAuth({ json: options.json });
-
-  if (!projectRef) {
-    if (options.json) {
-      console.log(JSON.stringify({ status: "error", message: "No project ref" }));
-    } else {
-      console.error(chalk.red("No project ref configured."));
-    }
-    process.exit(1);
-  }
+  const { cwd, config, branch: currentBranch, profile, projectRef, token } =
+    await resolveProjectContext(options);
 
   const client = createClient(token);
   const projectConfig = config as ProjectConfig;
 
-  // Non-TTY check for interactive mode
-  if (!options.json && !process.stdin.isTTY) {
-    console.error("Error: Interactive mode requires a TTY.");
-    console.error("Use --json for non-interactive output.");
-    process.exit(1);
+  if (!options.json) {
+    requireTTY();
   }
 
   // JSON mode

@@ -7,7 +7,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { WORKFLOW_PROFILES } from "@/lib/workflow-profiles.js";
 import type { WorkflowProfile } from "@/lib/config-types.js";
-import { loadProjectConfig, getWorkflowProfile } from "@/lib/config.js";
+import { getWorkflowProfile } from "@/lib/config.js";
+import { resolveConfig } from "@/lib/resolve-project.js";
 
 interface ProfileOptions {
   set?: WorkflowProfile;
@@ -68,8 +69,7 @@ function updateConfigProfile(cwd: string, newProfile: WorkflowProfile): boolean 
 }
 
 export async function profileCommand(options: ProfileOptions) {
-  const cwd = process.cwd();
-  const config = loadProjectConfig(cwd);
+  const { cwd, config } = resolveConfig(options);
 
   const profileInfo = (name: string) => {
     const def = WORKFLOW_PROFILES.find(p => p.name === name);
@@ -81,19 +81,6 @@ export async function profileCommand(options: ProfileOptions) {
     title: p.title,
     description: p.description,
   }));
-
-  if (!config) {
-    if (options.json) {
-      console.log(JSON.stringify({
-        error: "not_initialized",
-        message: "No supabase project found. Run `supa init` first.",
-        availableProfiles,
-      }));
-    } else {
-      console.error(chalk.red("No supabase project found. Run `supa init` first."));
-    }
-    process.exit(1);
-  }
 
   const currentProfile = getWorkflowProfile(config);
 

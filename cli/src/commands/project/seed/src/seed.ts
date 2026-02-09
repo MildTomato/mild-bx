@@ -5,13 +5,7 @@
 import { join, relative } from "node:path";
 import { existsSync } from "node:fs";
 import { createClient } from "@/lib/api.js";
-import {
-  requireAuth,
-  loadProjectConfig,
-  getProfileOrAuto,
-  getProjectRef,
-} from "@/lib/config.js";
-import { getCurrentBranch } from "@/lib/git.js";
+import { resolveProjectContext, resolveConfig, requireTTY } from "@/lib/resolve-project.js";
 import {
   applySeedFiles,
   findSeedFiles,
@@ -30,28 +24,13 @@ interface SeedOptions {
 }
 
 export async function seedCommand(options: SeedOptions): Promise<void> {
-  const cwd = process.cwd();
-  const supabaseDir = join(cwd, "supabase");
-
   // Set verbose mode
   setVerbose(options.verbose ?? false);
 
-  // Load config
-  const config = loadProjectConfig(cwd);
-  if (!config) {
-    if (options.json) {
-      console.log(
-        JSON.stringify({ status: "error", message: "No config found" }),
-      );
-    } else {
-      console.error(
-        `\n${C.error}Error:${C.reset} No supabase/config.json found`,
-      );
-      console.error(`  Run ${C.value}supa init${C.reset} to initialize\n`);
-    }
-    process.exitCode = 1;
-    return;
-  }
+  const { cwd, config, profile, projectRef, token } =
+    await resolveProjectContext(options);
+
+  const supabaseDir = join(cwd, "supabase");
 
   // Get seed config
   const seedConfig = getSeedConfig(config);
@@ -76,9 +55,6 @@ export async function seedCommand(options: SeedOptions): Promise<void> {
     return;
   }
 
-  // Get token
-  const token = await requireAuth({ json: options.json });
-
   // Check for db password
   const dbPassword = process.env.SUPABASE_DB_PASSWORD;
   if (!dbPassword) {
@@ -96,27 +72,6 @@ export async function seedCommand(options: SeedOptions): Promise<void> {
       console.error(
         `  Get your database password from the Supabase dashboard\n`,
       );
-    }
-    process.exitCode = 1;
-    return;
-  }
-
-  // Get profile and project
-  const currentBranch = getCurrentBranch(cwd) || "unknown";
-  const profile = getProfileOrAuto(config, options.profile, currentBranch);
-  const projectRef = getProjectRef(config, profile);
-
-  if (!projectRef) {
-    if (options.json) {
-      console.log(
-        JSON.stringify({
-          status: "error",
-          message: "No project_id configured",
-        }),
-      );
-    } else {
-      console.error(`\n${C.error}Error:${C.reset} No project_id configured`);
-      console.error(`  Add "project_id" to supabase/config.json\n`);
     }
     process.exitCode = 1;
     return;
@@ -178,12 +133,8 @@ export async function seedCommand(options: SeedOptions): Promise<void> {
     return;
   }
 
-  // Non-TTY check for interactive mode
-  if (!options.json && !process.stdin.isTTY) {
-    console.error("Error: Interactive mode requires a TTY.");
-    console.error("Use --json for non-interactive output.");
-    process.exitCode = 1;
-    return;
+  if (!options.json) {
+    requireTTY();
   }
 
   // Dry run - just show what would be seeded
@@ -292,24 +243,8 @@ export async function seedCommand(options: SeedOptions): Promise<void> {
 export async function seedStatusCommand(options: {
   json?: boolean;
 }): Promise<void> {
-  const cwd = process.cwd();
+  const { cwd, config } = resolveConfig(options);
   const supabaseDir = join(cwd, "supabase");
-
-  // Load config
-  const config = loadProjectConfig(cwd);
-  if (!config) {
-    if (options.json) {
-      console.log(
-        JSON.stringify({ status: "error", message: "No config found" }),
-      );
-    } else {
-      console.error(
-        `\n${C.error}Error:${C.reset} No supabase/config.json found\n`,
-      );
-    }
-    process.exitCode = 1;
-    return;
-  }
 
   // Get seed config
   const seedConfig = getSeedConfig(config);

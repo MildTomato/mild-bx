@@ -1,8 +1,7 @@
 import * as p from "@clack/prompts";
 import chalk from "chalk";
-import { requireAuth, loadProjectConfig, getProfileOrAuto, getProjectRef } from "@/lib/config.js";
 import { createClient } from "@/lib/api.js";
-import { getCurrentBranch } from "@/lib/git.js";
+import { resolveProjectContext, requireTTY } from "@/lib/resolve-project.js";
 import { printCommandHeader, S_BAR } from "@/components/command-header.js";
 import { createSpinner } from "@/lib/spinner.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
@@ -18,7 +17,7 @@ export interface ListOptions {
 }
 
 export async function listAuthProviders(options: ListOptions = {}): Promise<void> {
-  const spinner = !options.json ? createSpinner() : null;
+  const { projectRef, token: authToken } = await resolveProjectContext(options);
 
   if (!options.json) {
     printCommandHeader({
@@ -28,44 +27,8 @@ export async function listAuthProviders(options: ListOptions = {}): Promise<void
     console.log(S_BAR);
   }
 
-  spinner?.start("Authenticating...");
-  const authToken = await requireAuth();
-  spinner?.stop("Authenticated");
-
-  // Load config and get project ref (synchronous)
-  const cwd = process.cwd();
-  const config = loadProjectConfig(cwd);
-  if (!config) {
-    const errorMsg = "No project config found. Run `supa init` to create one, or cd into a directory with a supabase/ folder.";
-    if (options.json) {
-      console.error(JSON.stringify({
-        error: "ConfigNotFound",
-        message: errorMsg,
-        exitCode: EXIT_CODES.CONFIG_NOT_FOUND,
-      }, null, 2));
-    } else {
-      p.log.error(errorMsg);
-    }
-    process.exit(EXIT_CODES.CONFIG_NOT_FOUND);
-  }
-  const branch = getCurrentBranch(cwd) || "main";
-  const profile = getProfileOrAuto(config, options.profile, branch);
-  const projectRef = getProjectRef(config, profile);
-  if (!projectRef) {
-    const errorMsg = "No project ref configured. Run `supa init` to set up your project.";
-    if (options.json) {
-      console.error(JSON.stringify({
-        error: "ProjectRefNotFound",
-        message: errorMsg,
-        exitCode: EXIT_CODES.CONFIG_NOT_FOUND,
-      }, null, 2));
-    } else {
-      p.log.error(errorMsg);
-    }
-    process.exit(EXIT_CODES.CONFIG_NOT_FOUND);
-  }
-
   // Fetch remote auth config
+  const spinner = !options.json ? createSpinner() : null;
   spinner?.start("Fetching providers...");
 
   let remoteConfig: Record<string, unknown>;

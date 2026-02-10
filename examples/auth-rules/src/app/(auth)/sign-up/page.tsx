@@ -34,7 +34,7 @@ export default function SignUpPage() {
         placeholder="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="w-full px-3 py-2 bg-bg-secondary border border-border rounded outline-none focus:border-fg-muted"
+        className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-md outline-none focus:border-fg-muted"
         required
       />
       <input
@@ -42,7 +42,7 @@ export default function SignUpPage() {
         placeholder="password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="w-full px-3 py-2 bg-bg-secondary border border-border rounded outline-none focus:border-fg-muted"
+        className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-md outline-none focus:border-fg-muted"
         required
       />
       {error && <p className="text-red-500">{error}</p>}

@@ -11,7 +11,7 @@ export function GlobalMutationIndicator() {
   if (pendingMutations.length === 0) return null
 
   return (
-    <div className="fixed bottom-4 right-4 bg-accent text-bg px-3 py-1 rounded z-50">
+    <div className="fixed bottom-4 right-4 bg-fg text-bg px-3 py-1 rounded z-50">
       Saving...
     </div>
   )

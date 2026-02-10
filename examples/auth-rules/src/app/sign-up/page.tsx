@@ -32,15 +32,15 @@ export default function SignUpPage() {
       <form onSubmit={handleSignUp} className="w-full max-w-xs space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-medium">Create account</h1>
-          <div className="flex gap-1">
+          <div className="flex gap-1 text-xs">
             {(["light", "dark", "system"] as const).map((t) => (
               <button
                 key={t}
                 type="button"
                 onClick={() => setTheme(t)}
-                className="p-1 text-xs text-fg-muted hover:text-fg capitalize"
+                className={`px-2 py-1 rounded border ${theme === t ? "border-fg-muted bg-bg-secondary text-fg" : "border-transparent text-fg-muted hover:text-fg"}`}
               >
-                <span className={`inline-block w-2.5 h-2.5 rounded-full border ${theme === t ? "border-fg bg-fg" : "border-fg-muted"}`} />
+                {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
           </div>

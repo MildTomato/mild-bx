@@ -2,6 +2,7 @@
 
 import { ErrorBoundary } from 'react-error-boundary'
 import { QueryErrorResetBoundary } from '@tanstack/react-query'
+import { Button } from '@/components/ui/button'
 
 function ErrorFallback({
   error,
@@ -18,12 +19,9 @@ function ErrorFallback({
         <pre className="text-sm text-fg-muted bg-bg-secondary p-4 rounded overflow-auto">
           {errorMessage}
         </pre>
-        <button
-          onClick={resetErrorBoundary}
-          className="px-4 py-2 bg-accent text-bg rounded hover:opacity-80"
-        >
+        <Button onClick={resetErrorBoundary}>
           Try again
-        </button>
+        </Button>
       </div>
     </div>
   )

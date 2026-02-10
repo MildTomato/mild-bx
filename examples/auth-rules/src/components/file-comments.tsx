@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { VscSend, VscTrash } from "react-icons/vsc";
+import { Button } from "@/components/ui/button";
 import { useFileComments, useCreateComment, useDeleteComment } from "@/lib/queries";
 import { stringToColor, getInitials } from "@/lib/avatar-utils";
 import { supabase } from "@/lib/supabase";
@@ -118,13 +119,13 @@ export function FileComments({ fileId, canComment }: FileCommentsProps) {
             placeholder="Add a comment..."
             className="flex-1 bg-bg-secondary border border-border rounded px-3 py-1.5 text-sm outline-none focus:border-fg-muted"
           />
-          <button
+          <Button
             type="submit"
+            size="sm"
             disabled={!newComment.trim() || createCommentMutation.isPending}
-            className="px-3 py-1.5 bg-accent text-bg rounded hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <VscSend className="w-4 h-4" />
-          </button>
+          </Button>
         </form>
       )}
     </div>

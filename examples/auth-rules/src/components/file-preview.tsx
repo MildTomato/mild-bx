@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { VscFile, VscCalendar, VscAccount, VscLock } from "react-icons/vsc";
 import { useFileBrowser } from "@/lib/file-browser-context";
 import { useUpdateFileContent, useMyPermission, useResourceShares } from "@/lib/queries";
+import { Button } from "@/components/ui/button";
 import { FileComments } from "./file-comments";
 import { supabase } from "@/lib/supabase";
 
@@ -101,17 +102,17 @@ export function FilePreview() {
         <div className="flex items-center gap-2">
           {isEditing ? (
             <>
-              <button onClick={saveFileContent} className="px-2 py-1 bg-accent text-bg rounded hover:opacity-80">
+              <Button size="sm" onClick={saveFileContent}>
                 Save
-              </button>
-              <button onClick={() => { setFileContent(selectedFile.content || ""); setIsEditing(false); }} className="px-2 py-1 text-fg-muted hover:text-fg">
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => { setFileContent(selectedFile.content || ""); setIsEditing(false); }}>
                 Cancel
-              </button>
+              </Button>
             </>
           ) : canEdit ? (
-            <button onClick={() => setIsEditing(true)} className="px-2 py-1 bg-bg-secondary border border-border rounded hover:bg-border">
+            <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
               Edit
-            </button>
+            </Button>
           ) : null}
           <button onClick={() => selectFile(null)} className="px-2 py-1 text-fg-muted hover:text-fg">
             Close

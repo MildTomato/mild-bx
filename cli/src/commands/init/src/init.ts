@@ -32,6 +32,7 @@ interface InitOptions {
   name?: string;
   region?: string;
   dryRun?: boolean;
+  local?: boolean;
 }
 
 interface ConfigData {
@@ -70,39 +71,84 @@ export async function initCommand(options: InitOptions): Promise<void> {
   // Check if already initialized
   if (existsSync(join(supabaseDir, "config.json"))) {
     const config = loadProjectConfig(cwd);
-    const projectId = config?.project_id || "unknown";
-    const profile = config ? getWorkflowProfile(config) : "unknown";
-    const dashboardUrl = `https://supabase.com/dashboard/project/${projectId}`;
-    const profileDef = WORKFLOW_PROFILES.find((pr) => pr.name === profile);
+    const projectId = config?.project_id;
 
-    if (options.json) {
-      console.log(JSON.stringify({
-        status: "already_initialized",
-        project_id: projectId,
-        workflow_profile: profile,
-        dashboard_url: dashboardUrl,
-        config_path: join(supabaseDir, "config.json"),
-      }));
-    } else {
+    // Case: local init was run previously (no project_id) — offer to connect to platform
+    if (!projectId && !options.json && process.stdin.isTTY && !options.local) {
       console.log();
-      console.log("Already initialized in this directory.");
-      console.log();
-      console.log(`${chalk.dim("Project:")} ${projectId}`);
-      console.log(`${chalk.dim("Config:")} supabase/config.json`);
-      console.log(`${chalk.dim("Profile:")} ${profile}`);
-      if (profileDef) {
-        console.log();
-        console.log(chalk.bold(profileDef.title));
-        console.log(chalk.dim(profileDef.description));
+      p.log.info("Found existing local project (no cloud project linked).");
+
+      const reInitAction = await p.select({
+        message: "What would you like to do?",
+        options: [
+          { value: "connect" as const, label: "Connect to Supabase Platform", hint: "Link or create a cloud project" },
+          { value: "reinit" as const, label: "Re-initialize", hint: "Start fresh" },
+          { value: "cancel" as const, label: "Cancel" },
+        ],
+      });
+
+      if (p.isCancel(reInitAction) || reInitAction === "cancel") {
+        p.cancel("Cancelled");
+        return;
       }
-      console.log();
-      console.log(chalk.dim("Next steps:"));
-      console.log(`  supa dev  ${chalk.dim("Start development watcher")}`);
-      console.log(`  supa project profile  ${chalk.dim("Change workflow profile")}`);
-      console.log(`  supa status  ${chalk.dim("Show project status")}`);
+
+      if (reInitAction === "reinit") {
+        // Fall through to the rest of init (will overwrite)
+      } else {
+        // "connect" — go straight to platform wizard
+        const token = await requireAuth({ json: options.json });
+        const project = await runInitWizard();
+        await writePlatformProject(cwd, supabaseDir, token, project, options);
+        return;
+      }
+    } else if (projectId) {
+      // Case: fully initialized with a project — show current state
+      const profile = config ? getWorkflowProfile(config) : "unknown";
+      const dashboardUrl = `https://supabase.com/dashboard/project/${projectId}`;
+      const profileDef = WORKFLOW_PROFILES.find((pr) => pr.name === profile);
+
+      if (options.json) {
+        console.log(JSON.stringify({
+          status: "already_initialized",
+          project_id: projectId,
+          workflow_profile: profile,
+          dashboard_url: dashboardUrl,
+          config_path: join(supabaseDir, "config.json"),
+        }));
+      } else {
+        console.log();
+        console.log("Already initialized in this directory.");
+        console.log();
+        console.log(`${chalk.dim("Project:")} ${projectId}`);
+        console.log(`${chalk.dim("Config:")} supabase/config.json`);
+        console.log(`${chalk.dim("Profile:")} ${profile}`);
+        if (profileDef) {
+          console.log();
+          console.log(chalk.bold(profileDef.title));
+          console.log(chalk.dim(profileDef.description));
+        }
+        console.log();
+        console.log(chalk.dim("Next steps:"));
+        console.log(`  supa dev  ${chalk.dim("Start development watcher")}`);
+        console.log(`  supa project profile  ${chalk.dim("Change workflow profile")}`);
+        console.log(`  supa status  ${chalk.dim("Show project status")}`);
+      }
+      return;
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Non-interactive: --local flag
+  // ─────────────────────────────────────────────────────────────
+
+  if (options.local) {
+    runLocalInit(cwd, supabaseDir, options);
     return;
   }
+
+  // ─────────────────────────────────────────────────────────────
+  // Non-interactive: platform flags (--project, --org/--name/--region)
+  // ─────────────────────────────────────────────────────────────
 
   const token = await requireAuth({ json: options.json });
 
@@ -184,10 +230,123 @@ export async function initCommand(options: InitOptions): Promise<void> {
     }
     process.exit(1);
   } else {
-    // Interactive mode
+    // ─────────────────────────────────────────────────────────────
+    // Interactive mode: gateway question
+    // ─────────────────────────────────────────────────────────────
+
+    const { printCommandHeader } = await import("@/components/command-header.js");
+
+    printCommandHeader({
+      command: "supa init",
+      description: [
+        "Initialize a new Supabase project in this directory.",
+      ],
+      showBranding: true,
+    });
+
+    const developmentMode = await p.select({
+      message: "How would you like to develop?",
+      options: [
+        { value: "local" as const, label: "Local development", hint: "No account needed, connect to cloud later" },
+        { value: "connect" as const, label: "Connect to existing project", hint: "Link to a project on Supabase Platform" },
+        { value: "create" as const, label: "Create a new project", hint: "Set up a new project on Supabase Platform" },
+      ],
+    });
+
+    if (p.isCancel(developmentMode)) {
+      p.cancel("Cancelled");
+      return;
+    }
+
+    if (developmentMode === "local") {
+      runLocalInit(cwd, supabaseDir, options);
+      return;
+    }
+
+    // Platform paths — need auth, then run wizard
+    const platformToken = await requireAuth({ json: options.json });
     project = await runInitWizard();
+    await writePlatformProject(cwd, supabaseDir, platformToken, project, options);
+    return;
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // Non-interactive platform flow (flags were provided)
+  // ─────────────────────────────────────────────────────────────
+
+  await writePlatformProject(cwd, supabaseDir, token, project, options);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Local init - no auth, no API calls
+// ─────────────────────────────────────────────────────────────
+
+function runLocalInit(cwd: string, supabaseDir: string, options: InitOptions): void {
+  // Create directories
+  const dirs = [
+    supabaseDir,
+    join(supabaseDir, "migrations"),
+    join(supabaseDir, "functions"),
+    join(supabaseDir, "types"),
+    join(supabaseDir, "schema", "public"),
+  ];
+  for (const dir of dirs) {
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  }
+
+  // Write minimal config (no project_id)
+  const config: Record<string, unknown> = {
+    $schema: "../../../cli/config-schema/config.schema.json",
+    schema_management: "declarative",
+    config_source: "code",
+  };
+  writeFileSync(join(supabaseDir, "config.json"), JSON.stringify(config, null, 2));
+  writeFileSync(join(supabaseDir, "migrations", ".gitkeep"), "");
+  writeFileSync(join(supabaseDir, "functions", ".gitkeep"), "");
+
+  if (options.json) {
+    console.log(JSON.stringify({
+      status: "success",
+      mode: "local",
+      created: [
+        "supabase/config.json",
+        "supabase/migrations/",
+        "supabase/functions/",
+        "supabase/types/",
+        "supabase/schema/public/",
+      ],
+      next: {
+        command: "supa init",
+        description: "Run again to connect to Supabase Platform when ready",
+      },
+    }));
+  } else {
+    console.log();
+    console.log(chalk.green("✓") + " Initialized Supabase (local)");
+    console.log();
+    console.log(`  ${chalk.dim("Created in")} ${chalk.bold("./supabase/")}`);
+    console.log(`  ${chalk.dim("📄")} config.json`);
+    console.log(`  ${chalk.dim("📁")} schema/public/`);
+    console.log(`  ${chalk.dim("📁")} migrations/`);
+    console.log(`  ${chalk.dim("📁")} functions/`);
+    console.log(`  ${chalk.dim("📁")} types/`);
+    console.log();
+    console.log(chalk.dim("  Start writing SQL in supabase/schema/"));
+    console.log(chalk.dim("  When you're ready to deploy, run supa init again to connect to the platform."));
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Platform project write - shared by interactive and non-interactive flows
+// ─────────────────────────────────────────────────────────────
+
+async function writePlatformProject(
+  cwd: string,
+  supabaseDir: string,
+  token: string,
+  project: InitResult,
+  options: InitOptions,
+): Promise<void> {
   const { ref: projectRef, name: projectName, schemaManagement = "declarative", configSource = "code", workflowProfile = "solo" } = project;
 
   // Fetch project config

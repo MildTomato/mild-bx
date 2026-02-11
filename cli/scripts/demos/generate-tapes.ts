@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { commandSpecs } from "../../src/commands/index.js";
 import type { Command } from "../../src/util/commands/types.js";
 import { generateConfigTape } from "./tape-config.js";
-import { fixtures, type TapeCategory } from "./fixtures/index.js";
+import { fixtures, extraTapes, type TapeCategory } from "./fixtures/index.js";
 import {
   helpOnlyTape,
   helpAndExampleTape,
@@ -161,6 +161,16 @@ console.log("  supa.tape (HELP_ONLY)");
 // Process all top-level commands
 for (const command of commandSpecs) {
   processCommand(command);
+}
+
+// Process extra tapes (variant demos for the same command)
+for (const [key, fixture] of extraTapes) {
+  if (!fixture.tapeBody) continue;
+  const gif = `supa-${key}.webm`;
+  const fileName = `supa-${key}.tape`;
+  const content = interactiveTape(gif, fixture.tapeBody, { height: fixture.height });
+  writeFileSync(join(GENERATED_DIR, fileName), content);
+  console.log(`  ${fileName} (INTERACTIVE, extra)`);
 }
 
 console.log("");

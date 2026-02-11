@@ -1,0 +1,5 @@
+{
+  "$schema": "../../../cli/config-schema/config.schema.json",
+  "schema_management": "declarative",
+  "config_source": "code"
+}

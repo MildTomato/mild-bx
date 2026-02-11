@@ -190,6 +190,8 @@ async function main(): Promise<number> {
   // Run command handler
   try {
     const exitCode = await command.handler(rest);
+    // Ensure trailing newline for consistent bottom padding on all commands
+    console.log();
     return exitCode ?? 0;
   } catch (err) {
     if (err instanceof Error) {

@@ -1,0 +1,1 @@
+Get started immediately without a Supabase account. Creates the project structure so you can start writing SQL schema files right away.

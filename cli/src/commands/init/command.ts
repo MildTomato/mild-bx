@@ -19,6 +19,14 @@ export const initCommand = {
   arguments: [],
   options: [
     { ...yesOption, description: "Skip prompts and use defaults" },
+    {
+      name: "local",
+      shorthand: null,
+      type: Boolean,
+      argument: null,
+      deprecated: false,
+      description: "Initialize locally without connecting to Supabase Platform",
+    },
     { ...orgOption, description: "Organization slug" },
     {
       name: "project",
@@ -37,6 +45,10 @@ export const initCommand = {
     {
       name: "Interactive setup",
       value: "supa init",
+    },
+    {
+      name: "Local development (no account needed)",
+      value: "supa init --local",
     },
     {
       name: "Link to existing project",

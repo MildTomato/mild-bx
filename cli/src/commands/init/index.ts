@@ -33,6 +33,7 @@ export default async function init(argv: string[]): Promise<number> {
   await initHandler({
     yes: args["--yes"],
     json: args["--json"],
+    local: args["--local"],
     org: args["--org"],
     project: args["--project"],
     name: args["--name"],

@@ -5,7 +5,7 @@
  * tape overrides. Commands without a fixture use auto-classification.
  */
 
-import { initFixture } from "./init.js";
+import { initLocalFixture, initConnectFixture, initCreateFixture } from "./init.js";
 
 export type TapeCategory =
   | "HELP_ONLY"
@@ -35,9 +35,19 @@ export interface TapeFixture {
 // Shared setup: cd into demo project directory (relative from generated/)
 const PROJECT_SETUP = ["cd ../../../demos/recordings"];
 
+/**
+ * Extra tapes that don't map 1:1 to a command path.
+ * The generator writes these as additional .tape files.
+ * Key format: "command--variant" → tape file: supa-command--variant.tape
+ */
+export const extraTapes = new Map<string, TapeFixture>([
+  ["init--local", initLocalFixture],
+  ["init--connect", initConnectFixture],
+]);
+
 export const fixtures = new Map<string, TapeFixture>([
-  // Interactive commands
-  ["init", initFixture],
+  // Interactive commands (init → "create new project" is the primary demo)
+  ["init", initCreateFixture],
 
   // Long-running commands
   ["dev", { category: "LONG_RUNNING", setup: PROJECT_SETUP }],

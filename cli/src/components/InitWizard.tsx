@@ -45,30 +45,6 @@ export async function runInitWizard(): Promise<InitResult> {
 
   const client = createClient(token);
 
-  // Supabase branding header
-  printCommandHeader({
-    command: "supa init",
-    description: [
-      "Initialize a new Supabase project in this directory.",
-      "We'll connect to your org, set up your project, and",
-      "configure your local development workflow.",
-    ],
-    showBranding: true,
-  });
-
-  // ─────────────────────────────────────────────────────────────
-  // Check existing config
-  // ─────────────────────────────────────────────────────────────
-
-  const cwd = process.cwd();
-  p.log.info(`Directory: ${chalk.dim(cwd)}`);
-
-  const configSpinner = createSpinner();
-  configSpinner.start("Looking for supabase/config.json...");
-  // TODO: Actually check for config.json / supabase folder
-  await new Promise((r) => setTimeout(r, 200)); // Brief pause to show the check
-  configSpinner.stop("No existing config found");
-
   // ─────────────────────────────────────────────────────────────
   // Organization
   // ─────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, type JSX } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -693,12 +693,13 @@ export default function TreeView({
     };
   }, [data, searchQuery]);
 
-  // Update expanded IDs when search changes
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      setExpandedIds(prev => new Set([...prev, ...searchExpandedIds]));
+  // Merge search-driven expansions with user-driven expansions during render
+  const effectiveExpandedIds = useMemo(() => {
+    if (!searchQuery.trim() || searchExpandedIds.size === 0) {
+      return expandedIds;
     }
-  }, [searchExpandedIds, searchQuery]);
+    return new Set([...expandedIds, ...searchExpandedIds]);
+  }, [expandedIds, searchExpandedIds, searchQuery]);
 
   useEffect(() => {
     const handleClickAway = (e: MouseEvent) => {
@@ -1029,7 +1030,7 @@ export default function TreeView({
               selectedIds={selectedIds}
               lastSelectedId={lastSelectedId}
               onSelect={setSelectedIds}
-              expandedIds={expandedIds}
+              expandedIds={effectiveExpandedIds}
               onToggleExpand={handleToggleExpand}
               getIcon={getIcon}
               onAction={onAction}

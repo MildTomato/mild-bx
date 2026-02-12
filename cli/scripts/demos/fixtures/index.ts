@@ -9,7 +9,6 @@
  * their own setup via tapeBody.
  */
 
-import { bootstrapFixture } from "./bootstrap.js";
 import { initLocalFixture, initConnectFixture, initCreateFixture } from "./init.js";
 
 export type TapeCategory =
@@ -43,7 +42,7 @@ export const extraTapes = new Map<string, TapeFixture>([
 
 export const fixtures = new Map<string, TapeFixture>([
   // Interactive commands
-  ["bootstrap", bootstrapFixture],
+  ["bootstrap", { category: "SKIP" }],
   ["init", initCreateFixture],
 
   // Long-running commands

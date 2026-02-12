@@ -10,6 +10,7 @@ import { FileToolbar } from "@/components/file-toolbar";
 import { FileList } from "@/components/file-list";
 import { FilePreview } from "@/components/file-preview";
 import { ShareDialogWrapper } from "@/components/share-dialog-wrapper";
+import { SearchDialog } from "@/components/search-dialog";
 
 function LoadingSpinner() {
   return (
@@ -58,6 +59,7 @@ function HomeContent() {
           <FilePreview />
         </div>
         <ShareDialogWrapper />
+        <SearchDialog />
       </div>
     </FileBrowserProvider>
   );

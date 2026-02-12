@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useTheme } from "next-themes";
+import { VscGlobe } from "react-icons/vsc";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { useFileBrowser } from "@/lib/file-browser-context";
@@ -14,6 +15,7 @@ type AppHeaderProps = {
 export function AppHeader({ user }: AppHeaderProps) {
   const { currentFolder, currentFolderData, navigateTo } = useFileBrowser();
   const [breadcrumbs, setBreadcrumbs] = useState<Folder[]>([]);
+  const [loadingAncestors, setLoadingAncestors] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const { theme, setTheme } = useTheme();
@@ -22,10 +24,7 @@ export function AppHeader({ user }: AppHeaderProps) {
     let cancelled = false;
 
     async function loadBreadcrumbs() {
-      // Start with optimistic data if available
       const crumbs: Folder[] = currentFolderData ? [currentFolderData] : [];
-
-      // Determine starting point for fetching ancestors
       let id = currentFolderData?.parent_id ?? (currentFolderData ? null : currentFolder);
 
       // If we don't have optimistic data, fetch the current folder first
@@ -41,7 +40,10 @@ export function AppHeader({ user }: AppHeaderProps) {
         }
       }
 
-      // Fetch ancestor folders
+      // Show loading indicator if there are ancestors to fetch
+      if (id && !cancelled) setLoadingAncestors(true);
+
+      // Fetch all ancestors, then set breadcrumbs once
       while (id) {
         const { data } = await supabase
           .from("folders")
@@ -53,21 +55,47 @@ export function AppHeader({ user }: AppHeaderProps) {
           id = data.parent_id;
         } else break;
       }
-      if (!cancelled) setBreadcrumbs(crumbs);
+      if (!cancelled) {
+        setBreadcrumbs(crumbs);
+        setLoadingAncestors(false);
+      }
     }
 
     if (currentFolder) {
-      // Show optimistic breadcrumb immediately
+      // Show current folder immediately, ancestors load in background
       if (currentFolderData) {
         setBreadcrumbs([currentFolderData]);
+        if (currentFolderData.parent_id) setLoadingAncestors(true);
       }
       loadBreadcrumbs();
     } else {
       setBreadcrumbs([]);
+      setLoadingAncestors(false);
     }
 
     return () => { cancelled = true; };
   }, [currentFolder, currentFolderData]);
+
+  // Check which breadcrumb folders have direct shares (for globe icon)
+  const [sharedFolderIds, setSharedFolderIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!breadcrumbs.length) {
+      setSharedFolderIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    const ids = breadcrumbs.map((f) => f.id);
+    supabase
+      .from("shares")
+      .select("resource_id")
+      .in("resource_id", ids)
+      .then(({ data }) => {
+        if (!cancelled && data) {
+          setSharedFolderIds(new Set(data.map((s) => s.resource_id)));
+        }
+      });
+    return () => { cancelled = true; };
+  }, [breadcrumbs]);
 
   useEffect(() => {
     const handleClick = () => setUserMenuOpen(false);
@@ -95,13 +123,22 @@ export function AppHeader({ user }: AppHeaderProps) {
         >
           Files
         </button>
+        {loadingAncestors && (
+          <span className="flex items-center gap-2">
+            <span className="text-fg-muted">/</span>
+            <span className="text-fg-muted">...</span>
+          </span>
+        )}
         {breadcrumbs.map((folder) => (
           <span key={folder.id} className="flex items-center gap-2">
             <span className="text-fg-muted">/</span>
             <button
               onClick={() => handleNavigate(folder.id)}
-              className="hover:text-fg-muted"
+              className="hover:text-fg-muted flex items-center gap-1"
             >
+              {sharedFolderIds.has(folder.id) && (
+                <VscGlobe className="text-shared text-xs shrink-0" />
+              )}
               {folder.name}
             </button>
           </span>

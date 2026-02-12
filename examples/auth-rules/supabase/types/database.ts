@@ -92,6 +92,7 @@ export type Database = {
           id: string
           name: string
           owner_id: string
+          search_vector: unknown
           size: number | null
         }
         Insert: {
@@ -101,6 +102,7 @@ export type Database = {
           id?: string
           name: string
           owner_id: string
+          search_vector?: unknown
           size?: number | null
         }
         Update: {
@@ -110,6 +112,7 @@ export type Database = {
           id?: string
           name?: string
           owner_id?: string
+          search_vector?: unknown
           size?: number | null
         }
         Relationships: [

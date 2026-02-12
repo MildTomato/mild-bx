@@ -65,6 +65,12 @@ RETURNS JSONB LANGUAGE sql IMMUTABLE AS $$
   SELECT jsonb_build_object('type', 'select', 'columns', to_jsonb(columns))
 $$;
 
+-- Select with require mode: raises explicit errors instead of silent filtering
+CREATE OR REPLACE FUNCTION auth_rules.select_strict(VARIADIC columns TEXT[])
+RETURNS JSONB LANGUAGE sql IMMUTABLE AS $$
+  SELECT jsonb_build_object('type', 'select', 'columns', to_jsonb(columns), 'mode', 'require')
+$$;
+
 CREATE OR REPLACE FUNCTION auth_rules.insert()
 RETURNS JSONB LANGUAGE sql IMMUTABLE AS $$
   SELECT jsonb_build_object('type', 'insert')

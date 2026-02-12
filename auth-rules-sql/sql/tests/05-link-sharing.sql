@@ -36,9 +36,11 @@ SELECT 'T5.2: Invalid link token denies access' AS test;
 DO $$
 BEGIN
   PERFORM * FROM data_api.files WHERE id = 'f0000001-0001-0001-0001-000000000001';
-  RAISE NOTICE 'FAIL: Invalid token should not grant access';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: Invalid token should not grant access';
+  END IF;
 END;
 $$;
 
@@ -51,9 +53,11 @@ SELECT 'T5.3: Expired link token denies access' AS test;
 DO $$
 BEGIN
   PERFORM * FROM data_api.files WHERE id = 'f0000003-0003-0003-0003-000000000003';
-  RAISE NOTICE 'FAIL: Expired token should not grant access';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: Expired token should not grant access';
+  END IF;
 END;
 $$;
 
@@ -89,9 +93,11 @@ DO $$
 BEGIN
   -- This link is for alice-private.txt, not bob-private.txt
   PERFORM * FROM data_api.files WHERE id = 'f0000003-0003-0003-0003-000000000003';
-  RAISE NOTICE 'FAIL: Link should only grant access to its specific file';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: Link should only grant access to its specific file';
+  END IF;
 END;
 $$;
 
@@ -105,9 +111,11 @@ SELECT 'T5.6: No token and no user denies access' AS test;
 DO $$
 BEGIN
   PERFORM * FROM data_api.files WHERE id = 'f0000001-0001-0001-0001-000000000001';
-  RAISE NOTICE 'FAIL: Should deny access without token or user';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: Should deny access without token or user';
+  END IF;
 END;
 $$;
 

@@ -11,3 +11,8 @@ CREATE INDEX files_folder_id_idx ON public.files(folder_id);
 -- For auth filtering (views filter by owner)
 CREATE INDEX folders_owner_id_idx ON public.folders(owner_id);
 CREATE INDEX files_owner_id_idx ON public.files(owner_id);
+
+-- Full-text search indexes
+CREATE INDEX files_search_idx ON public.files USING gin(search_vector);
+CREATE INDEX comments_search_idx ON public.comments USING gin(search_vector);
+

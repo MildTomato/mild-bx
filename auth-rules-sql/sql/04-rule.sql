@@ -11,6 +11,7 @@ DECLARE
   filters JSONB := '[]'::JSONB;
   v_rule_id UUID;
   sql TEXT;
+  v_mode TEXT := 'filter';
 BEGIN
   -- Parse parts
   FOREACH part IN ARRAY p_parts LOOP
@@ -18,6 +19,10 @@ BEGIN
       WHEN 'select' THEN
         op := 'select';
         SELECT array_agg(c::TEXT) INTO cols FROM jsonb_array_elements_text(part->'columns') c;
+        -- Extract mode if present (from select_strict)
+        IF part->>'mode' IS NOT NULL THEN
+          v_mode := part->>'mode';
+        END IF;
       WHEN 'insert' THEN op := 'insert';
       WHEN 'update' THEN op := 'update';
       WHEN 'delete' THEN op := 'delete';
@@ -38,8 +43,8 @@ BEGIN
   -- Generate
   CASE op
     WHEN 'select' THEN
-      -- Generate view (silent filtering, for browsing)
-      sql := auth_rules._gen_select_view(p_table, cols, filters);
+      -- Generate view (filter mode = silent filtering, require mode = explicit errors)
+      sql := auth_rules._gen_select_view(p_table, cols, filters, v_mode);
       EXECUTE sql;
       EXECUTE format('GRANT SELECT ON data_api.%I TO anon, authenticated', p_table);
       INSERT INTO auth_rules.generated_objects (rule_id, object_type, object_schema, object_name)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { VscEdit, VscShare, VscTrash, VscEllipsis, VscGlobe, VscLink } from "react-icons/vsc";
+import { VscEdit, VscShare, VscTrash, VscEllipsis, VscGlobe, VscLink, VscArrowRight } from "react-icons/vsc";
 import { useFileBrowser } from "@/lib/file-browser-context";
 import { useResourceShares, useMyPermission } from "@/lib/queries";
 import type { Folder, File } from "@/lib/types";
@@ -46,7 +46,7 @@ export function ResourceRow({
   onDelete,
   onMouseEnter,
 }: ResourceRowProps) {
-  const { openShareDialog, openLinkShareDialog } = useFileBrowser();
+  const { openShareDialog, openLinkShareDialog, openMoveDialog } = useFileBrowser();
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(resource.name);
   const [error, setError] = useState("");
@@ -98,6 +98,12 @@ export function ResourceRow({
           Rename
         </ContextMenuItem>
       )}
+      {canEdit && (
+        <ContextMenuItem onSelect={() => openMoveDialog(resource, resourceType)}>
+          <VscArrowRight />
+          Move to...
+        </ContextMenuItem>
+      )}
       {canShare && (
         <ContextMenuItem onSelect={() => openShareDialog(resource, resourceType)}>
           <VscShare />
@@ -125,6 +131,12 @@ export function ResourceRow({
         <DropdownMenuItem onSelect={() => setIsRenaming(true)}>
           <VscEdit />
           Rename
+        </DropdownMenuItem>
+      )}
+      {canEdit && (
+        <DropdownMenuItem onSelect={() => openMoveDialog(resource, resourceType)}>
+          <VscArrowRight />
+          Move to...
         </DropdownMenuItem>
       )}
       {canShare && (

@@ -99,12 +99,12 @@ BEGIN
   PERFORM set_user('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee');
 
   -- Eve should NOT see Alice's file
-  BEGIN
-    PERFORM * FROM data_api.files WHERE id = 'f0000001-0001-0001-0001-000000000001';
-    RAISE NOTICE 'FAIL: Eve should not see Alice''s file after user switch';
-  EXCEPTION WHEN OTHERS THEN
+  PERFORM * FROM data_api.files WHERE id = 'f0000001-0001-0001-0001-000000000001';
+  IF NOT FOUND THEN
     RAISE NOTICE 'PASS: User switch cleared access';
-  END;
+  ELSE
+    RAISE NOTICE 'FAIL: Eve should not see Alice''s file after user switch';
+  END IF;
 END;
 $$;
 
@@ -122,9 +122,11 @@ BEGIN
   PERFORM set_config('app.link_token', '', false);
 
   PERFORM * FROM data_api.files WHERE id = 'f0000001-0001-0001-0001-000000000001';
-  RAISE NOTICE 'FAIL: Empty user_id should not have access';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: Empty user_id should not have access';
+  END IF;
 END;
 $$;
 

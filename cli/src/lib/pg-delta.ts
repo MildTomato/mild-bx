@@ -200,6 +200,7 @@ const FILE_PRIORITY: Record<string, number> = {
   domains: 2,
   tables: 3,
   table: 3,
+  helpers: 3.5, // Helper functions needed by claims
   rules: 4, // auth_rules.rule() creates views that functions may reference
   claims: 4, // auth_rules claims setup
   indexes: 4.5,
@@ -210,6 +211,7 @@ const FILE_PRIORITY: Record<string, number> = {
   view: 5,
   triggers: 6,
   trigger: 6,
+  data_api: 6.5, // data_api depends on views created by rules
   rls: 7,
   policies: 7,
   policy: 7,
@@ -769,7 +771,7 @@ function getStatementPriority(stmt: string): number {
   if (upper.startsWith("CREATE FUNCTION") || upper.startsWith("CREATE OR REPLACE FUNCTION"))
     return 5;
 
-  // Then views (after tables and functions)
+  // Then views (after functions they might reference)
   if (upper.startsWith("CREATE VIEW") || upper.startsWith("CREATE OR REPLACE VIEW"))
     return 6;
 

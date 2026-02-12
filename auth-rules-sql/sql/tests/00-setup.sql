@@ -457,4 +457,78 @@ INSERT INTO public.link_shares (id, resource_type, resource_id, token, permissio
 INSERT INTO public.link_shares (id, resource_type, resource_id, token, permission, expires_at, created_by) VALUES
   ('11110003-0003-0003-0003-000000000003', 'file', 'f0000004-0004-0004-0004-000000000004', 'valid-link-future', 'edit', '2099-12-31 23:59:59', 'cccccccc-cccc-cccc-cccc-cccccccccccc');
 
+-- =============================================================================
+-- REQUIRE-MODE TABLES AND RULES (for testing select_strict)
+-- =============================================================================
+
+-- A simple table for testing require-mode (ownership-based)
+CREATE TABLE public.strict_files (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id UUID NOT NULL,
+  name TEXT NOT NULL
+);
+
+-- A simple table for testing require-mode (claim-based)
+CREATE TABLE public.strict_docs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  title TEXT NOT NULL
+);
+
+-- Test data: strict_files
+INSERT INTO public.strict_files (id, owner_id, name) VALUES
+  ('5f000001-0001-0001-0001-000000000001', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'alice-strict.txt'),
+  ('5f000002-0002-0002-0002-000000000002', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'bob-strict.txt');
+
+-- Test data: strict_docs
+INSERT INTO public.strict_docs (id, org_id, title) VALUES
+  ('5d000001-0001-0001-0001-000000000001', '11111111-1111-1111-1111-111111111111', 'Org One Doc'),
+  ('5d000002-0002-0002-0002-000000000002', '22222222-2222-2222-2222-222222222222', 'Org Two Doc');
+
+-- Require-mode rules: use select_strict() for explicit error on unauthorized access
+SELECT auth_rules.rule('strict_files',
+  auth_rules.select_strict('id', 'owner_id', 'name'),
+  auth_rules.eq('owner_id', auth_rules.user_id_marker())
+);
+
+SELECT auth_rules.rule('strict_docs',
+  auth_rules.select_strict('id', 'org_id', 'title'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+
+-- =============================================================================
+-- MOVE-TEST TABLE AND RULES (for testing UPDATE NEW value validation)
+-- =============================================================================
+
+CREATE TABLE public.movable_files (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id UUID NOT NULL,
+  folder_id UUID REFERENCES public.folders(id) ON DELETE CASCADE,
+  name TEXT NOT NULL
+);
+
+-- Test data: Alice's file in Alice's folder, Bob's file in Bob's folder
+INSERT INTO public.movable_files (id, owner_id, folder_id, name) VALUES
+  ('a0000001-0001-0001-0001-000000000001', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'd0000001-0001-0001-0001-000000000001', 'alice-movable.txt'),
+  ('b0000001-0001-0001-0001-000000000001', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'd0000003-0003-0003-0003-000000000003', 'bob-movable.txt');
+
+-- Claim with folder_id alias (so eq('folder_id', one_of(...)) matches)
+SELECT auth_rules.claim('writable_folder_ids', $$
+  SELECT owner_id AS user_id, id AS folder_id FROM folders
+$$);
+
+-- SELECT rule (needed before UPDATE)
+SELECT auth_rules.rule('movable_files',
+  auth_rules.select('id', 'owner_id', 'folder_id', 'name'),
+  auth_rules.eq('owner_id', auth_rules.user_id_marker())
+);
+
+-- UPDATE rule: validates BOTH owner_id AND folder_id
+-- owner_id must match auth.uid(), folder_id must be in writable_folder_ids
+SELECT auth_rules.rule('movable_files',
+  auth_rules.update(),
+  auth_rules.eq('owner_id', auth_rules.user_id_marker()),
+  auth_rules.eq('folder_id', auth_rules.one_of('writable_folder_ids'))
+);
+
 SELECT '=== SETUP COMPLETE ===' AS status;

@@ -37,9 +37,11 @@ DO $$
 BEGIN
   -- Bob's private file (not shared)
   PERFORM * FROM data_api.files WHERE id = 'f0000003-0003-0003-0003-000000000003';
-  RAISE NOTICE 'FAIL: Alice should not see Bob''s private file';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: Alice should not see Bob''s private file';
+  END IF;
 END;
 $$;
 
@@ -75,9 +77,11 @@ DO $$
 BEGIN
   -- Try to access Alice's file
   PERFORM * FROM data_api.files WHERE id = 'f0000001-0001-0001-0001-000000000001';
-  RAISE NOTICE 'FAIL: Dave should not be able to access any files';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: Dave should not be able to access any files';
+  END IF;
 END;
 $$;
 
@@ -90,9 +94,11 @@ SELECT 'T1.5: No user (NULL auth) cannot access files' AS test;
 DO $$
 BEGIN
   PERFORM * FROM data_api.files WHERE id = 'f0000001-0001-0001-0001-000000000001';
-  RAISE NOTICE 'FAIL: NULL user should not see any files';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: NULL user should not see any files';
+  END IF;
 END;
 $$;
 

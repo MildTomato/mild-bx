@@ -48,7 +48,10 @@ CREATE TABLE public.files (
   name TEXT NOT NULL,
   content TEXT,
   size BIGINT DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT now()
+  created_at TIMESTAMPTZ DEFAULT now(),
+  search_vector TSVECTOR GENERATED ALWAYS AS (
+    to_tsvector('english', coalesce(name, '') || ' ' || coalesce(content, ''))
+  ) STORED
 );
 
 -- Direct shares (user-to-user or user-to-group)
@@ -84,7 +87,10 @@ CREATE TABLE public.comments (
   file_id UUID NOT NULL REFERENCES public.files(id) ON DELETE CASCADE,
   user_id UUID NOT NULL,
   content TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT now()
+  created_at TIMESTAMPTZ DEFAULT now(),
+  search_vector TSVECTOR GENERATED ALWAYS AS (
+    to_tsvector('english', coalesce(content, ''))
+  ) STORED
 );
 
 -- Audit logs

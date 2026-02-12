@@ -49,9 +49,17 @@ export function FileList() {
     }
   }, [currentFolderData, user, currentFolder]);
 
-  // Flatten paginated data
-  const folders = data?.pages?.flatMap((p) => p.folders) ?? [];
-  const files = data?.pages?.flatMap((p) => p.files) ?? [];
+  // Flatten paginated data and deduplicate (cache invalidation can cause overlap across pages)
+  const folders = useMemo(() => {
+    const all = data?.pages?.flatMap((p) => p.folders) ?? [];
+    const seen = new Set<string>();
+    return all.filter((f) => seen.has(f.id) ? false : (seen.add(f.id), true));
+  }, [data]);
+  const files = useMemo(() => {
+    const all = data?.pages?.flatMap((p) => p.files) ?? [];
+    const seen = new Set<string>();
+    return all.filter((f) => seen.has(f.id) ? false : (seen.add(f.id), true));
+  }, [data]);
 
   // Only show "shared with me" styling at root level - inside folders, the banner indicates shared status
   const isInsideAnyFolder = currentFolder !== null;
@@ -114,7 +122,7 @@ export function FileList() {
         hasNextPage={hasNextPage ?? false}
         fetchNextPage={fetchNextPage}
         isFetchingNextPage={isFetchingNextPage}
-        getItemKey={(item) => item.type === "section-header" ? `header-${item.label}` : item.data.id}
+        getItemKey={(item) => item.type === "section-header" ? `header-${item.label}` : `${item.type}-${item.data.id}`}
         renderItem={(item: ListItem, idx: number) => {
           if (item.type === "section-header") {
             return <SectionHeader label={item.label} isSharedSection={item.isSharedSection} />;

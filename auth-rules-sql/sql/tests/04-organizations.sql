@@ -36,9 +36,11 @@ SELECT 'T4.2: Bob (member, not admin) cannot see Org One audit logs' AS test;
 DO $$
 BEGIN
   PERFORM * FROM data_api.audit_logs WHERE org_id = '11111111-1111-1111-1111-111111111111';
-  RAISE NOTICE 'FAIL: Bob should not see audit logs';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: Bob should not see audit logs';
+  END IF;
 END;
 $$;
 
@@ -51,9 +53,11 @@ SELECT 'T4.3: Alice (admin of Org One) cannot see Org Two audit logs' AS test;
 DO $$
 BEGIN
   PERFORM * FROM data_api.audit_logs WHERE org_id = '22222222-2222-2222-2222-222222222222';
-  RAISE NOTICE 'FAIL: Alice should not see Org Two audit logs';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: Alice should not see Org Two audit logs';
+  END IF;
 END;
 $$;
 
@@ -88,9 +92,11 @@ SELECT 'T4.5: Eve (no orgs) cannot see any audit logs' AS test;
 DO $$
 BEGIN
   PERFORM * FROM data_api.audit_logs WHERE org_id = '11111111-1111-1111-1111-111111111111';
-  RAISE NOTICE 'FAIL: Eve should not see any audit logs';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: Eve should not see any audit logs';
+  END IF;
 END;
 $$;
 
@@ -103,9 +109,11 @@ SELECT 'T4.6: Dave (member of Org One, not admin) cannot see audit logs' AS test
 DO $$
 BEGIN
   PERFORM * FROM data_api.audit_logs WHERE org_id = '11111111-1111-1111-1111-111111111111';
-  RAISE NOTICE 'FAIL: Dave should not see audit logs';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: Dave should not see audit logs';
+  END IF;
 END;
 $$;
 

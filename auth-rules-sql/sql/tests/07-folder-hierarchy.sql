@@ -36,9 +36,11 @@ SELECT 'T7.2: Bob cannot see Alice''s private folder' AS test;
 DO $$
 BEGIN
   PERFORM * FROM data_api.folders WHERE id = 'd0000001-0001-0001-0001-000000000001';
-  RAISE NOTICE 'FAIL: Bob should not see Alice''s private folder';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: Bob should not see Alice''s private folder';
+  END IF;
 END;
 $$;
 
@@ -95,9 +97,11 @@ SELECT 'T7.5: Dave cannot see file inside folder not shared with him' AS test;
 DO $$
 BEGIN
   PERFORM * FROM data_api.files WHERE id = 'f0000005-0005-0005-0005-000000000005';
-  RAISE NOTICE 'FAIL: Dave should not see file in unshared folder';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: Dave should not see file in unshared folder';
+  END IF;
 END;
 $$;
 

@@ -59,9 +59,11 @@ SELECT 'T3.3: Dave (not in Engineering) cannot see file shared with Engineering'
 DO $$
 BEGIN
   PERFORM * FROM data_api.files WHERE id = 'f0000004-0004-0004-0004-000000000004';
-  RAISE NOTICE 'FAIL: Dave should not see file shared with Engineering';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: Dave should not see file shared with Engineering';
+  END IF;
 END;
 $$;
 

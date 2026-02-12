@@ -67,8 +67,69 @@ BEGIN
 END;
 $$;
 
+-- Build WHERE clause using require() functions (raises errors instead of filtering)
+CREATE OR REPLACE FUNCTION auth_rules._build_where_require(filter JSONB)
+RETURNS TEXT LANGUAGE plpgsql IMMUTABLE AS $$
+DECLARE
+  ftype TEXT := filter->>'type';
+  col TEXT;
+  val JSONB;
+  vtype TEXT;
+  claim TEXT;
+  result TEXT;
+BEGIN
+  CASE ftype
+    WHEN 'eq' THEN
+      col := filter->>'column';
+      val := filter->'value';
+      vtype := val->>'type';
+
+      CASE vtype
+        WHEN 'user_id' THEN
+          RETURN format('auth_rules.require_user(%L, %I)', col, col);
+        WHEN 'one_of' THEN
+          claim := val->>'claim';
+          RETURN format('auth_rules.require(%L, %L, %I)', claim, col, col);
+        WHEN 'literal' THEN
+          RETURN format('%I = %L', col, val->>'value');
+        WHEN 'check' THEN
+          claim := val->>'claim';
+          -- Fall back to filter mode for check type (no require_check yet)
+          RETURN format('%I IN (SELECT %I FROM auth_rules_claims.%I WHERE user_id = auth.uid() AND %I = ANY(%L::text[]))',
+            col, col, claim, val->>'property', val->'values');
+        ELSE
+          RETURN format('%I = %L', col, val);
+      END CASE;
+
+    WHEN 'in' THEN
+      col := filter->>'column';
+      claim := filter->>'claim';
+      IF filter->'check' IS NULL THEN
+        RETURN format('auth_rules.require(%L, %L, %I)', claim, col, col);
+      ELSE
+        -- Fall back to filter mode for check conditions
+        RETURN format('%I IN (SELECT %I FROM auth_rules_claims.%I WHERE user_id = auth.uid() AND %I = ANY(%L::text[]))',
+          col, col, claim, filter->'check'->>'property', filter->'check'->'values');
+      END IF;
+
+    WHEN 'or' THEN
+      SELECT '(' || string_agg(auth_rules._build_where_require(c), ' OR ') || ')'
+      INTO result FROM jsonb_array_elements(filter->'conditions') c;
+      RETURN result;
+
+    WHEN 'and' THEN
+      SELECT '(' || string_agg(auth_rules._build_where_require(c), ' AND ') || ')'
+      INTO result FROM jsonb_array_elements(filter->'conditions') c;
+      RETURN result;
+
+    ELSE
+      RAISE EXCEPTION 'Unknown filter type: %', ftype;
+  END CASE;
+END;
+$$;
+
 -- Generate SELECT view
-CREATE OR REPLACE FUNCTION auth_rules._gen_select_view(p_table TEXT, p_cols TEXT[], p_filters JSONB)
+CREATE OR REPLACE FUNCTION auth_rules._gen_select_view(p_table TEXT, p_cols TEXT[], p_filters JSONB, p_mode TEXT DEFAULT 'filter')
 RETURNS TEXT LANGUAGE plpgsql AS $$
 DECLARE
   where_parts TEXT[];
@@ -76,7 +137,11 @@ DECLARE
 BEGIN
   FOR f IN SELECT * FROM jsonb_array_elements(p_filters) LOOP
     IF f->>'type' NOT IN ('select', 'insert', 'update', 'delete') THEN
-      where_parts := array_append(where_parts, auth_rules._build_where(f));
+      IF p_mode = 'require' THEN
+        where_parts := array_append(where_parts, auth_rules._build_where_require(f));
+      ELSE
+        where_parts := array_append(where_parts, auth_rules._build_where(f));
+      END IF;
     END IF;
   END LOOP;
 

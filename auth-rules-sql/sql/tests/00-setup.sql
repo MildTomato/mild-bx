@@ -457,4 +457,43 @@ INSERT INTO public.link_shares (id, resource_type, resource_id, token, permissio
 INSERT INTO public.link_shares (id, resource_type, resource_id, token, permission, expires_at, created_by) VALUES
   ('11110003-0003-0003-0003-000000000003', 'file', 'f0000004-0004-0004-0004-000000000004', 'valid-link-future', 'edit', '2099-12-31 23:59:59', 'cccccccc-cccc-cccc-cccc-cccccccccccc');
 
+-- =============================================================================
+-- REQUIRE-MODE TABLES AND RULES (for testing select_strict)
+-- =============================================================================
+
+-- A simple table for testing require-mode (ownership-based)
+CREATE TABLE public.strict_files (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id UUID NOT NULL,
+  name TEXT NOT NULL
+);
+
+-- A simple table for testing require-mode (claim-based)
+CREATE TABLE public.strict_docs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  title TEXT NOT NULL
+);
+
+-- Test data: strict_files
+INSERT INTO public.strict_files (id, owner_id, name) VALUES
+  ('5f000001-0001-0001-0001-000000000001', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'alice-strict.txt'),
+  ('5f000002-0002-0002-0002-000000000002', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'bob-strict.txt');
+
+-- Test data: strict_docs
+INSERT INTO public.strict_docs (id, org_id, title) VALUES
+  ('5d000001-0001-0001-0001-000000000001', '11111111-1111-1111-1111-111111111111', 'Org One Doc'),
+  ('5d000002-0002-0002-0002-000000000002', '22222222-2222-2222-2222-222222222222', 'Org Two Doc');
+
+-- Require-mode rules: use select_strict() for explicit error on unauthorized access
+SELECT auth_rules.rule('strict_files',
+  auth_rules.select_strict('id', 'owner_id', 'name'),
+  auth_rules.eq('owner_id', auth_rules.user_id_marker())
+);
+
+SELECT auth_rules.rule('strict_docs',
+  auth_rules.select_strict('id', 'org_id', 'title'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+
 SELECT '=== SETUP COMPLETE ===' AS status;

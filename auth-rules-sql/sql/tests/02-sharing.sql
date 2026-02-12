@@ -36,9 +36,11 @@ SELECT 'T2.2: Bob cannot see Alice''s private file (not shared)' AS test;
 DO $$
 BEGIN
   PERFORM * FROM data_api.files WHERE id = 'f0000001-0001-0001-0001-000000000001';
-  RAISE NOTICE 'FAIL: Bob should not see Alice''s private file';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: Bob should not see Alice''s private file';
+  END IF;
 END;
 $$;
 
@@ -95,9 +97,11 @@ SELECT 'T2.5: Dave cannot see file shared between Alice and Bob' AS test;
 DO $$
 BEGIN
   PERFORM * FROM data_api.files WHERE id = 'f0000002-0002-0002-0002-000000000002';
-  RAISE NOTICE 'FAIL: Dave should not see file shared between Alice and Bob';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'PASS: %', SQLERRM;
+  IF NOT FOUND THEN
+    RAISE NOTICE 'PASS: no access (filtered)';
+  ELSE
+    RAISE NOTICE 'FAIL: Dave should not see file shared between Alice and Bob';
+  END IF;
 END;
 $$;
 

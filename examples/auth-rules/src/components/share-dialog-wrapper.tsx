@@ -4,9 +4,10 @@ import { AnimatePresence } from "motion/react";
 import { useFileBrowser } from "@/lib/file-browser-context";
 import { ShareDialog } from "./share-dialog";
 import { LinkShareDialog } from "./link-share-dialog";
+import { MoveDialog } from "./move-dialog";
 
 export function ShareDialogWrapper() {
-  const { shareTarget, closeShareDialog, linkShareTarget, closeLinkShareDialog } = useFileBrowser();
+  const { shareTarget, closeShareDialog, linkShareTarget, closeLinkShareDialog, moveTarget, closeMoveDialog } = useFileBrowser();
 
   return (
     <>
@@ -25,6 +26,12 @@ export function ShareDialogWrapper() {
           />
         )}
       </AnimatePresence>
+      <MoveDialog
+        open={!!moveTarget}
+        onOpenChange={(open) => !open && closeMoveDialog()}
+        resource={moveTarget?.resource ?? null}
+        resourceType={moveTarget?.type ?? "file"}
+      />
     </>
   );
 }

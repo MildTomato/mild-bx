@@ -496,4 +496,39 @@ SELECT auth_rules.rule('strict_docs',
   auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
 );
 
+-- =============================================================================
+-- MOVE-TEST TABLE AND RULES (for testing UPDATE NEW value validation)
+-- =============================================================================
+
+CREATE TABLE public.movable_files (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id UUID NOT NULL,
+  folder_id UUID REFERENCES public.folders(id) ON DELETE CASCADE,
+  name TEXT NOT NULL
+);
+
+-- Test data: Alice's file in Alice's folder, Bob's file in Bob's folder
+INSERT INTO public.movable_files (id, owner_id, folder_id, name) VALUES
+  ('a0000001-0001-0001-0001-000000000001', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'd0000001-0001-0001-0001-000000000001', 'alice-movable.txt'),
+  ('b0000001-0001-0001-0001-000000000001', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'd0000003-0003-0003-0003-000000000003', 'bob-movable.txt');
+
+-- Claim with folder_id alias (so eq('folder_id', one_of(...)) matches)
+SELECT auth_rules.claim('writable_folder_ids', $$
+  SELECT owner_id AS user_id, id AS folder_id FROM folders
+$$);
+
+-- SELECT rule (needed before UPDATE)
+SELECT auth_rules.rule('movable_files',
+  auth_rules.select('id', 'owner_id', 'folder_id', 'name'),
+  auth_rules.eq('owner_id', auth_rules.user_id_marker())
+);
+
+-- UPDATE rule: validates BOTH owner_id AND folder_id
+-- owner_id must match auth.uid(), folder_id must be in writable_folder_ids
+SELECT auth_rules.rule('movable_files',
+  auth_rules.update(),
+  auth_rules.eq('owner_id', auth_rules.user_id_marker()),
+  auth_rules.eq('folder_id', auth_rules.one_of('writable_folder_ids'))
+);
+
 SELECT '=== SETUP COMPLETE ===' AS status;

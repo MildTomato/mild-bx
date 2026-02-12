@@ -8,10 +8,11 @@ SELECT auth_rules.rule('files',
   auth_rules.eq('id', auth_rules.one_of('accessible_file_ids'))
 );
 
--- Files: UPDATE (need edit permission)
+-- Files: UPDATE (need edit permission + destination folder must be writable)
 SELECT auth_rules.rule('files',
   auth_rules.update(),
-  auth_rules.eq('id', auth_rules.one_of('editable_file_ids'))
+  auth_rules.eq('id', auth_rules.one_of('editable_file_ids')),
+  auth_rules.eq('folder_id', auth_rules.one_of('writable_folder_ids'))
 );
 
 -- Files: DELETE (owner only)
@@ -26,10 +27,11 @@ SELECT auth_rules.rule('folders',
   auth_rules.eq('id', auth_rules.one_of('accessible_folder_ids'))
 );
 
--- Folders: UPDATE (owner only for now)
+-- Folders: UPDATE (owner only + destination must be writable)
 SELECT auth_rules.rule('folders',
   auth_rules.update(),
-  auth_rules.eq('owner_id', auth_rules.user_id_marker())
+  auth_rules.eq('owner_id', auth_rules.user_id_marker()),
+  auth_rules.eq('parent_id', auth_rules.one_of('writable_parent_ids'))
 );
 
 -- Folders: DELETE (owner only)

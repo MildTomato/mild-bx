@@ -5,20 +5,17 @@
   "schema_management": "declarative",
   "config_source": "code",
   "api": {
-    "schemas": [
-      "public",
-      "graphql_public"
-    ],
-    "extra_search_path": [
-      "public",
-      "extensions"
-    ],
+    "schemas": ["data_api"],
+
     "max_rows": 1000
   },
   "auth": {
     "site_url": "http://localhost:3000",
     "jwt_expiry": 3600,
     "enable_signup": true,
-    "enable_anonymous_sign_ins": false
+    "enable_anonymous_sign_ins": false,
+    "email": {
+      "enable_confirmations": false
+    }
   }
 }

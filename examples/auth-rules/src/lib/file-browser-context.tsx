@@ -14,6 +14,11 @@ type LinkShareTarget = {
   type: "folder" | "file";
 } | null;
 
+type MoveTarget = {
+  resource: Folder | File;
+  type: "folder" | "file";
+} | null;
+
 type FileBrowserContextValue = {
   currentFolder: string | null;
   currentFolderData: Folder | null; // Optimistic folder data for instant breadcrumb display
@@ -27,6 +32,9 @@ type FileBrowserContextValue = {
   linkShareTarget: LinkShareTarget;
   openLinkShareDialog: (resource: Folder | File, type: "folder" | "file") => void;
   closeLinkShareDialog: () => void;
+  moveTarget: MoveTarget;
+  openMoveDialog: (resource: Folder | File, type: "folder" | "file") => void;
+  closeMoveDialog: () => void;
 };
 
 const FileBrowserContext = createContext<FileBrowserContextValue | null>(null);
@@ -42,6 +50,7 @@ export function FileBrowserProvider({ children }: { children: ReactNode }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [shareTarget, setShareTarget] = useState<ShareTarget>(null);
   const [linkShareTarget, setLinkShareTarget] = useState<LinkShareTarget>(null);
+  const [moveTarget, setMoveTarget] = useState<MoveTarget>(null);
 
   // Build URL with current state
   const buildUrl = useCallback((folderId: string | null, fileId: string | null) => {
@@ -97,6 +106,14 @@ export function FileBrowserProvider({ children }: { children: ReactNode }) {
     setLinkShareTarget(null);
   }, []);
 
+  const openMoveDialog = useCallback((resource: Folder | File, type: "folder" | "file") => {
+    setMoveTarget({ resource, type });
+  }, []);
+
+  const closeMoveDialog = useCallback(() => {
+    setMoveTarget(null);
+  }, []);
+
   return (
     <FileBrowserContext.Provider
       value={{
@@ -112,6 +129,9 @@ export function FileBrowserProvider({ children }: { children: ReactNode }) {
         linkShareTarget,
         openLinkShareDialog,
         closeLinkShareDialog,
+        moveTarget,
+        openMoveDialog,
+        closeMoveDialog,
       }}
     >
       {children}

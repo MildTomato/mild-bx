@@ -306,6 +306,50 @@ export function useRenameFile() {
   })
 }
 
+export function useMoveFile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['move-file'],
+    mutationFn: async (data: { fileId: string; destinationFolderId: string | null }) => {
+      const { data: updated, error } = await supabase
+        .from('files')
+        .update({ folder_id: data.destinationFolderId })
+        .eq('id', data.fileId)
+        .select('id')
+      if (error) throw error
+      if (!updated || updated.length === 0) {
+        throw new Error('Permission denied: cannot move this file to the selected folder')
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['folder-contents'] })
+      queryClient.invalidateQueries({ queryKey: ['folder-count'] })
+    },
+  })
+}
+
+export function useMoveFolder() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['move-folder'],
+    mutationFn: async (data: { folderId: string; destinationFolderId: string | null }) => {
+      const { data: updated, error } = await supabase
+        .from('folders')
+        .update({ parent_id: data.destinationFolderId })
+        .eq('id', data.folderId)
+        .select('id')
+      if (error) throw error
+      if (!updated || updated.length === 0) {
+        throw new Error('Permission denied: cannot move this folder to the selected destination')
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['folder-contents'] })
+      queryClient.invalidateQueries({ queryKey: ['folder-count'] })
+    },
+  })
+}
+
 export function useUpdateFileContent() {
   const queryClient = useQueryClient()
   return useMutation({

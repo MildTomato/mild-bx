@@ -186,6 +186,45 @@ SELECT auth_rules.claim('commentable_file_ids', $$
   WHERE shares.resource_type = 'folder' AND shares.permission IN ('comment', 'edit')
 $$);
 
+-- writable_folder_ids: folders user can write to (owns or has edit access)
+-- Uses descendant expansion with LIMIT to prevent explosion on huge folders
+SELECT auth_rules.claim('writable_folder_ids', $$
+  SELECT owner_id AS user_id, id AS folder_id FROM public.folders
+  UNION
+  SELECT shares.shared_with_user_id AS user_id, descendant.id AS folder_id
+  FROM public.shares
+  JOIN LATERAL (
+    WITH RECURSIVE folder_tree AS (
+      SELECT id FROM public.folders WHERE id = shares.resource_id
+      UNION ALL
+      SELECT f.id FROM public.folders f JOIN folder_tree ft ON f.parent_id = ft.id
+    )
+    SELECT id FROM folder_tree LIMIT 100000
+  ) descendant ON true
+  WHERE shares.resource_type = 'folder'
+    AND shares.shared_with_user_id IS NOT NULL
+    AND shares.permission = 'edit'
+$$);
+
+-- writable_parent_ids: same as writable_folder_ids but aliased as parent_id for folders UPDATE rule
+SELECT auth_rules.claim('writable_parent_ids', $$
+  SELECT owner_id AS user_id, id AS parent_id FROM public.folders
+  UNION
+  SELECT shares.shared_with_user_id AS user_id, descendant.id AS parent_id
+  FROM public.shares
+  JOIN LATERAL (
+    WITH RECURSIVE folder_tree AS (
+      SELECT id FROM public.folders WHERE id = shares.resource_id
+      UNION ALL
+      SELECT f.id FROM public.folders f JOIN folder_tree ft ON f.parent_id = ft.id
+    )
+    SELECT id FROM folder_tree LIMIT 100000
+  ) descendant ON true
+  WHERE shares.resource_type = 'folder'
+    AND shares.shared_with_user_id IS NOT NULL
+    AND shares.permission = 'edit'
+$$);
+
 -- accessible_folder_ids: folders user can access (including subfolders of shared folders)
 -- Uses descendant expansion with LIMIT to prevent explosion on huge folders
 SELECT auth_rules.claim('accessible_folder_ids', $$

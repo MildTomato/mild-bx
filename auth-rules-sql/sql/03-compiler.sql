@@ -208,11 +208,62 @@ CREATE OR REPLACE FUNCTION auth_rules._gen_update_trigger(p_table TEXT, p_filter
 RETURNS TEXT LANGUAGE plpgsql AS $$
 DECLARE
   where_parts TEXT[] := ARRAY['id = OLD.id'];
+  validations TEXT := '';
+  set_parts TEXT[] := ARRAY[]::TEXT[];
+  col_rec RECORD;
   f JSONB;
   col TEXT;
   val JSONB;
   vtype TEXT;
 BEGIN
+  -- Build SET clause from all columns in the table
+  FOR col_rec IN
+    SELECT column_name FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = p_table
+    ORDER BY ordinal_position
+  LOOP
+    set_parts := array_append(set_parts, format('%I = NEW.%I', col_rec.column_name, col_rec.column_name));
+  END LOOP;
+
+  -- ==========================================================================
+  -- UPDATE TRIGGER FILTER BEHAVIOR
+  -- ==========================================================================
+  --
+  -- Filters generate two things: WHERE conditions (which rows can be updated)
+  -- and validations (what new values are acceptable). Different filter types
+  -- map to these differently:
+  --
+  -- ┌──────────────────┬───────────────────┬────────────────────────────────┐
+  -- │ Filter type      │ WHERE (OLD row)   │ Validation (NEW values)        │
+  -- ├──────────────────┼───────────────────┼────────────────────────────────┤
+  -- │ user_id_marker() │ ✓ col = auth.uid()│ ✓ NEW.col must = auth.uid()   │
+  -- │ one_of(claim)    │ ✗ (skipped)       │ ✓ NEW.col must be in claim    │
+  -- └──────────────────┴───────────────────┴────────────────────────────────┘
+  --
+  -- WHY one_of skips the WHERE clause:
+  --   The WHERE clause on an UPDATE identifies which rows the user is allowed
+  --   to modify. Ownership (user_id) is a source authorization — "can I touch
+  --   this row?". Claim checks (one_of) are destination validations — "is the
+  --   new value allowed?". Checking the OLD value against a claim would break
+  --   operations like moving a file from root (folder_id = NULL) since
+  --   NULL IN (...) is always false in SQL.
+  --
+  -- WHY one_of allows NULL:
+  --   NULL means "no value" (e.g. parent_id = NULL means root-level folder).
+  --   The claim check is skipped when NEW.col IS NULL. This is safe because:
+  --   - If the column is nullable: NULL is intentionally valid (e.g. move to root)
+  --   - If the column is NOT NULL: the database constraint on the underlying
+  --     public table rejects the NULL when the trigger executes the UPDATE,
+  --     so security is still enforced — just with a different error message.
+  --   If you need to prevent NULLs, add a NOT NULL constraint on the column.
+  --
+  -- EXAMPLE — files UPDATE rule:
+  --   eq('id', one_of('editable_file_ids'))     → validates NEW.id is editable
+  --   eq('folder_id', one_of('writable_folder_ids')) → validates destination folder
+  --   eq('owner_id', user_id_marker())           → WHERE owner_id = auth.uid()
+  --                                                + validates NEW.owner_id
+  -- ==========================================================================
+
   FOR f IN SELECT * FROM jsonb_array_elements(p_filters) LOOP
     IF f->>'type' = 'eq' THEN
       col := f->>'column';
@@ -220,25 +271,38 @@ BEGIN
       vtype := val->>'type';
 
       IF vtype = 'user_id' THEN
+        -- SOURCE AUTHORIZATION + NEW VALIDATION
+        -- Added to WHERE: only rows owned by this user can be updated
+        -- Added to validations: user can't transfer ownership to someone else
         where_parts := array_append(where_parts, format('%I = auth.uid()', col));
+        validations := validations || format($v$
+  IF NEW.%I IS DISTINCT FROM auth.uid() THEN
+    RAISE EXCEPTION '%I must match authenticated user' USING ERRCODE = '42501';
+  END IF;$v$, col, col);
+
       ELSIF vtype = 'one_of' THEN
-        where_parts := array_append(where_parts, format('%I IN (SELECT %I FROM auth_rules_claims.%I WHERE user_id = auth.uid())',
-          col, col, val->>'claim'));
+        -- DESTINATION VALIDATION ONLY (not added to WHERE)
+        -- Checks that the new value is in the user's claim set.
+        -- NULL values are allowed through — see comment block above for why.
+        validations := validations || format($v$
+  IF NEW.%I IS NOT NULL AND NOT EXISTS (SELECT 1 FROM auth_rules_claims.%I WHERE user_id = auth.uid() AND %I = NEW.%I) THEN
+    RAISE EXCEPTION '%I invalid' USING ERRCODE = '42501';
+  END IF;$v$, col, val->>'claim', col, col, col);
       END IF;
     END IF;
   END LOOP;
 
   RETURN format($f$
 CREATE OR REPLACE FUNCTION data_api.%I_update_trigger() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $t$
-BEGIN
-  UPDATE public.%I SET id = NEW.id WHERE %s;
+BEGIN%s
+  UPDATE public.%I SET %s WHERE %s;
   IF NOT FOUND THEN RAISE EXCEPTION 'Not found or not authorized' USING ERRCODE = 'P0002'; END IF;
   RETURN NEW;
 END;
 $t$;
 DROP TRIGGER IF EXISTS %I_update ON data_api.%I;
 CREATE TRIGGER %I_update INSTEAD OF UPDATE ON data_api.%I FOR EACH ROW EXECUTE FUNCTION data_api.%I_update_trigger();
-$f$, p_table, p_table, array_to_string(where_parts, ' AND '), p_table, p_table, p_table, p_table, p_table);
+$f$, p_table, validations, p_table, array_to_string(set_parts, ', '), array_to_string(where_parts, ' AND '), p_table, p_table, p_table, p_table, p_table);
 END;
 $$;
 

@@ -5,9 +5,12 @@
  * parses GitHub URLs, and downloads + extracts template tarballs.
  */
 
+import * as p from "@clack/prompts";
+import chalk from "chalk";
 import { exec } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { promisify } from "node:util";
+import { searchSelect, cancelSymbol } from "@/components/search-select.js";
 
 const execAsync = promisify(exec);
 
@@ -111,4 +114,90 @@ export async function downloadTemplate(
     `curl -sL -H "Accept: application/vnd.github+json" "${tarballUrl}" | tar xzf - --strip-components=${stripCount} -C "${targetDir}" --include="${includePattern}"`,
     { timeout: 120_000 },
   );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Shared template picker
+// ─────────────────────────────────────────────────────────────
+
+function isCancel(value: unknown): value is symbol {
+  return p.isCancel(value) || value === cancelSymbol;
+}
+
+/**
+ * Interactive template picker: asks whether to use a template, then
+ * shows a searchable list and downloads the selection.
+ *
+ * Returns the selected template, or null if the user chose "from scratch".
+ * Calls process.exit on cancellation.
+ */
+export async function pickTemplate(
+  workdir: string,
+): Promise<StarterTemplate | null> {
+  const useTemplate = await p.confirm({
+    message: "Start from a starter template?",
+    initialValue: false,
+  });
+
+  if (p.isCancel(useTemplate)) {
+    p.cancel("Cancelled");
+    process.exit(0);
+  }
+
+  if (!useTemplate) {
+    return null;
+  }
+
+  // Fetch available templates
+  const spinner = p.spinner();
+  spinner.start("Fetching templates...");
+
+  let templates: StarterTemplate[];
+  try {
+    templates = await fetchTemplates();
+  } catch (err) {
+    spinner.stop(chalk.red("Failed to fetch templates"));
+    console.error(
+      "Error:",
+      err instanceof Error ? err.message : "Failed to fetch templates",
+    );
+    process.exit(1);
+  }
+
+  spinner.stop(
+    `Found ${templates.length} template${templates.length === 1 ? "" : "s"}`,
+  );
+
+  const choice = await searchSelect<StarterTemplate>({
+    message: "Which template?",
+    items: templates.map((t) => ({
+      value: t,
+      label: t.name,
+      hint: t.description,
+    })),
+  });
+
+  if (isCancel(choice)) {
+    p.cancel("Cancelled");
+    process.exit(0);
+  }
+
+  const selected = choice as StarterTemplate;
+
+  const dlSpinner = p.spinner();
+  dlSpinner.start(`Downloading "${selected.name}" template...`);
+
+  try {
+    await downloadTemplate(selected, workdir);
+    dlSpinner.stop(`Downloaded "${selected.name}" template`);
+  } catch (err) {
+    dlSpinner.stop(chalk.red("Download failed"));
+    console.error(
+      "Error:",
+      err instanceof Error ? err.message : "Failed to download template",
+    );
+    process.exit(1);
+  }
+
+  return selected;
 }

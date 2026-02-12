@@ -25,10 +25,11 @@ import {
   getWorkflowProfile,
 } from "@/lib/config.js";
 import { printCommandHeader } from "@/components/command-header.js";
-import { searchSelect, cancelSymbol } from "@/components/search-select.js";
+import { cancelSymbol } from "@/components/search-select.js";
 import {
   fetchTemplates,
   downloadTemplate,
+  pickTemplate,
   type StarterTemplate,
 } from "@/lib/templates.js";
 import { writeSmartEnv, resolveProjectEnv } from "@/lib/dotenv.js";
@@ -51,17 +52,6 @@ interface BootstrapOptions {
 function isCancel(value: unknown): value is symbol {
   return p.isCancel(value) || value === cancelSymbol;
 }
-
-// ─────────────────────────────────────────────────────────────
-// Scratch template (empty project from scratch)
-// ─────────────────────────────────────────────────────────────
-
-const SCRATCH_TEMPLATE: StarterTemplate = {
-  name: "scratch",
-  description: "An empty project from scratch",
-  url: "",
-  start: "",
-};
 
 // ─────────────────────────────────────────────────────────────
 // Main handler
@@ -101,114 +91,89 @@ export async function bootstrapHandler(
   }
 
   // 1. Template selection
-  const spinner = isInteractive ? p.spinner() : null;
+  let selectedTemplate: StarterTemplate | null = null;
+  let alreadyDownloaded = false;
 
-  spinner?.start("Fetching templates...");
-  let templates: StarterTemplate[];
-  try {
-    templates = await fetchTemplates();
-  } catch (err) {
-    spinner?.stop(chalk.red("Failed to fetch templates"));
-    if (options.json) {
-      console.log(
-        JSON.stringify({
-          status: "error",
-          message:
-            err instanceof Error ? err.message : "Failed to fetch templates",
-        }),
-      );
-    } else {
-      console.error(
-        "Error:",
-        err instanceof Error ? err.message : "Failed to fetch templates",
-      );
-    }
-    process.exit(1);
-  }
-  spinner?.stop(`Found ${templates.length} template${templates.length === 1 ? "" : "s"}`);
-
-  let selectedTemplate: StarterTemplate;
-
-  if (options.template) {
-    // Named template from CLI arg
-    const found = templates.find(
-      (t) => t.name.toLowerCase() === options.template!.toLowerCase(),
-    );
-    if (!found && options.template.toLowerCase() === "scratch") {
-      selectedTemplate = SCRATCH_TEMPLATE;
-    } else if (!found) {
+  if (options.template || !isInteractive) {
+    // Non-interactive paths need to fetch templates directly
+    const spinner = isInteractive ? p.spinner() : null;
+    spinner?.start("Fetching templates...");
+    let templates: StarterTemplate[];
+    try {
+      templates = await fetchTemplates();
+    } catch (err) {
+      spinner?.stop(chalk.red("Failed to fetch templates"));
       if (options.json) {
         console.log(
           JSON.stringify({
             status: "error",
-            message: `Template not found: ${options.template}`,
-            available: templates.map((t) => t.name),
+            message:
+              err instanceof Error ? err.message : "Failed to fetch templates",
           }),
         );
       } else {
-        console.error(`Error: Template not found: ${options.template}`);
         console.error(
-          `Available templates: ${templates.map((t) => t.name).join(", ")}, scratch`,
+          "Error:",
+          err instanceof Error ? err.message : "Failed to fetch templates",
         );
       }
       process.exit(1);
+    }
+    spinner?.stop(`Found ${templates.length} template${templates.length === 1 ? "" : "s"}`);
+
+    if (options.template) {
+      // Named template from CLI arg
+      const found = templates.find(
+        (t) => t.name.toLowerCase() === options.template!.toLowerCase(),
+      );
+      if (!found) {
+        if (options.json) {
+          console.log(
+            JSON.stringify({
+              status: "error",
+              message: `Template not found: ${options.template}`,
+              available: templates.map((t) => t.name),
+            }),
+          );
+        } else {
+          console.error(`Error: Template not found: ${options.template}`);
+          console.error(
+            `Available templates: ${templates.map((t) => t.name).join(", ")}`,
+          );
+        }
+        process.exit(1);
+      } else {
+        selectedTemplate = found;
+      }
     } else {
-      selectedTemplate = found;
-    }
-  } else if (isInteractive) {
-    // Interactive template picker
-    const templateItems = [
-      ...templates.map((t) => ({
-        value: t,
-        label: t.name,
-        hint: t.description,
-      })),
-      {
-        value: SCRATCH_TEMPLATE,
-        label: SCRATCH_TEMPLATE.name,
-        hint: SCRATCH_TEMPLATE.description,
-      },
-    ];
-
-    const choice = await searchSelect<StarterTemplate>({
-      message: "Which starter template do you want to use?",
-      items: templateItems,
-    });
-
-    if (isCancel(choice)) {
-      p.cancel("Cancelled");
-      return;
-    }
-
-    selectedTemplate = choice;
-  } else {
-    // Non-interactive without template name — list templates as JSON
-    if (options.json) {
-      console.log(
-        JSON.stringify({
-          templates: [
-            ...templates.map((t) => ({
+      // Non-interactive without template name — list templates as JSON
+      if (options.json) {
+        console.log(
+          JSON.stringify({
+            templates: templates.map((t) => ({
               name: t.name,
               description: t.description,
               url: t.url,
               start: t.start,
             })),
-            {
-              name: "scratch",
-              description: "An empty project from scratch",
-              url: "",
-              start: "",
-            },
-          ],
-        }),
+          }),
+        );
+        return;
+      }
+      console.error(
+        "Error: Template name is required in non-interactive mode.",
       );
-      return;
+      console.error('Run "supa bootstrap --json" to list available templates.');
+      process.exit(1);
     }
-    console.error(
-      "Error: Template name is required in non-interactive mode.",
-    );
-    console.error('Run "supa bootstrap --json" to list available templates.');
-    process.exit(1);
+  } else {
+    // Interactive — use shared picker (handles confirm, fetch, search, download)
+    const picked = await pickTemplate(workdir);
+    if (picked) {
+      selectedTemplate = picked;
+      // pickTemplate already downloaded the template
+      alreadyDownloaded = true;
+    }
   }
 
   // Dry run: show what would happen
@@ -222,12 +187,11 @@ export async function bootstrapHandler(
       console.log(
         JSON.stringify({
           status: "dry_run",
-          template: {
-            name: selectedTemplate.name,
-            url: selectedTemplate.url || null,
-          },
+          template: selectedTemplate
+            ? { name: selectedTemplate.name, url: selectedTemplate.url }
+            : null,
           workdir,
-          wouldDownload: !!selectedTemplate.url,
+          wouldDownload: !!selectedTemplate,
           linkedProject: projectRef || null,
           wouldPushMigrations: !!isRemote,
           wouldWriteEnv: !!isRemote,
@@ -237,14 +201,14 @@ export async function bootstrapHandler(
       console.log();
       console.log(chalk.yellow("Dry run - no changes made"));
       console.log();
-      console.log(`${chalk.dim("Template:")} ${selectedTemplate.name}`);
+      console.log(`${chalk.dim("Template:")} ${selectedTemplate ? selectedTemplate.name : "none"}`);
       console.log(`${chalk.dim("Directory:")} ${workdir}`);
       if (projectRef) {
         console.log(`${chalk.dim("Project:")} ${projectRef} (${profile})`);
       }
       console.log();
       console.log(chalk.dim("Would:"));
-      if (selectedTemplate.url) {
+      if (selectedTemplate) {
         console.log(`  - Download template from GitHub`);
       } else {
         console.log(`  - Create empty project scaffold`);
@@ -257,8 +221,8 @@ export async function bootstrapHandler(
     return;
   }
 
-  // 2. Download template
-  if (selectedTemplate.url) {
+  // 2. Download template (skip if pickTemplate already handled it, or no template chosen)
+  if (selectedTemplate && !alreadyDownloaded) {
     const dlSpinner = isInteractive ? p.spinner() : null;
     dlSpinner?.start(`Downloading "${selectedTemplate.name}" template...`);
 
@@ -283,8 +247,8 @@ export async function bootstrapHandler(
       }
       process.exit(1);
     }
-  } else {
-    // Scratch: create minimal supabase directory structure
+  } else if (!selectedTemplate) {
+    // No template — create empty project scaffold
     createScratchProject(workdir);
     if (isInteractive) {
       p.log.info("Created empty project scaffold");
@@ -302,12 +266,11 @@ export async function bootstrapHandler(
       console.log(
         JSON.stringify({
           status: "success",
-          template: {
-            name: selectedTemplate.name,
-            url: selectedTemplate.url || null,
-          },
+          template: selectedTemplate
+            ? { name: selectedTemplate.name, url: selectedTemplate.url }
+            : null,
           project: null,
-          startCommand: selectedTemplate.start || null,
+          startCommand: selectedTemplate?.start || null,
         }),
       );
     } else {
@@ -325,13 +288,12 @@ export async function bootstrapHandler(
       console.log(
         JSON.stringify({
           status: "success",
-          template: {
-            name: selectedTemplate.name,
-            url: selectedTemplate.url || null,
-          },
+          template: selectedTemplate
+            ? { name: selectedTemplate.name, url: selectedTemplate.url }
+            : null,
           project: { ref: projectRef },
           profile,
-          startCommand: selectedTemplate.start || null,
+          startCommand: selectedTemplate?.start || null,
         }),
       );
     } else {
@@ -417,16 +379,15 @@ export async function bootstrapHandler(
     console.log(
       JSON.stringify({
         status: "success",
-        template: {
-          name: selectedTemplate.name,
-          url: selectedTemplate.url || null,
-        },
+        template: selectedTemplate
+          ? { name: selectedTemplate.name, url: selectedTemplate.url }
+          : null,
         project: { ref: projectRef },
         profile,
         api: { url: envCtx.supabaseUrl, anonKey: envCtx.anonKey },
         env: { path: ".env", keys: envKeys },
         migrations: 0,
-        startCommand: selectedTemplate.start || null,
+        startCommand: selectedTemplate?.start || null,
       }),
     );
   } else {
@@ -443,11 +404,11 @@ export async function bootstrapHandler(
 
 function showStartSuggestion(
   workdir: string,
-  template: StarterTemplate,
+  template: StarterTemplate | null,
 ): void {
   p.log.success(chalk.green("Done!"));
 
-  if (template.start) {
+  if (template?.start) {
     console.log();
     console.log(chalk.dim("To start your app:"));
     if (workdir !== process.cwd()) {

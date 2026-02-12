@@ -14,6 +14,7 @@ import type { WorkflowProfile, SchemaManagement, ConfigSource } from "../lib/con
 import { searchSelect, cancelSymbol } from "./search-select.js";
 import { profileSelect } from "./profile-select.js";
 import { printCommandHeader, S_BAR } from "./command-header.js";
+import { pickTemplate } from "../lib/templates.js";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -238,6 +239,13 @@ export async function runInitWizard(): Promise<InitResult> {
     newProjectName = projectName;
     newProjectRegion = region as Region;
   }
+
+  // ─────────────────────────────────────────────────────────────
+  // Template
+  // ─────────────────────────────────────────────────────────────
+
+  const cwd = process.cwd();
+  await pickTemplate(cwd);
 
   // ─────────────────────────────────────────────────────────────
   // Schema Management

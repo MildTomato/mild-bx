@@ -2,9 +2,10 @@
  * Hand-crafted interactive tapes for `supa init`
  *
  * Three variants:
- * - init-local:   supa init → local development (instant, no auth)
- * - init-connect: supa init → connect to existing project
- * - init-create:  supa init → create a new project (the original demo)
+ * - init-local:           supa init → local development (instant, no auth)
+ * - init-local-template:  supa init → local → yes to template → pick one
+ * - init-connect:         supa init → connect to existing project
+ * - init-create:          supa init → create a new project (the original demo)
  */
 
 import type { TapeFixture } from "./index.js";
@@ -32,21 +33,63 @@ Sleep 500ms
 Show`;
 
 /**
- * Local development — picks "Local development" from gateway, instant scaffolding
+ * Local development — picks "Local development" from gateway,
+ * declines template, picks schema management
  */
 export const initLocalFixture: TapeFixture = {
   category: "INTERACTIVE",
-  height: 600,
+  height: 800,
   tapeBody: `${SETUP_LOCAL}
 
-# Start init
 Type@50ms "supa init"
 Enter
-Sleep 4s
+Sleep 2s
 
-# Gateway: "How would you like to develop?" → Local development (already selected)
+# Gateway → Local development (first option)
 Enter
-Sleep 3s`,
+Sleep 500ms
+
+# Template? → No
+Enter
+Sleep 100ms
+
+# Schema management → Declarative
+Enter
+Sleep 5s`,
+};
+
+/**
+ * Local development with template — picks "Local development" from gateway,
+ * says Yes to template, picks one, then schema management
+ */
+export const initLocalTemplateFixture: TapeFixture = {
+  category: "INTERACTIVE",
+  height: 800,
+  tapeBody: `${SETUP}
+
+Type@50ms "supa init"
+Enter
+Sleep 2s
+
+# Gateway → Local development (first option)
+Enter
+Sleep 500ms
+
+# Template? → Yes (default is No, press Left to switch to Yes)
+Left
+Sleep 150ms
+Enter
+Sleep 3s
+
+# Template picker: search for "hono" and select
+Type@80ms "hono"
+Sleep 500ms
+Enter
+Sleep 15s
+
+# Schema management → Declarative
+Enter
+Sleep 5s`,
 };
 
 /**
@@ -58,53 +101,55 @@ export const initConnectFixture: TapeFixture = {
   height: 800,
   tapeBody: `${SETUP}
 
-# Start init
 Type@50ms "supa init"
 Enter
-Sleep 4s
+Sleep 2s
 
-# Gateway: "How would you like to develop?" → Connect to existing project
+# Gateway → Connect to existing project
 Down
-Sleep 300ms
-Enter
-Sleep 8s
-
-# Organization prompt: "Use existing"
+Sleep 150ms
 Enter
 Sleep 2s
 
-# Select organization (only one, just confirm)
+# Org → Use existing
 Enter
-Sleep 6s
+Sleep 100ms
 
-# Project prompt: "Use existing"
-Enter
-Sleep 2s
-
-# Select project: browse and pick
-Down
-Sleep 400ms
-Up
-Sleep 400ms
-Enter
-Sleep 2s
-
-# Schema management: accept default (Declarative)
+# Select org
 Enter
 Sleep 1s
 
-# Config source: accept default (In code)
+# Project → Use existing
 Enter
-Sleep 2s
+Sleep 100ms
+
+# Select project: browse and pick
+Down
+Sleep 200ms
+Up
+Sleep 200ms
+Enter
+Sleep 500ms
+
+# Template? → No
+Enter
+Sleep 100ms
+
+# Schema management → Declarative
+Enter
+Sleep 100ms
+
+# Config source → In code
+Enter
+Sleep 100ms
 
 # Workflow profile: browse and pick solo
-Sleep 500ms
 Down
-Sleep 800ms
+Sleep 500ms
 Up
-Sleep 600ms
+Sleep 500ms
 Enter
-Sleep 5s`,
+Sleep 4s`,
 };
 
 /**
@@ -116,63 +161,65 @@ export const initCreateFixture: TapeFixture = {
   height: 800,
   tapeBody: `${SETUP}
 
-# Start init
 Type@50ms "supa init"
 Enter
-Sleep 4s
+Sleep 2s
 
-# Gateway: "How would you like to develop?" → Create a new project
+# Gateway → Create a new project
 Down
-Sleep 300ms
+Sleep 150ms
 Down
-Sleep 300ms
-Enter
-Sleep 8s
-
-# Organization prompt: "Use existing"
+Sleep 150ms
 Enter
 Sleep 2s
 
-# Select organization (only one, just confirm)
+# Org → Use existing
 Enter
-Sleep 6s
+Sleep 100ms
 
-# Project prompt: "Create new"
-Down
-Sleep 300ms
+# Select org
 Enter
-Sleep 2s
+Sleep 1s
+
+# Project → Create new
+Down
+Sleep 150ms
+Enter
+Sleep 100ms
 
 # Project name
 Type@80ms "${randomSuffix}-delete-me"
-Sleep 500ms
+Sleep 200ms
 Enter
-Sleep 2s
+Sleep 100ms
 
-# Region: search and select
+# Region
 Type@80ms "us-east"
-Sleep 1s
+Sleep 200ms
 Enter
-Sleep 2s
+Sleep 500ms
 
-# Schema management: accept default (Declarative)
+# Template? → No
 Enter
-Sleep 1s
+Sleep 100ms
 
-# Config source: accept default (In code)
+# Schema management → Declarative
 Enter
-Sleep 2s
+Sleep 100ms
+
+# Config source → In code
+Enter
+Sleep 100ms
 
 # Workflow profile: browse through options
+Down
 Sleep 500ms
 Down
-Sleep 800ms
-Down
-Sleep 800ms
+Sleep 500ms
 Up
-Sleep 800ms
+Sleep 500ms
 Up
-Sleep 600ms
+Sleep 500ms
 Enter
-Sleep 5s`,
+Sleep 4s`,
 };

@@ -22,6 +22,7 @@ import { WORKFLOW_PROFILES } from "@/lib/workflow-profiles.js";
 import type { WorkflowProfile, SchemaManagement, ConfigSource } from "@/lib/config-types.js";
 import { runInitWizard, type InitResult } from "@/components/InitWizard.js";
 import { S_BAR } from "@/components/command-header.js";
+import { pickTemplate } from "@/lib/templates.js";
 
 interface InitOptions {
   yes?: boolean;
@@ -141,7 +142,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
   // ─────────────────────────────────────────────────────────────
 
   if (options.local) {
-    runLocalInit(cwd, supabaseDir, options);
+    await runLocalInit(cwd, supabaseDir, options);
     return;
   }
 
@@ -258,7 +259,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
     }
 
     if (developmentMode === "local") {
-      runLocalInit(cwd, supabaseDir, options);
+      await runLocalInit(cwd, supabaseDir, options);
       return;
     }
 
@@ -280,29 +281,60 @@ export async function initCommand(options: InitOptions): Promise<void> {
 // Local init - no auth, no API calls
 // ─────────────────────────────────────────────────────────────
 
-function runLocalInit(cwd: string, supabaseDir: string, options: InitOptions): void {
-  // Create directories
-  const dirs = [
-    supabaseDir,
-    join(supabaseDir, "migrations"),
-    join(supabaseDir, "functions"),
-    join(supabaseDir, "types"),
-    join(supabaseDir, "schema", "public"),
-  ];
-  for (const dir of dirs) {
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+async function runLocalInit(cwd: string, supabaseDir: string, options: InitOptions): Promise<void> {
+  // 1. Template picker (interactive only)
+  const isInteractive = !options.json && process.stdin.isTTY;
+  let pickedTemplate: Awaited<ReturnType<typeof pickTemplate>> = null;
+
+  if (isInteractive) {
+    pickedTemplate = await pickTemplate(cwd);
   }
 
-  // Write minimal config (no project_id)
+  // 2. If scratch (or non-interactive), scaffold empty dirs
+  if (!pickedTemplate) {
+    const dirs = [
+      supabaseDir,
+      join(supabaseDir, "migrations"),
+      join(supabaseDir, "functions"),
+      join(supabaseDir, "types"),
+      join(supabaseDir, "schema", "public"),
+    ];
+    for (const dir of dirs) {
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    }
+    writeFileSync(join(supabaseDir, "migrations", ".gitkeep"), "");
+    writeFileSync(join(supabaseDir, "functions", ".gitkeep"), "");
+  }
+
+  // 3. Schema management prompt (interactive only)
+  let schemaManagement: "declarative" | "migrations" = "declarative";
+
+  if (isInteractive) {
+    const schemaMgmt = await p.select({
+      message: "Schema management",
+      options: [
+        { value: "declarative" as const, label: "Declarative (recommended)", hint: "Write what you want, we figure out the changes" },
+        { value: "migrations" as const, label: "Migrations", hint: "Traditional versioned migration files" },
+      ],
+    });
+
+    if (p.isCancel(schemaMgmt)) {
+      p.cancel("Cancelled");
+      return;
+    }
+
+    schemaManagement = schemaMgmt;
+  }
+
+  // 4. Write config
   const config: Record<string, unknown> = {
     $schema: "../../../cli/config-schema/config.schema.json",
-    schema_management: "declarative",
+    schema_management: schemaManagement,
     config_source: "code",
   };
   writeFileSync(join(supabaseDir, "config.json"), JSON.stringify(config, null, 2));
-  writeFileSync(join(supabaseDir, "migrations", ".gitkeep"), "");
-  writeFileSync(join(supabaseDir, "functions", ".gitkeep"), "");
 
+  // 5. Success output
   if (options.json) {
     console.log(JSON.stringify({
       status: "success",

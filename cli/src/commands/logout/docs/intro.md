@@ -1,3 +1,5 @@
+<DemoVideo id="supa-logout" />
+
 Remove your stored credentials from the system keychain.
 
 After logging out, you need to run `supa login` again to access your projects.

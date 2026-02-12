@@ -5,6 +5,7 @@
  * tape overrides. Commands without a fixture use auto-classification.
  */
 
+import { bootstrapFixture } from "./bootstrap.js";
 import { initLocalFixture, initConnectFixture, initCreateFixture } from "./init.js";
 
 export type TapeCategory =
@@ -46,7 +47,8 @@ export const extraTapes = new Map<string, TapeFixture>([
 ]);
 
 export const fixtures = new Map<string, TapeFixture>([
-  // Interactive commands (init → "create new project" is the primary demo)
+  // Interactive commands
+  ["bootstrap", bootstrapFixture],
   ["init", initCreateFixture],
 
   // Long-running commands

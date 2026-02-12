@@ -107,7 +107,7 @@ export function helpAndExampleTape(
 export function longRunningTape(
   commandPath: string,
   gifName: string,
-  opts?: { height?: number }
+  opts?: { height?: number; setup?: string[] }
 ): string {
   const lines: string[] = [
     CONFIG_SOURCE,
@@ -118,6 +118,16 @@ export function longRunningTape(
 
   if (opts?.height) {
     lines.push(`Set Height ${opts.height}`);
+  }
+
+  if (opts?.setup && opts.setup.length > 0) {
+    lines.push("", "Hide");
+    for (const cmd of opts.setup) {
+      lines.push(`Type "${cmd}"`);
+      lines.push("Enter");
+      lines.push("Sleep 500ms");
+    }
+    lines.push("Show");
   }
 
   lines.push(

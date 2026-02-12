@@ -3,7 +3,6 @@ import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
 import { resolveProjectContext, requireTTY } from "@/lib/resolve-project.js";
 import { printCommandHeader, S_BAR } from "@/components/command-header.js";
-import { createSpinner } from "@/lib/spinner.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
 import {
   PROVIDER_DEFINITIONS,
@@ -28,7 +27,7 @@ export async function listAuthProviders(options: ListOptions = {}): Promise<void
   }
 
   // Fetch remote auth config
-  const spinner = !options.json ? createSpinner() : null;
+  const spinner = !options.json ? p.spinner() : null;
   spinner?.start("Fetching providers...");
 
   let remoteConfig: Record<string, unknown>;

@@ -1,3 +1,5 @@
+<DemoVideo id="supa-project-auth-provider" />
+
 Manage OAuth providers for your Supabase project directly from the CLI.
 
 ## Overview

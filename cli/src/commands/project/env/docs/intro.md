@@ -1,3 +1,5 @@
+<DemoVideo id="supa-project-env" />
+
 The `supa project env` commands let you store, sync, and manage environment
 variables for your Supabase project without using the dashboard. Variables
 are scoped to environments (development, preview, production, or custom)

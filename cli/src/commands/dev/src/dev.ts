@@ -28,7 +28,6 @@ import {
 } from "@/lib/pg-delta.js";
 import { getSeedConfig } from "@/lib/seed-config.js";
 import { C } from "@/lib/colors.js";
-import { SPINNER_FRAMES } from "@/lib/spinner.js";
 import { printCommandHeader, S_BAR } from "@/components/command-header.js";
 import * as p from "@clack/prompts";
 import {
@@ -38,7 +37,8 @@ import {
   type ProjectConfig,
   type ConfigDiff,
 } from "@/lib/sync.js";
-import { createSpinner } from "@/lib/spinner.js";
+
+const SPINNER_FRAMES = ["◒", "◐", "◓", "◑"];
 
 // Heartbeat frames for idle state
 const HEARTBEAT_FRAMES = ["⠏", "⠇", "⠧", "⠦", "⠴", "⠼", "⠸", "⠹", "⠙", "⠋"];
@@ -890,7 +890,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
   let lastActivity = Date.now();
   let debounceTimer: NodeJS.Timeout | null = null;
   let isSpinnerActive = false;
-  const spinner = createSpinner();
+  const spinner = p.spinner();
 
   const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 

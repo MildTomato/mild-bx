@@ -1,3 +1,5 @@
+<DemoVideo id="supa-login" />
+
 Authenticate with your Supabase account to access your projects.
 
 The CLI stores your credentials securely in your system keychain. You only need

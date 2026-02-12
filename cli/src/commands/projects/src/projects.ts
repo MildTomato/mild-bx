@@ -9,7 +9,6 @@ import { requireAuth } from "@/lib/config.js";
 import { formatProjectStatus, REGIONS, type Region } from "@/lib/constants.js";
 import { createProject as createProjectOp } from "@/lib/operations.js";
 import { searchSelect } from "@/components/search-select.js";
-import { createSpinner } from "@/lib/spinner.js";
 import { printCommandHeader } from "@/components/command-header.js";
 import { printTable } from "@/components/table.js";
 
@@ -42,7 +41,7 @@ async function listProjects(token: string, orgSlug?: string) {
     description: ["List all projects."],
   });
 
-  const spinner = createSpinner();
+  const spinner = p.spinner();
   spinner.start("Loading projects...");
 
   try {
@@ -82,7 +81,7 @@ async function listProjects(token: string, orgSlug?: string) {
 async function selectOrg(client: ReturnType<typeof createClient>, orgSlug?: string): Promise<string> {
   if (orgSlug) return orgSlug;
 
-  const spinner = createSpinner();
+  const spinner = p.spinner();
   spinner.start("Fetching organizations...");
   const orgs = await client.listOrganizations();
   spinner.stop(`Found ${orgs.length} organization${orgs.length === 1 ? "" : "s"}`);
@@ -162,7 +161,7 @@ async function createProject(token: string, options: ProjectsOptions) {
   }
 
   // Create
-  const createSpinnerInstance = createSpinner();
+  const createSpinnerInstance = p.spinner();
   createSpinnerInstance.start(`Creating project "${projectName}"...`);
 
   try {
@@ -208,7 +207,7 @@ async function deleteProject(token: string, options: ProjectsOptions) {
     const orgSlug = await selectOrg(client, options.org);
 
     // List projects for that org
-    const spinner = createSpinner();
+    const spinner = p.spinner();
     spinner.start("Loading projects...");
     const allProjects = await client.listProjects();
     const projects = allProjects.filter((proj) => proj.organization_slug === orgSlug);
@@ -237,7 +236,7 @@ async function deleteProject(token: string, options: ProjectsOptions) {
   }
 
   // Look up project details for confirmation
-  const lookupSpinner = createSpinner();
+  const lookupSpinner = p.spinner();
   lookupSpinner.start("Looking up project...");
 
   let project: Project;
@@ -271,7 +270,7 @@ async function deleteProject(token: string, options: ProjectsOptions) {
     }
   }
 
-  const deleteSpinner = createSpinner();
+  const deleteSpinner = p.spinner();
   deleteSpinner.start(`Deleting project "${project.name}"...`);
 
   try {

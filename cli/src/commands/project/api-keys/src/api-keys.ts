@@ -5,7 +5,7 @@
 import chalk from "chalk";
 import { createClient, type ApiKey } from "@/lib/api.js";
 import { resolveProjectContext, requireTTY } from "@/lib/resolve-project.js";
-import { createSpinner } from "@/lib/spinner.js";
+import * as p from "@clack/prompts";
 import { printTable } from "@/components/table.js";
 
 interface ApiKeysOptions {
@@ -70,7 +70,7 @@ export async function apiKeysCommand(options: ApiKeysOptions): Promise<void> {
   requireTTY();
 
   // Interactive mode
-  const spinner = createSpinner();
+  const spinner = p.spinner();
   spinner.start("Loading API keys...");
 
   try {

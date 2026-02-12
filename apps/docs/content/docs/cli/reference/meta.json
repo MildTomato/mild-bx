@@ -3,6 +3,7 @@
     "index",
     "login",
     "logout",
+    "bootstrap",
     "init",
     "dev",
     "orgs",

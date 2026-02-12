@@ -92,14 +92,6 @@ function commandToMdx(command: Command, parent?: Command, parentPath?: string, d
     "",
   ];
 
-  // Demo video (if rendered) — at the top
-  const demoName = `supa-${fullName.replace(/ /g, "-")}.webm`;
-  const demoPath = `/demos/${demoName}`;
-  const demoAbsPath = join(process.cwd(), "..", "apps", "docs", "public", demoPath);
-  if (existsSync(demoAbsPath)) {
-    lines.push(`<video src="${demoPath}" autoPlay loop muted playsInline style={{ borderRadius: "8px", border: "1px solid #333" }} />`, "");
-  }
-
   // Intro prose (from docs/intro.md or command.longDescription)
   const intro = readDocFile(command, parent, "intro.md");
   if (intro) {

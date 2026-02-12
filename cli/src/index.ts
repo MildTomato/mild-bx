@@ -84,7 +84,7 @@ const rootCommand: Command = {
 // Auth check
 // ─────────────────────────────────────────────────────────────
 
-const SKIP_AUTH_COMMANDS = ["init", "help", "login", "logout"];
+const SKIP_AUTH_COMMANDS = ["init", "bootstrap", "help", "login", "logout"];
 
 async function checkAuth(commandName: string): Promise<boolean> {
   if (SKIP_AUTH_COMMANDS.includes(commandName)) {
@@ -144,6 +144,7 @@ async function main(): Promise<number> {
     runWizardDemo();
     return 0;
   }
+
 
   // Find the command name (first non-flag argument)
   const commandIndex = argv.findIndex((arg) => !arg.startsWith("-"));

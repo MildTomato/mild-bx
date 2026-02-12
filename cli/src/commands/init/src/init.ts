@@ -21,7 +21,6 @@ import { buildApiConfigFromRemote, buildAuthConfigFromRemote } from "@/lib/sync.
 import { WORKFLOW_PROFILES } from "@/lib/workflow-profiles.js";
 import type { WorkflowProfile, SchemaManagement, ConfigSource } from "@/lib/config-types.js";
 import { runInitWizard, type InitResult } from "@/components/InitWizard.js";
-import { createSpinner } from "@/lib/spinner.js";
 import { S_BAR } from "@/components/command-header.js";
 
 interface InitOptions {
@@ -350,7 +349,7 @@ async function writePlatformProject(
   const { ref: projectRef, name: projectName, schemaManagement = "declarative", configSource = "code", workflowProfile = "solo" } = project;
 
   // Fetch project config
-  const spinner = !options.json && process.stdin.isTTY ? createSpinner() : null;
+  const spinner = !options.json && process.stdin.isTTY ? p.spinner() : null;
   spinner?.start("Fetching project config...");
 
   const client = createClient(token);

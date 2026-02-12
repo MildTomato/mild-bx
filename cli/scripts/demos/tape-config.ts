@@ -9,7 +9,7 @@ export const TAPE_CONFIG = {
   shell: "bash",
   width: 1200,
   height: 600,
-  fontFamily: "Geist Mono",
+  fontFamily: "Menlo",
   fontSize: 16,
   lineHeight: 1.2,
   padding: 24,

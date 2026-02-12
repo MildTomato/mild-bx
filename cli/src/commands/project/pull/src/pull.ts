@@ -20,7 +20,6 @@ import {
 import { pullSchemaWithPgDelta, setVerbose } from "@/lib/pg-delta.js";
 import { printCommandHeader, S_BAR } from "@/components/command-header.js";
 import { C } from "@/lib/colors.js";
-import { createSpinner } from "@/lib/spinner.js";
 
 interface PullOptions {
   profile?: string;
@@ -128,7 +127,7 @@ export async function pullCommand(options: PullOptions) {
   }
   console.log(S_BAR);
 
-  const spinner = createSpinner();
+  const spinner = p.spinner();
   spinner.start("Fetching remote state...");
 
   try {
@@ -226,7 +225,7 @@ export async function pullCommand(options: PullOptions) {
     }
 
     // Apply changes
-    const applySpinner = createSpinner();
+    const applySpinner = p.spinner();
     applySpinner.start("Writing files...");
 
     let configUpdated = false;

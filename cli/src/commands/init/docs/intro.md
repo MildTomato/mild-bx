@@ -1,3 +1,5 @@
+<DemoVideo id="supa-init" />
+
 Set up Supabase in the current directory.
 
 Creates the `supabase/` folder structure. You can start with local development
@@ -18,12 +20,12 @@ schema management, and workflow profile selection.
 <Tabs items={['Connect to existing', 'Create new project']}>
 <Tab value="Connect to existing">
 
-<video src="/demos/supa-init--connect.webm" autoPlay loop muted playsInline style={{ borderRadius: "8px", border: "1px solid #333" }} />
+<DemoVideo id="supa-init--connect" />
 
 </Tab>
 <Tab value="Create new project">
 
-<video src="/demos/supa-init.webm" autoPlay loop muted playsInline style={{ borderRadius: "8px", border: "1px solid #333" }} />
+<DemoVideo id="supa-init" />
 
 </Tab>
 </Tabs>
@@ -36,7 +38,7 @@ account. Run `supa init` again later to connect to the platform.
 If you previously initialized locally, running `supa init` again offers to
 connect the existing project.
 
-<video src="/demos/supa-init--local.webm" autoPlay loop muted playsInline style={{ borderRadius: "8px", border: "1px solid #333" }} />
+<DemoVideo id="supa-init--local" />
 
 ## Created files
 

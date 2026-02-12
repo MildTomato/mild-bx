@@ -5,6 +5,7 @@
 import type { Command, CommandHandler } from "@/util/commands/types.js";
 
 // Import commands
+import bootstrap, { bootstrapCommand } from "./bootstrap/index.js";
 import init, { initCommand } from "./init/index.js";
 import dev, { devCommand } from "./dev/index.js";
 import orgs, { orgsCommand } from "./orgs/index.js";
@@ -23,6 +24,7 @@ interface CommandEntry {
 const commandEntries: CommandEntry[] = [
   { spec: loginCommand, handler: login },
   { spec: logoutCommand, handler: logout },
+  { spec: bootstrapCommand, handler: bootstrap },
   { spec: initCommand, handler: init },
   { spec: devCommand, handler: dev },
   { spec: orgsCommand, handler: orgs },

@@ -1,3 +1,5 @@
+<DemoVideo id="supa-project-env-push" />
+
 Reads your local `supabase/.env` file, computes a diff against the
 remote environment, and applies the changes. You see a summary of
 additions, updates, and deletions before confirming.

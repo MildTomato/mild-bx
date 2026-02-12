@@ -5,7 +5,6 @@ import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
 import { printCommandHeader, S_BAR } from "@/components/command-header.js";
-import { createSpinner } from "@/lib/spinner.js";
 import { findProvider, buildProviderPayload, parseProviderFromRemote, PROVIDER_DEFINITIONS } from "@/lib/auth-providers.js";
 import { writeJsonAtomic } from "@/lib/fs-atomic.js";
 import { findSimilar } from "@/lib/string-similarity.js";
@@ -25,7 +24,7 @@ export async function toggleAuthProvider(
   const isTTY = process.stdout.isTTY && !options.json;
   const action = enable ? "enable" : "disable";
   const isDryRun = options["dry-run"] || false;
-  const spinner = isTTY ? createSpinner() : null;
+  const spinner = isTTY ? p.spinner() : null;
 
   if (isTTY) {
     printCommandHeader({

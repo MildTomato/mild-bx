@@ -63,9 +63,7 @@ Sleep 8s
 Enter
 Sleep 2s
 
-# Select organization
-Type@80ms "Docmrk"
-Sleep 1s
+# Select organization (only one, just confirm)
 Enter
 Sleep 6s
 
@@ -125,9 +123,7 @@ Sleep 8s
 Enter
 Sleep 2s
 
-# Select organization: search and select
-Type@80ms "Docmrk"
-Sleep 1s
+# Select organization (only one, just confirm)
 Enter
 Sleep 6s
 

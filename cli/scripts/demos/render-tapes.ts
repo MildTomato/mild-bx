@@ -2,12 +2,14 @@
 /**
  * Render VHS tape files into videos
  *
- * Finds all .tape files in generated/ and runs `vhs` on each one.
- * Init tape runs first (creates the demo project), then the rest run in parallel.
+ * Pipeline:
+ *   1. Init tape always runs first (creates the demo project)
+ *   2. Remaining tapes render in parallel (filter applies here only)
+ *   3. Cleanup: delete demo projects created during recording
  *
  * Usage:
  *   pnpm demos:render                       # Render all tapes
- *   pnpm demos:render -- --filter init      # Render only matching tapes
+ *   pnpm demos:render -- --filter bootstrap # Render only matching tapes (init still runs first)
  *   pnpm demos:render -- --dry-run          # Print what would render
  *   pnpm demos:render -- --concurrency 4    # Max parallel renders (default: 4)
  */
@@ -27,19 +29,29 @@ const concurrencyIdx = args.indexOf("--concurrency");
 const concurrency = concurrencyIdx >= 0 ? parseInt(args[concurrencyIdx + 1], 10) : 4;
 
 // Find all .tape files (excluding config.tape)
-const tapeFiles = readdirSync(GENERATED_DIR)
+const allTapes = readdirSync(GENERATED_DIR)
   .filter((f) => f.endsWith(".tape") && f !== "config.tape")
-  .filter((f) => !filter || f.includes(filter))
   .sort();
 
-if (tapeFiles.length === 0) {
+const initTape = "supa-init.tape";
+const hasInit = allTapes.includes(initTape);
+
+// Filter applies only to non-init tapes
+const restTapes = allTapes
+  .filter((f) => f !== initTape)
+  .filter((f) => !filter || f.includes(filter));
+
+const totalToRender = (hasInit ? 1 : 0) + restTapes.length;
+
+if (totalToRender === 0) {
   console.log("No tape files found.");
   if (filter) console.log(`  (filter: "${filter}")`);
   process.exit(0);
 }
 
-console.log(`Found ${tapeFiles.length} tape file(s) to render:`);
-for (const f of tapeFiles) {
+console.log(`Rendering ${totalToRender} tape(s):`);
+if (hasInit) console.log(`  ${initTape} (always runs first)`);
+for (const f of restTapes) {
   console.log(`  ${f}`);
 }
 console.log("");
@@ -98,15 +110,42 @@ async function renderBatch(files: string[], max: number): Promise<number> {
   return failed;
 }
 
-// ── Main ──────────────────────────────────────────────────────
+function cleanupProjects(): void {
+  console.log("\nPhase 3: Cleaning up demo projects...");
+  try {
+    const output = execSync(
+      `PATH="${CLI_BIN}:$PATH" supa projects list --json`,
+      { encoding: "utf-8", timeout: 30_000 },
+    );
+    const projects = JSON.parse(output) as Array<{ ref: string; name: string }>;
+    const demoProjects = projects.filter((p) => p.name.includes("delete-me"));
 
-const initTape = "supa-init.tape";
-const hasInit = tapeFiles.includes(initTape);
-const restTapes = tapeFiles.filter((f) => f !== initTape);
+    if (demoProjects.length === 0) {
+      console.log("  No demo projects to clean up.");
+      return;
+    }
+
+    for (const project of demoProjects) {
+      try {
+        execSync(
+          `PATH="${CLI_BIN}:$PATH" supa projects delete ${project.ref} --yes`,
+          { stdio: "pipe", timeout: 30_000 },
+        );
+        console.log(`  ✓ Deleted ${project.name} (${project.ref})`);
+      } catch {
+        console.error(`  ✗ Failed to delete ${project.name} (${project.ref})`);
+      }
+    }
+  } catch (err) {
+    console.error("  ✗ Cleanup failed:", err instanceof Error ? err.message : err);
+  }
+}
+
+// ── Main ──────────────────────────────────────────────────────
 
 let failed = 0;
 
-// Init must run first — it creates the project other tapes depend on
+// Phase 1: Init always runs first — creates the demo project
 if (hasInit) {
   console.log("Phase 1: Rendering init tape (creates demo project)...");
   const result = await renderTape(initTape);
@@ -116,15 +155,17 @@ if (hasInit) {
   }
 }
 
-// Render the rest in parallel
+// Phase 2: Render the rest in parallel (filter applies here)
 if (restTapes.length > 0) {
   console.log(`\nPhase 2: Rendering ${restTapes.length} tape(s) in parallel (concurrency: ${concurrency})...`);
   failed = await renderBatch(restTapes, concurrency);
 }
 
-const total = tapeFiles.length;
+// Phase 3: Delete demo projects
+cleanupProjects();
+
 console.log("");
-console.log(`Rendered ${total - failed}/${total} tapes.`);
+console.log(`Rendered ${totalToRender - failed}/${totalToRender} tapes.`);
 
 if (failed > 0) {
   console.error(`${failed} tape(s) failed.`);

@@ -1,0 +1,96 @@
+---
+title: "supa bootstrap"
+description: "Bootstrap a project from a starter template"
+generated: true
+---
+
+<DemoVideo id="supa-bootstrap" />
+
+Bootstrap a new project from a starter template. This command downloads a
+template from the Supabase community samples repository, creates a new
+Supabase project, waits for it to be ready, pushes any included migrations,
+and writes a `.env` file with your project credentials.
+
+## Interactive flow
+
+When run without arguments, `supa bootstrap` walks you through an interactive
+flow:
+
+1. **Template selection** -- pick from community starter templates or start
+   from scratch
+2. **Authentication** -- logs you in if needed
+3. **Project creation** -- choose an org, name your project, pick a region
+4. **Wait for ready** -- polls until the database and connection pooler are
+   healthy
+5. **Push migrations** -- applies any `.sql` files found in
+   `supabase/migrations/`
+6. **Write `.env`** -- generates a `.env` file with your API keys and
+   database connection strings, merging with `.env.example` if present
+
+## Created files
+
+| File | Description |
+|------|-------------|
+| `supabase/config.json` | Project configuration linked to your cloud project |
+| `supabase/migrations/` | Database migration files (from the template) |
+| `.env` | Environment variables with API keys and database URLs |
+
+## Usage
+
+```bash
+supa bootstrap [template] [options]
+```
+
+## Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `template` | No | Template name (optional, interactive if omitted) |
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `-y, --yes` | boolean | Skip prompts and use defaults |
+| `--json` | boolean | Output as JSON |
+| `--dry-run` | boolean | Show what would be done without applying |
+| `-w, --workdir <DIR>` | string | Directory to bootstrap into (default: current directory) |
+| `-p, --password <PASSWORD>` | string | Password for remote Postgres database |
+
+### `--workdir`
+
+Specify a directory to bootstrap into. If the directory does not exist, it
+will be created. If it already exists and is non-empty, you will be prompted
+to confirm overwriting.
+
+Defaults to the current working directory.
+
+### `--password`
+
+Provide a password for the remote Postgres database. If not specified, the
+password generated during project creation is used automatically.
+
+This password is included in the `POSTGRES_URL` and related connection
+strings written to `.env`.
+
+## Examples
+
+### Interactive setup
+
+Launches the full interactive flow: template picker, authentication,
+project creation wizard, and environment setup. This is the recommended
+way to start a new project.
+
+```bash
+supa bootstrap
+```
+
+### Use a specific template
+
+Skip the interactive template picker by passing a template name directly.
+Run `supa bootstrap --json` without a template name to list all available
+templates.
+
+```bash
+supa bootstrap nextjs
+```

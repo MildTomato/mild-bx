@@ -28,7 +28,6 @@ import {
 } from "@/lib/pg-delta.js";
 import { printCommandHeader, S_BAR } from "@/components/command-header.js";
 import { C } from "@/lib/colors.js";
-import { createSpinner } from "@/lib/spinner.js";
 
 export interface PushOptions {
   profile?: string;
@@ -404,7 +403,7 @@ export async function pushCommand(options: PushOptions) {
   }
   console.log(S_BAR);
 
-  const spinner = createSpinner();
+  const spinner = p.spinner();
   spinner.start("Connecting...");
 
   try {
@@ -499,7 +498,7 @@ export async function pushCommand(options: PushOptions) {
     }
 
     // Apply changes
-    const applySpinner = createSpinner();
+    const applySpinner = p.spinner();
     applySpinner.start("Applying changes...");
 
     let appliedCount = 0;

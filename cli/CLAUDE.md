@@ -112,5 +112,5 @@ the full docs structure.
 - **Command headers**: Use `printCommandHeader` from
   `src/components/command-header.ts` with the `context` option for
   key-value lines (Project, Profile, Env, and so on).
-- **Spinners**: Use `createSpinner` from `src/lib/spinner.ts` for
+- **Spinners**: Use `p.spinner()` from `@clack/prompts` for
   interactive progress indicators.

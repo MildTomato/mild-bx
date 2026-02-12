@@ -14,7 +14,6 @@ import {
   isValidAccessToken,
   saveAccessTokenAsync,
 } from "@/lib/config.js";
-import { createSpinner } from "@/lib/spinner.js";
 import { generateKeyPair, decryptToken } from "./encryption.js";
 
 const DASHBOARD_URL = "https://supabase.com/dashboard";
@@ -113,7 +112,7 @@ export async function loginCommand(options: LoginOptions): Promise<void> {
     }
 
     // Verify token by making API call
-    const spinner = options.json ? null : createSpinner();
+    const spinner = options.json ? null : p.spinner();
     spinner?.start("Verifying token...");
 
     try {

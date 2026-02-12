@@ -38,10 +38,11 @@ const allTapes = readdirSync(GENERATED_DIR)
 
 // Init tapes run sequentially in a specific order; everything else runs in parallel
 const INIT_LOCAL = "supa-init--local.tape";
+const INIT_LOCAL_TEMPLATE = "supa-init--local-template.tape";
 const INIT_CONNECT = "supa-init--connect.tape";
 const INIT_CREATE = "supa-init.tape"; // init--create is the main init tape
 
-const initTapes = [INIT_LOCAL, INIT_CONNECT, INIT_CREATE].filter((f) => allTapes.includes(f));
+const initTapes = [INIT_LOCAL, INIT_LOCAL_TEMPLATE, INIT_CONNECT, INIT_CREATE].filter((f) => allTapes.includes(f));
 const initSet = new Set(initTapes);
 
 // Filter applies only to non-init tapes
@@ -149,9 +150,9 @@ function cleanupDemoProject(): void {
 
 let failed = 0;
 
-// Step 1: supa-init--local (creates recordings dir)
+// Step 1a: supa-init--local (creates recordings dir)
 if (initSet.has(INIT_LOCAL)) {
-  console.log("Step 1: Rendering supa-init--local...");
+  console.log("Step 1a: Rendering supa-init--local...");
   const result = await renderTape(INIT_LOCAL);
   if (!result.ok) {
     console.error("supa-init--local failed — aborting.");
@@ -159,7 +160,16 @@ if (initSet.has(INIT_LOCAL)) {
   }
 }
 
-// Step 2: Create .env so the CLI can write DB password during init
+// Step 1b: clean recordings dir, then supa-init--local-template
+if (initSet.has(INIT_LOCAL_TEMPLATE)) {
+  execSync(`rm -rf "${RECORDINGS_DIR}" && mkdir -p "${RECORDINGS_DIR}"`, { stdio: "pipe" });
+  console.log("\nStep 1b: Rendering supa-init--local-template...");
+  const result = await renderTape(INIT_LOCAL_TEMPLATE);
+  if (!result.ok) failed++;
+}
+
+// Step 2: Clean recordings dir again, create .env so the CLI can write DB password during init
+execSync(`rm -rf "${RECORDINGS_DIR}" && mkdir -p "${RECORDINGS_DIR}"`, { stdio: "pipe" });
 console.log("\nStep 2: Creating .env in recordings dir...");
 writeFileSync(join(RECORDINGS_DIR, ".env"), "");
 

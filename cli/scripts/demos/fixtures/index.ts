@@ -9,7 +9,7 @@
  * their own setup via tapeBody.
  */
 
-import { initLocalFixture, initConnectFixture, initCreateFixture } from "./init.js";
+import { initLocalFixture, initLocalTemplateFixture, initConnectFixture, initCreateFixture } from "./init.js";
 
 export type TapeCategory =
   | "HELP_ONLY"
@@ -37,6 +37,7 @@ export interface TapeFixture {
  */
 export const extraTapes = new Map<string, TapeFixture>([
   ["init--local", initLocalFixture],
+  ["init--local-template", initLocalTemplateFixture],
   ["init--connect", initConnectFixture],
 ]);
 

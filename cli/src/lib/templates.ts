@@ -136,6 +136,7 @@ export async function pickTemplate(
 ): Promise<StarterTemplate | null> {
   const useTemplate = await p.confirm({
     message: "Start from a starter template?",
+    initialValue: false,
   });
 
   if (p.isCancel(useTemplate)) {

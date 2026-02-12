@@ -1,35 +1,67 @@
 # CLI (`supa`)
 
-The Supabase CLI, built with TypeScript and bundled with tsup.
+The Supabase CLI, built with TypeScript, bundled with tsup, and compiled
+to a standalone binary with bun.
+
+When adding or modifying commands, use the `cli-guidelines` skill.
 
 ## Build and run
 
 ```bash
 npm run build          # Build CLI to dist/ and bin/supa
+npm run dev            # Watch mode (tsup --watch)
 npm run docs:generate  # Regenerate reference docs from command specs
 ```
 
-Test from an example project directory:
+There are no tests yet. Vitest is configured as a dev dependency.
+
+## Testing commands
+
+After `npm run build`, test via the linked binary:
 
 ```bash
-cd examples/auth-rules
-../../cli/bin/supa project env list --json
+supa --help
+supa project pull --plan
 ```
+
+For a quick check without a full build, run the compiled output
+directly:
+
+```bash
+node cli/dist/index.js --help
+```
+
+## Path aliases
+
+tsup resolves these aliases:
+
+- `@/lib` → `./src/lib`
+- `@/components` → `./src/components`
+- `@/commands` → `./src/commands`
+- `@/util` → `./src/util`
 
 ## Command structure
 
-Every command follows a three-file pattern:
+Every command follows this pattern (example: `project pull`):
 
 ```
-src/commands/<parent>/<command>/
-  command.ts   # Declarative spec (name, options, args, examples)
-  index.ts     # Arg parser and router (arg → handler)
-  src/*.ts     # Implementation (business logic)
+src/commands/project/pull/
+  command.ts              # Declarative spec (satisfies Command)
+  index.ts                # Arg parser → calls handler in src/
+  src/pull.ts             # Implementation (business logic)
+  docs/intro.md           # Overview prose (required)
+  docs/option.types-only.md  # Extra detail for --types-only flag
 ```
 
 For commands with subcommands (like `project env`), the parent directory
 contains a `command.ts` with all subcommand specs and an `index.ts` router
 that dispatches to child directories.
+
+Command handlers return an exit code:
+
+```typescript
+export default async function commandName(argv: string[]): Promise<number | void>
+```
 
 ### Adding a new command
 
@@ -47,9 +79,11 @@ that dispatches to child directories.
 Reuse options from `src/util/commands/arg-common.ts` instead of defining
 inline:
 
-- `jsonOption`, `profileOption`, `yesOption`, `verboseOption`
-- `environmentOption`, `branchOption`, `secretOption`, `pruneOption`
-- `planOption`, `dryRunOption`, `orgOption`, `regionOption`
+- `yesOption`, `jsonOption`, `profileOption`, `verboseOption`
+- `planOption`, `dryRunOption`
+- `orgOption`, `regionOption`, `nameOption`
+- `environmentOption`, `branchOption`
+- `secretOption`, `pruneOption`
 
 ## Project context resolution
 
@@ -81,6 +115,34 @@ isn't a terminal.
 
 Don't use these in `init` or `dev` — those are wizard-based commands with
 their own patterns.
+
+## Config
+
+Loads project config from `supabase/config.json` (primary) or
+`supabase/config.toml` (legacy fallback). Validated with Zod in
+`src/lib/config-spec.ts`.
+
+Access token resolution priority: env var (`SUPABASE_ACCESS_TOKEN`) →
+OS keyring (profile-scoped) → OS keyring (legacy) → file
+(`~/.supabase/access-token`).
+
+Don't edit `src/lib/api-types.ts` directly — it's auto-generated from
+the OpenAPI spec. Regenerate with `npm run generate:api-types`.
+
+## .env setup
+
+The CLI loads `.env`, `supabase/.env`, and `.env.local` from the
+working directory at startup (`src/index.ts`). Several commands (`dev`,
+`push`, `pull`, `seed`) require `SUPABASE_DB_PASSWORD` to be set.
+`supa init` writes this to `.env` automatically when linking a project,
+but when working on the CLI itself you need to add it manually:
+
+```
+SUPABASE_DB_PASSWORD=your-db-password
+```
+
+Get the password from the Supabase dashboard. Use `--verbose` to
+confirm the CLI is picking it up.
 
 ## Documentation
 
@@ -114,3 +176,5 @@ the full docs structure.
   key-value lines (Project, Profile, Env, and so on).
 - **Spinners**: Use `p.spinner()` from `@clack/prompts` for
   interactive progress indicators.
+- **Colors**: Use semantic helpers from `src/lib/styles.ts` (`success()`,
+  `error()`, `warning()`, etc.) or raw ANSI from `src/lib/colors.ts`.

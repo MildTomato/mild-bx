@@ -3,28 +3,19 @@ title: Auth Rules
 description: Declarative authorization for Supabase
 ---
 
-Auth Rules lets you define who can access what in your Supabase app
-using simple SQL. Write rules once, and your API automatically
-enforces them.
+Auth Rules is a SQL-based authorization system for Supabase.
+You define **claims** (which entities each user belongs to) and
+**rules** (what operations are allowed on each table). The system
+generates views, triggers, and column-level security automatically.
 
-## The problem
+## How it works
 
-Row Level Security can be frustrating:
+Claims describe relationships — which orgs a user belongs to,
+which teams they're on. Rules reference those claims to control
+reads, writes, updates, and deletes.
 
-- **Silent failures** — Queries return empty results instead of telling you why
-- **Hidden logic** — Authorization rules scattered across policies
-- **Row-only** — No way to control which columns are exposed
-- **Hard to audit** — Difficult to see what access rules exist
-
-## The solution
-
-Auth Rules splits access control into two parts. **Claims** describe
-which entities each user is related to — which orgs they belong to,
-which teams they're on. **Rules** use those claims to control what
-operations are allowed on your tables.
-
-Here's a complete example. Say you have users, organizations, and
-documents. Users can only see documents in orgs they belong to.
+Here's a complete example with users, organizations, and documents.
+Users can only see documents in orgs they belong to.
 
 First, define the claim — the relationship between users and orgs:
 
@@ -52,7 +43,7 @@ SELECT auth_rules.rule('documents',
 -- Users can only delete their own documents
 SELECT auth_rules.rule('documents',
   auth_rules.delete(),
-  auth_rules.eq('created_by', auth_rules.user_id_marker())
+  auth_rules.eq('created_by', auth_rules.user_id())
 );
 ```
 
@@ -66,14 +57,14 @@ const { data } = await supabase.from('documents').select('*')
 await supabase.from('documents').insert({ org_id: 'other-org', title: 'Test' })
 ```
 
-## What you get
+## Key features
 
-Auth Rules gives you:
-
-- **Column control** — Specify exactly which fields to expose
-- **Clear errors** — Write operations fail with meaningful messages
-- **Auditable rules** — See all access rules with `SELECT * FROM auth_rules.list_rules()`
-- **No client changes** — Your existing Supabase queries work as-is
+- **Column control** — expose only the fields you specify
+- **Explicit errors** — writes fail with the column that was
+  rejected (for example, `org_id invalid`)
+- **Auditable** — list all rules with
+  `SELECT * FROM auth_rules.list_rules()`
+- **No client changes** — existing Supabase queries work as-is
 
 ## Next steps
 

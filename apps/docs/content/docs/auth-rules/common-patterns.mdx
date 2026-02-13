@@ -3,18 +3,18 @@ title: Common patterns
 description: End-to-end authorization examples
 ---
 
-Each example below shows a complete scenario — the claim, the rule, and
-the client code. Start here to see how claims and rules work together.
+Each example below shows a complete scenario — the claim, the
+rule, and the client code.
 
 ## User owns their data
 
 The simplest pattern is when users can only see their own records.
-Use `auth_rules.user_id_marker()` to match the authenticated user:
+Use `auth_rules.user_id()` to match the authenticated user:
 
 ```sql title="rules.sql"
 SELECT auth_rules.rule('profiles',
   auth_rules.select('id', 'user_id', 'bio', 'avatar_url'),
-  auth_rules.eq('user_id', auth_rules.user_id_marker())
+  auth_rules.eq('user_id', auth_rules.user_id())
 );
 ```
 
@@ -77,7 +77,7 @@ multiple conditions to validate the insert:
 SELECT auth_rules.rule('documents',
   auth_rules.insert(),
   auth_rules.eq('org_id', auth_rules.one_of('org_ids')),
-  auth_rules.eq('created_by', auth_rules.user_id_marker())
+  auth_rules.eq('created_by', auth_rules.user_id())
 );
 ```
 
@@ -108,7 +108,7 @@ For updates, specify which records users can modify:
 SELECT auth_rules.rule('documents',
   auth_rules.update(),
   auth_rules.eq('org_id', auth_rules.one_of('org_ids')),
-  auth_rules.eq('created_by', auth_rules.user_id_marker())
+  auth_rules.eq('created_by', auth_rules.user_id())
 );
 ```
 
@@ -121,7 +121,7 @@ To restrict deletes to the record owner:
 ```sql title="rules.sql"
 SELECT auth_rules.rule('documents',
   auth_rules.delete(),
-  auth_rules.eq('created_by', auth_rules.user_id_marker())
+  auth_rules.eq('created_by', auth_rules.user_id())
 );
 ```
 
@@ -148,7 +148,7 @@ Here are common patterns at a glance:
 
 | What you want | Rule |
 |---------------|------|
-| User's own data | `auth_rules.eq('user_id', auth_rules.user_id_marker())` |
+| User's own data | `auth_rules.eq('user_id', auth_rules.user_id())` |
 | Org membership | `auth_rules.eq('org_id', auth_rules.one_of('org_ids'))` |
 | Team membership | `auth_rules.eq('team_id', auth_rules.one_of('team_ids'))` |
 | Public + private | `auth_rules.or_(auth_rules.eq('is_public', true), ...)` |

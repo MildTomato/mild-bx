@@ -3,12 +3,11 @@ title: Rules
 description: Define access control rules for tables
 ---
 
-A rule answers the question: "what can users do with this data?"
-
-It specifies what operations (SELECT, INSERT, UPDATE, DELETE) are allowed
-on a table, and under what conditions. Rules reference
-[claims](/docs/auth-rules/claims) to know what each user has access to —
-a claim defines the relationship, a rule enforces it.
+A rule controls what users can do with a table — which rows they
+can read, create, update, or delete, and under what conditions.
+Rules can reference [claims](/docs/auth-rules/claims) to filter by
+membership, or use `user_id()` to match the authenticated
+user directly, or combine both.
 
 ## Creating a rule
 
@@ -75,7 +74,7 @@ the incoming row:
 SELECT auth_rules.rule('documents',
   auth_rules.insert(),
   auth_rules.eq('org_id', auth_rules.one_of('org_ids')),
-  auth_rules.eq('created_by', auth_rules.user_id_marker())
+  auth_rules.eq('created_by', auth_rules.user_id())
 );
 ```
 
@@ -89,7 +88,7 @@ both the existing row and the new values:
 ```sql title="rules.sql"
 SELECT auth_rules.rule('documents',
   auth_rules.update(),
-  auth_rules.eq('created_by', auth_rules.user_id_marker())
+  auth_rules.eq('created_by', auth_rules.user_id())
 );
 ```
 
@@ -100,7 +99,7 @@ Controls what records users can remove:
 ```sql title="rules.sql"
 SELECT auth_rules.rule('documents',
   auth_rules.delete(),
-  auth_rules.eq('created_by', auth_rules.user_id_marker())
+  auth_rules.eq('created_by', auth_rules.user_id())
 );
 ```
 
@@ -131,7 +130,7 @@ SELECT auth_rules.rule('documents',
 
 The filter functions available are:
 
-- `eq(column, value)` — column equals a value, a `user_id_marker()`,
+- `eq(column, value)` — column equals a value, a `user_id()`,
   or a `one_of()` claim reference
 - `or_(...)` — any condition must be true
 - `and_(...)` — all conditions must be true
@@ -179,12 +178,12 @@ SELECT auth_rules.rule('documents',
 -- Only the creator can update or delete
 SELECT auth_rules.rule('documents',
   auth_rules.update(),
-  auth_rules.eq('created_by', auth_rules.user_id_marker())
+  auth_rules.eq('created_by', auth_rules.user_id())
 );
 
 SELECT auth_rules.rule('documents',
   auth_rules.delete(),
-  auth_rules.eq('created_by', auth_rules.user_id_marker())
+  auth_rules.eq('created_by', auth_rules.user_id())
 );
 ```
 

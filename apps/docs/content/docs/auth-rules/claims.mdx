@@ -3,20 +3,19 @@ title: Claims
 description: Define user relationships for access control
 ---
 
-A claim maps users to entities they're related to — orgs, teams,
-folders, courses. It's a SQL query that returns these relationships
-from your existing tables.
+A claim is a SQL query that maps users to the entities they belong
+to — orgs, teams, folders, courses. It reads from your existing
+tables and tells the system "this user is in these orgs" or "this
+user is on these teams."
 
-For example, a claim might say "user Alice is in orgs `org-1` and
-`org-2`" or "user Bob is a member of team `team-5`." The claim
-doesn't grant access — it just describes the relationship.
-[Rules](/docs/auth-rules/rules) use claims to decide what operations
-are allowed.
+Claims don't grant access on their own.
+[Rules](/docs/auth-rules/rules) reference claims to control what
+users can read, create, update, and delete.
 
 ## Creating a claim
 
-A claim is a SQL query that returns user-to-value mappings. The query must
-return `user_id` as the first column:
+Define a claim with `auth_rules.claim()`. The SQL query must return
+`user_id` as the first column:
 
 ```sql title="claims.sql"
 SELECT auth_rules.claim('org_ids', $$

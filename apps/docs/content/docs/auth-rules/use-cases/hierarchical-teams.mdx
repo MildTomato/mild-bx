@@ -84,5 +84,5 @@ CREATE INDEX idx_teams_parent ON teams(parent_team_id);
 CREATE INDEX idx_team_members_user ON team_members(user_id);
 ```
 
-For very deep hierarchies (100+ levels), consider capping the recursion
-with a depth counter in the CTE to prevent timeouts.
+For very deep hierarchies (100+ levels), consider capping the
+recursion with a depth counter in the CTE to prevent timeouts.

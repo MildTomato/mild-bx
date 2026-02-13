@@ -9,7 +9,7 @@ This is the complete reference for all Auth Rules DSL functions.
 
 ### auth_rules.claim()
 
-Define a claim that maps users to values they can access.
+Define a claim that maps users to the entities they belong to.
 
 ```sql
 SELECT auth_rules.claim(name TEXT, sql TEXT);
@@ -96,7 +96,8 @@ Returns: `table_name`, `operation`, `columns`, `filters`
 
 ### auth_rules.select()
 
-Mark rule as SELECT and specify visible columns. By default, rows the user can't access are silently filtered out (filter mode).
+Mark rule as SELECT and specify visible columns. By default, rows
+the user can't access are silently filtered out (filter mode).
 
 ```sql
 auth_rules.select(VARIADIC columns TEXT[])
@@ -110,13 +111,17 @@ auth_rules.select('id', 'name', 'created_at')
 
 ### auth_rules.select_strict()
 
-Mark rule as SELECT and specify visible columns, but raise an explicit error instead of silently filtering rows (require mode).
+Mark rule as SELECT and specify visible columns, but raise an
+explicit error instead of silently filtering rows (require mode).
 
 ```sql
 auth_rules.select_strict(VARIADIC columns TEXT[])
 ```
 
-Use this when you want unauthorized access attempts to fail with an error instead of returning no results. This is useful for single-resource fetches (for example, viewing a specific document) where an empty result could be confusing.
+Use this when you want unauthorized access attempts to fail with an
+error instead of returning no results. This is useful for
+single-resource fetches (for example, viewing a specific document)
+where an empty result could be confusing.
 
 Example:
 
@@ -164,7 +169,7 @@ auth_rules.eq(column_name TEXT, value JSONB|UUID|TEXT|BOOLEAN)
 
 The value can be:
 
-- `auth_rules.user_id_marker()` — Match authenticated user
+- `auth_rules.user_id()` — Match authenticated user
 - `auth_rules.one_of('claim')` — Match any value in claim
 - A literal value (UUID, TEXT, BOOLEAN)
 
@@ -172,7 +177,7 @@ Examples:
 
 ```sql title="rules.sql"
 -- Match authenticated user
-auth_rules.eq('owner_id', auth_rules.user_id_marker())
+auth_rules.eq('owner_id', auth_rules.user_id())
 
 -- Match claim values
 auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
@@ -182,23 +187,10 @@ auth_rules.eq('status', 'published')
 auth_rules.eq('is_active', true)
 ```
 
-### auth_rules.user_id_marker()
-
-Returns a JSONB marker representing the authenticated user's ID. The
-compiler converts this to `auth.uid()` at query time.
-
-```sql
-auth_rules.user_id_marker()
-```
-
-Use this inside `eq()` in rule definitions. Don't use `user_id()` in
-rules — that returns the current UUID at definition time, not a marker
-the compiler can interpret.
-
 ### auth_rules.user_id()
 
-Returns the authenticated user's UUID directly (`auth.uid()`). This is
-a runtime helper, not for use in rule definitions.
+Match the authenticated user's ID. Use this inside `eq()` to filter
+by the current user.
 
 ```sql
 auth_rules.user_id()

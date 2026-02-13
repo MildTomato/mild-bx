@@ -104,7 +104,7 @@ $$);
 ```sql title="rules.sql"
 SELECT auth_rules.rule('files',
   auth_rules.update(),
-  auth_rules.eq('owner_id', auth_rules.user_id_marker()),
+  auth_rules.eq('owner_id', auth_rules.user_id()),
   auth_rules.eq('folder_id', auth_rules.one_of('writable_folder_ids'))
 );
 ```

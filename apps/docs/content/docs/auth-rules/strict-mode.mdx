@@ -20,7 +20,7 @@ Use `select_strict()` instead of `select()`:
 ```sql title="rules.sql"
 SELECT auth_rules.rule('user_settings',
   auth_rules.select_strict('id', 'user_id', 'theme', 'notifications'),
-  auth_rules.eq('user_id', auth_rules.user_id_marker())
+  auth_rules.eq('user_id', auth_rules.user_id())
 );
 ```
 

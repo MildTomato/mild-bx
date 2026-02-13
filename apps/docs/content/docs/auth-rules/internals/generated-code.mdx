@@ -55,12 +55,13 @@ BEGIN
     SELECT 1 FROM auth_rules_claims.org_ids
     WHERE user_id = auth.uid() AND org_id = NEW.org_id
   ) THEN
-    RAISE EXCEPTION 'Not authorized' USING ERRCODE = '42501';
+    RAISE EXCEPTION '% invalid', 'org_id'
+      USING ERRCODE = '42501';
   END IF;
 
   -- Validate created_by
   IF NEW.created_by IS DISTINCT FROM auth.uid() THEN
-    RAISE EXCEPTION 'created_by must match authenticated user'
+    RAISE EXCEPTION '% invalid', 'created_by'
       USING ERRCODE = '42501';
   END IF;
 
@@ -110,7 +111,9 @@ $$;
 ```
 
 <Callout type="info">
-The UPDATE trigger validates access via the WHERE clause. The actual column updates are handled by PostgreSQL's INSTEAD OF trigger mechanism, which passes the full NEW record back to the view.
+The UPDATE trigger validates access via the WHERE clause. The actual
+column updates are handled by PostgreSQL's INSTEAD OF trigger
+mechanism, which passes the full NEW record back to the view.
 </Callout>
 
 ```sql

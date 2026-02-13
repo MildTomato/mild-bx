@@ -54,7 +54,10 @@ WITH (security_invoker = false)
 AS SELECT user_id, org_id FROM org_members;
 ```
 
-The `security_invoker = false` setting means the view runs with the owner's privileges (postgres), not the calling user's. This allows the view to read tables that `authenticated` users can't access directly.
+The `security_invoker = false` setting means the view runs with the
+owner's privileges (postgres), not the calling user's. This allows
+the view to read tables that `authenticated` users can't access
+directly.
 
 ## Flow: defining a rule
 
@@ -109,7 +112,7 @@ BEGIN
     SELECT 1 FROM auth_rules_claims.org_ids
     WHERE user_id = auth.uid() AND org_id = NEW.org_id
   ) THEN
-    RAISE EXCEPTION 'Not a member of this organization'
+    RAISE EXCEPTION '% invalid', 'org_id'
       USING ERRCODE = '42501';
   END IF;
 
@@ -141,7 +144,8 @@ auth_rules.require_user('owner_id', some_value)
 -- Returns TRUE if value matches auth.uid(), raises exception if not
 ```
 
-These are marked `VOLATILE` to ensure PostgreSQL evaluates them after other WHERE conditions.
+These are marked `VOLATILE` to ensure PostgreSQL evaluates them
+after other WHERE conditions.
 
 ## Cleanup
 
@@ -157,7 +161,8 @@ CREATE TABLE auth_rules.generated_objects (
 );
 ```
 
-When you call `auth_rules.drop_rules('table_name')`, it uses this table to find and remove all generated objects.
+When you call `auth_rules.drop_rules('table_name')`, it uses this
+table to find and remove all generated objects.
 
 Similarly, `auth_rules.generated_claims` tracks claim views:
 

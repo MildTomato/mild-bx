@@ -1,20 +1,20 @@
 ---
-title: Basic usage
-description: Common authorization patterns
+title: Common patterns
+description: End-to-end authorization examples
 ---
 
-This page covers the most common authorization patterns you need. Each example
-shows what you want to achieve and the rules to make it happen.
+Each example below shows a complete scenario — the claim, the rule, and
+the client code. Start here to see how claims and rules work together.
 
 ## User owns their data
 
-The simplest pattern is when users can only see their own records. Use
-`auth_rules.user_id()` to match the authenticated user:
+The simplest pattern is when users can only see their own records.
+Use `auth_rules.user_id_marker()` to match the authenticated user:
 
 ```sql title="rules.sql"
 SELECT auth_rules.rule('profiles',
   auth_rules.select('id', 'user_id', 'bio', 'avatar_url'),
-  auth_rules.eq('user_id', auth_rules.user_id())
+  auth_rules.eq('user_id', auth_rules.user_id_marker())
 );
 ```
 
@@ -77,11 +77,12 @@ multiple conditions to validate the insert:
 SELECT auth_rules.rule('documents',
   auth_rules.insert(),
   auth_rules.eq('org_id', auth_rules.one_of('org_ids')),
-  auth_rules.eq('created_by', auth_rules.user_id())
+  auth_rules.eq('created_by', auth_rules.user_id_marker())
 );
 ```
 
-If a user tries to create a document in an org they don't belong to, they get a clear error:
+If a user tries to create a document in an org they don't belong
+to, they get a clear error:
 
 ```typescript title="app.ts"
 // Works - user is in this org
@@ -91,7 +92,7 @@ await supabase.from('documents').insert({
   created_by: currentUser.id
 })
 
-// Fails with "Not a member of this organization"
+// Fails with error code 42501 (org_id invalid)
 await supabase.from('documents').insert({
   org_id: 'other-org',
   title: 'Report',
@@ -107,7 +108,7 @@ For updates, specify which records users can modify:
 SELECT auth_rules.rule('documents',
   auth_rules.update(),
   auth_rules.eq('org_id', auth_rules.one_of('org_ids')),
-  auth_rules.eq('created_by', auth_rules.user_id())
+  auth_rules.eq('created_by', auth_rules.user_id_marker())
 );
 ```
 
@@ -120,7 +121,7 @@ To restrict deletes to the record owner:
 ```sql title="rules.sql"
 SELECT auth_rules.rule('documents',
   auth_rules.delete(),
-  auth_rules.eq('created_by', auth_rules.user_id())
+  auth_rules.eq('created_by', auth_rules.user_id_marker())
 );
 ```
 
@@ -138,7 +139,8 @@ SELECT auth_rules.rule('documents',
 );
 ```
 
-Unauthenticated users see only public documents. Authenticated users see public documents plus documents from their orgs.
+Unauthenticated users see only public documents. Authenticated
+users see public documents plus documents from their orgs.
 
 ## Quick reference
 
@@ -146,17 +148,17 @@ Here are common patterns at a glance:
 
 | What you want | Rule |
 |---------------|------|
-| User's own data | `auth_rules.eq('user_id', auth_rules.user_id())` |
+| User's own data | `auth_rules.eq('user_id', auth_rules.user_id_marker())` |
 | Org membership | `auth_rules.eq('org_id', auth_rules.one_of('org_ids'))` |
 | Team membership | `auth_rules.eq('team_id', auth_rules.one_of('team_ids'))` |
-| Public + private | `auth_rules.or_(eq('is_public', true), ...)` |
+| Public + private | `auth_rules.or_(auth_rules.eq('is_public', true), ...)` |
 
 ## Error codes
 
-Write operations (insert, update, delete) return meaningful HTTP errors:
+Write operations (insert, update, delete) raise PostgreSQL exceptions
+when access is denied. The error message includes the column that
+failed validation (for example, `org_id invalid`).
 
-| Error | HTTP Status | Meaning |
-|-------|-------------|---------|
-| `P0002` | 404 | Record doesn't exist or you don't have access |
-| `42501` | 403 | You don't have permission for this action |
-| `22023` | 400 | Invalid parameter |
+| Error code | HTTP status | Meaning |
+|------------|-------------|---------|
+| `42501` | 403 | Column value not authorized (for example, `org_id invalid`) |

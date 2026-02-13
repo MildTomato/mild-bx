@@ -3,10 +3,15 @@
   "root": true,
   "pages": [
     "index",
-    "basic-usage",
+    "---Basics---",
     "claims",
+    "rules",
+    "common-patterns",
+    "---Advanced---",
     "check-claim",
-    "advanced",
+    "strict-mode",
+    "---Use Cases---",
+    "...use-cases",
     "---Internals---",
     "...internals"
   ]

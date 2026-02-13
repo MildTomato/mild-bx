@@ -1,0 +1,64 @@
+---
+title: Audit logs
+description: Restrict audit log access to organization admins
+---
+
+Audit logs track sensitive actions. Only org admins should be able to
+view them. This combines role-based claims with a SELECT rule.
+
+## The schema
+
+```sql title="schema.sql"
+CREATE TABLE audit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id UUID NOT NULL,
+  actor_id UUID NOT NULL,
+  action TEXT NOT NULL,
+  details JSONB,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE org_members (
+  user_id UUID NOT NULL,
+  org_id UUID NOT NULL,
+  role TEXT NOT NULL  -- 'viewer', 'member', 'admin', 'owner'
+);
+```
+
+## The claim
+
+Create a claim that maps users to orgs where they're an admin or
+owner:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('admin_org_ids', $$
+  SELECT user_id, org_id
+  FROM org_members
+  WHERE role IN ('admin', 'owner')
+$$);
+```
+
+## The rule
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('audit_logs',
+  auth_rules.select('id', 'org_id', 'actor_id', 'action',
+    'details', 'created_at'),
+  auth_rules.eq('org_id', auth_rules.one_of('admin_org_ids'))
+);
+```
+
+Non-admin users see no audit log entries. Admin users see logs only
+for their own orgs.
+
+## Client code
+
+```typescript title="app.ts"
+// Only returns logs for orgs where user is admin
+const { data } = await supabase
+  .from('audit_logs')
+  .select('*')
+  .eq('org_id', orgId)
+  .order('created_at', { ascending: false })
+  .schema('data_api')
+```

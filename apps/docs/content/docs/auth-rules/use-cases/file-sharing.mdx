@@ -1,0 +1,149 @@
+---
+title: File sharing
+description: Recursive folder sharing with file and folder access
+---
+
+A Dropbox-style file system where sharing a folder grants access to
+all files and subfolders inside it. This combines recursive CTEs for
+folder hierarchy with UNION-based claims for multiple access paths.
+
+## The schema
+
+```sql title="schema.sql"
+CREATE TABLE folders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  parent_id UUID REFERENCES folders(id),
+  owner_id UUID NOT NULL,
+  name TEXT NOT NULL
+);
+
+CREATE TABLE files (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  folder_id UUID REFERENCES folders(id),
+  owner_id UUID NOT NULL,
+  name TEXT NOT NULL,
+  content TEXT
+);
+
+CREATE TABLE shares (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  resource_type TEXT NOT NULL,  -- 'file' or 'folder'
+  resource_id UUID NOT NULL,
+  shared_with_user_id UUID NOT NULL
+);
+```
+
+## The claims
+
+Folder access combines ownership with shared folder hierarchies:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('accessible_folder_ids', $$
+  -- Folders user owns
+  SELECT owner_id AS user_id, id FROM folders
+  UNION
+  -- Folders shared with user, plus all subfolders
+  SELECT shares.shared_with_user_id AS user_id, descendant.id
+  FROM shares
+  JOIN LATERAL (
+    WITH RECURSIVE folder_tree AS (
+      SELECT id FROM folders WHERE id = shares.resource_id
+      UNION ALL
+      SELECT f.id FROM folders f
+      JOIN folder_tree ft ON f.parent_id = ft.id
+    )
+    SELECT id FROM folder_tree
+  ) descendant ON true
+  WHERE shares.resource_type = 'folder'
+$$);
+```
+
+File access combines ownership, direct shares, and folder membership:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('accessible_file_ids', $$
+  -- Files user owns
+  SELECT owner_id AS user_id, id FROM files
+  UNION
+  -- Files shared directly
+  SELECT shared_with_user_id AS user_id, resource_id AS id
+  FROM shares WHERE resource_type = 'file'
+  UNION
+  -- Files in accessible folders
+  SELECT af.user_id, f.id
+  FROM auth_rules_claims.accessible_folder_ids af
+  JOIN files f ON f.folder_id = af.id
+$$);
+```
+
+## The rules
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('folders',
+  auth_rules.select('id', 'parent_id', 'owner_id', 'name'),
+  auth_rules.eq('id', auth_rules.one_of('accessible_folder_ids'))
+);
+
+SELECT auth_rules.rule('files',
+  auth_rules.select('id', 'folder_id', 'owner_id', 'name', 'content'),
+  auth_rules.eq('id', auth_rules.one_of('accessible_file_ids'))
+);
+```
+
+## Moving files between folders
+
+To allow moving files, add a writable folders claim and an UPDATE rule
+that validates both ownership and the destination:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('writable_folder_ids', $$
+  SELECT owner_id AS user_id, id FROM folders
+$$);
+```
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('files',
+  auth_rules.update(),
+  auth_rules.eq('owner_id', auth_rules.user_id_marker()),
+  auth_rules.eq('folder_id', auth_rules.one_of('writable_folder_ids'))
+);
+```
+
+The first condition validates the user owns the file. The second
+validates the destination folder is writable. If either fails, the
+update is rejected with error code `42501`.
+
+## Client code
+
+```typescript title="app.ts"
+// List folders the user can access
+const { data: folders } = await supabase
+  .from('folders')
+  .select('*')
+  .schema('data_api')
+
+// List files in a specific folder
+const { data: files } = await supabase
+  .from('files')
+  .select('*')
+  .eq('folder_id', folderId)
+  .schema('data_api')
+
+// Move a file to a different folder
+await supabase
+  .from('files')
+  .update({ folder_id: newFolderId })
+  .eq('id', fileId)
+  .schema('data_api')
+```
+
+## Performance
+
+Index the recursive join columns for efficient folder traversal:
+
+```sql title="indexes.sql"
+CREATE INDEX idx_folders_parent ON folders(parent_id);
+CREATE INDEX idx_folders_owner ON folders(owner_id);
+CREATE INDEX idx_files_folder ON files(folder_id);
+CREATE INDEX idx_shares_resource ON shares(resource_type, resource_id);
+```

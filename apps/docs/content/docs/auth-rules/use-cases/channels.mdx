@@ -1,0 +1,83 @@
+---
+title: Public and private channels
+description: Slack-style workspaces with public and private channels
+---
+
+Workspaces with both public and private channels need two levels of
+access control. Public channels are visible to all workspace members.
+Private channels require explicit membership.
+
+## The schema
+
+```sql title="schema.sql"
+CREATE TABLE workspaces (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL
+);
+
+CREATE TABLE workspace_members (
+  user_id UUID NOT NULL,
+  workspace_id UUID NOT NULL
+);
+
+CREATE TABLE channels (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id),
+  name TEXT NOT NULL,
+  is_private BOOLEAN NOT NULL DEFAULT false
+);
+
+CREATE TABLE channel_members (
+  user_id UUID NOT NULL,
+  channel_id UUID NOT NULL
+);
+```
+
+## The claims
+
+Two claims: workspace membership and private channel membership.
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('workspace_ids', $$
+  SELECT user_id, workspace_id FROM workspace_members
+$$);
+
+SELECT auth_rules.claim('private_channel_ids', $$
+  SELECT cm.user_id, cm.channel_id
+  FROM channel_members cm
+  JOIN channels c ON c.id = cm.channel_id
+  WHERE c.is_private = TRUE
+$$);
+```
+
+## The rule
+
+Combine workspace membership with a public/private check:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('channels',
+  auth_rules.select('id', 'workspace_id', 'name', 'is_private'),
+  auth_rules.and_(
+    auth_rules.eq('workspace_id', auth_rules.one_of('workspace_ids')),
+    auth_rules.or_(
+      auth_rules.eq('is_private', false),
+      auth_rules.eq('id', auth_rules.one_of('private_channel_ids'))
+    )
+  )
+);
+```
+
+The `and_()` ensures users only see channels in their workspaces. The
+inner `or_()` lets through public channels for everyone and private
+channels only for members.
+
+## Client code
+
+```typescript title="app.ts"
+// All channels user can see in a workspace
+const { data } = await supabase
+  .from('channels')
+  .select('*')
+  .eq('workspace_id', workspaceId)
+  .schema('data_api')
+```

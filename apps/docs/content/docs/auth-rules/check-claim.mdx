@@ -3,8 +3,9 @@ title: Role-based access
 description: Control access based on user roles
 ---
 
-Sometimes membership isn't enough — you need to know the user's *role* within
-an organization. Auth Rules handles this with `check()`.
+Sometimes membership isn't enough — you need to know the user's
+*role* within an organization. Auth Rules handles this with
+`check()`.
 
 ## The problem
 
@@ -18,7 +19,9 @@ CREATE TABLE org_members (
 );
 ```
 
-All members can view documents, but only admins and owners should see billing. You could create separate claims for each role, but that doesn't scale well.
+All members can view documents, but only admins and owners can see
+billing. You could create separate claims for each role, but that
+doesn't scale well.
 
 ## The solution
 
@@ -35,7 +38,7 @@ Then use `check()` to filter by role:
 ```sql title="rules.sql"
 SELECT auth_rules.rule('billing',
   auth_rules.select('id', 'org_id', 'amount', 'due_date'),
-  auth_rules.in_claim('org_id', 'org_ids',
+  auth_rules.in_claim('org_id', 'org_roles',
     auth_rules.check('org_roles', 'role', ARRAY['admin', 'owner']))
 );
 ```
@@ -44,17 +47,23 @@ Users only see billing records for orgs where they're an admin or owner.
 
 ## How check() works
 
-The `check()` function filters the claim by a property:
+The `check()` function filters a claim by checking another column
+within it. It's used with `in_claim()` to validate that a user's
+claim row has the right property value.
 
 ```sql
-auth_rules.check('claim_name', 'property', ARRAY['allowed', 'values'])
+auth_rules.check('claim_name', 'property_column', ARRAY['allowed', 'values'])
 ```
 
 | Parameter | Description |
 |-----------|-------------|
-| `claim_name` | The claim to check (must have this column) |
-| `property` | Column name to filter on |
-| `allowed values` | Array of acceptable values |
+| `claim_name` | The claim to filter (must include the property column) |
+| `property_column` | Column name in the claim to check (for example, `role`, `status`, `plan`) |
+| `allowed_values` | Array of acceptable values for that column |
+
+For example, if your `org_roles` claim has columns
+`(user_id, org_id, role)`, you use `check()` to validate that the
+`role` column matches one of the allowed roles.
 
 ## Example: role hierarchy
 
@@ -93,7 +102,7 @@ $$);
 ```sql title="rules.sql"
 SELECT auth_rules.rule('analytics',
   auth_rules.select('id', 'org_id', 'data'),
-  auth_rules.in_claim('org_id', 'org_ids',
+  auth_rules.in_claim('org_id', 'org_plans',
     auth_rules.check('org_plans', 'plan', ARRAY['pro', 'enterprise']))
 );
 ```
@@ -113,7 +122,7 @@ $$);
 ```sql title="rules.sql"
 SELECT auth_rules.rule('deployments',
   auth_rules.insert(),
-  auth_rules.in_claim('project_id', 'project_ids',
+  auth_rules.in_claim('project_id', 'project_status',
     auth_rules.check('project_status', 'status', ARRAY['approved']))
 );
 ```
@@ -131,34 +140,40 @@ $$);
 ```sql title="rules.sql"
 SELECT auth_rules.rule('documents',
   auth_rules.select('id', 'title'),
-  auth_rules.in_claim('org_id', 'org_ids',
+  auth_rules.in_claim('org_id', 'org_membership',
     auth_rules.check('org_membership', 'status', ARRAY['active']))
 );
 ```
 
-## Multiple checks
+## Multiple conditions
 
-You can combine multiple checks. For example, to require both admin role AND
-active status:
+Each `in_claim()` accepts one `check()` condition. To combine multiple
+conditions, use `and_()` with separate `in_claim()` calls:
 
 ```sql title="rules.sql"
 SELECT auth_rules.rule('billing',
   auth_rules.select('id', 'org_id', 'amount'),
-  auth_rules.in_claim('org_id', 'org_ids',
-    auth_rules.check('org_membership', 'role', ARRAY['admin', 'owner']),
-    auth_rules.check('org_membership', 'status', ARRAY['active'])
+  auth_rules.and_(
+    auth_rules.in_claim('org_id', 'org_membership',
+      auth_rules.check('org_membership', 'role', ARRAY['admin', 'owner'])),
+    auth_rules.in_claim('org_id', 'org_membership',
+      auth_rules.check('org_membership', 'status', ARRAY['active']))
   )
 );
 ```
 
-## Behavior note
+## Default behavior
 
-With `check()`, rows that don't match are filtered out silently. If a user
-queries billing for an org where they're a viewer, they get an empty result
-(not an error).
+By default, rows that don't match the `check()` condition are
+filtered out silently. If a user queries billing for an org where
+they're a viewer, they get an empty result (not an error). This is
+the expected behavior for SELECT — you see what you have access to.
 
-This is the expected behavior for SELECT — you see what you have access to.
-For writes, you get explicit errors if access is denied.
+To fail with an error instead, use `auth_rules.select_strict()`.
+See [Require on SELECT](/docs/auth-rules/strict-mode) for details.
+
+For writes (insert, update, delete), you always get explicit errors
+if access is denied.
 
 ## Performance
 

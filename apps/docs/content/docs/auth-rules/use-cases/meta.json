@@ -1,0 +1,12 @@
+{
+  "title": "Use Cases",
+  "defaultOpen": true,
+  "pages": [
+    "hierarchical-teams",
+    "time-limited-access",
+    "file-sharing",
+    "channels",
+    "cross-tenant-sharing",
+    "audit-logs"
+  ]
+}

@@ -1,0 +1,216 @@
+---
+title: Rules
+description: Define access control rules for tables
+---
+
+A rule answers the question: "what can users do with this data?"
+
+It specifies what operations (SELECT, INSERT, UPDATE, DELETE) are allowed
+on a table, and under what conditions. Rules reference
+[claims](/docs/auth-rules/claims) to know what each user has access to —
+a claim defines the relationship, a rule enforces it.
+
+## Creating a rule
+
+Define a rule with `auth_rules.rule()`. Pass the table name, an operation
+marker, and one or more filter conditions:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'title', 'content'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+```
+
+Breaking this down:
+
+```sql
+SELECT auth_rules.rule('documents',
+--                      ^^^^^^^^^^^
+--                      Table in public schema
+
+  auth_rules.select('id', 'title', 'content'),
+--           ^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^
+--           │       Only these columns are exposed
+--           Operation type
+
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+--              ^^^^^^^^                     ^^^^^^^^
+--              │                            Reference to claim
+--              Column to filter on
+);
+```
+
+Only rows where `org_id` matches the user's `org_ids` claim are
+returned, and only the `id`, `title`, and `content` columns are
+visible.
+
+## Operation markers
+
+Each rule needs exactly one operation marker to specify what it controls.
+
+### SELECT
+
+Controls which rows and columns users can read. Pass the list of visible
+columns as arguments:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'title', 'org_id'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+```
+
+Columns not in the list are never returned, even if explicitly requested.
+By default, unauthorized rows are silently excluded. Use
+`auth_rules.select_strict()` to raise an error instead — see
+[Require on SELECT](/docs/auth-rules/strict-mode).
+
+### INSERT
+
+Controls what data users can create. Every condition is validated against
+the incoming row:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.insert(),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids')),
+  auth_rules.eq('created_by', auth_rules.user_id_marker())
+);
+```
+
+If any condition fails, the insert is rejected with error code `42501`.
+
+### UPDATE
+
+Controls what records users can modify. Conditions are validated against
+both the existing row and the new values:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.update(),
+  auth_rules.eq('created_by', auth_rules.user_id_marker())
+);
+```
+
+### DELETE
+
+Controls what records users can remove:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.delete(),
+  auth_rules.eq('created_by', auth_rules.user_id_marker())
+);
+```
+
+## Filter conditions
+
+Filters define the conditions that must be true for the operation to
+proceed. Pass multiple filters to combine them with AND:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'title'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids')),
+  auth_rules.eq('status', 'published')
+);
+```
+
+Use `or_()` and `and_()` for more complex logic:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'title'),
+  auth_rules.or_(
+    auth_rules.eq('is_public', true),
+    auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+  )
+);
+```
+
+The filter functions available are:
+
+- `eq(column, value)` — column equals a value, a `user_id_marker()`,
+  or a `one_of()` claim reference
+- `or_(...)` — any condition must be true
+- `and_(...)` — all conditions must be true
+- `in_claim()` with `check()` — for role-based filtering (see
+  [Role-based access](/docs/auth-rules/check-claim))
+
+## Rule constraints
+
+There are two constraints to keep in mind when defining rules.
+
+**One rule per operation.** Each table can have one rule per operation
+(one SELECT, one INSERT, one UPDATE, one DELETE). Defining a second
+SELECT rule for the same table replaces the first.
+
+**SELECT before writes.** You must define the SELECT rule before any
+INSERT, UPDATE, or DELETE rules. Write rules depend on the generated
+`data_api` view, which is created by the SELECT rule.
+
+```sql title="rules.sql"
+-- 1. SELECT first (creates the data_api view)
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'title', 'org_id'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+
+-- 2. Then write rules
+SELECT auth_rules.rule('documents',
+  auth_rules.insert(),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+```
+
+## Multiple rules per table
+
+You can define separate rules for each operation on the same table. Each
+operation has independent access control:
+
+```sql title="rules.sql"
+-- Anyone in the org can read
+SELECT auth_rules.rule('documents',
+  auth_rules.select('id', 'title', 'org_id'),
+  auth_rules.eq('org_id', auth_rules.one_of('org_ids'))
+);
+
+-- Only the creator can update or delete
+SELECT auth_rules.rule('documents',
+  auth_rules.update(),
+  auth_rules.eq('created_by', auth_rules.user_id_marker())
+);
+
+SELECT auth_rules.rule('documents',
+  auth_rules.delete(),
+  auth_rules.eq('created_by', auth_rules.user_id_marker())
+);
+```
+
+A user might be able to read all org documents but only modify the ones
+they created.
+
+## Managing rules
+
+List all defined rules:
+
+```sql
+SELECT * FROM auth_rules.list_rules();
+```
+
+Remove all rules for a table:
+
+```sql
+SELECT auth_rules.drop_rules('documents');
+```
+
+## Error codes
+
+Write operations (insert, update, delete) raise PostgreSQL exceptions
+when access is denied. The error message includes the column that
+failed validation (for example, `org_id invalid`).
+
+| Error code | HTTP status | Meaning |
+|------------|-------------|---------|
+| `42501` | 403 | Column value not authorized (for example, `org_id invalid`) |

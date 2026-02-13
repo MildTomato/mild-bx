@@ -1,0 +1,61 @@
+---
+title: Require on SELECT
+description: Raise errors instead of filtering unauthorized rows
+---
+
+By default, SELECT rules silently filter out rows the user can't
+access. `select_strict()` changes this — it raises an error instead,
+so you can tell the difference between "not found" and "not allowed."
+
+<Callout type="info">
+`select_strict()` runs a validation function on every row the query
+touches. On large result sets this adds overhead — see
+[How it works](#how-it-works).
+</Callout>
+
+## Usage
+
+Use `select_strict()` instead of `select()`:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('user_settings',
+  auth_rules.select_strict('id', 'user_id', 'theme', 'notifications'),
+  auth_rules.eq('user_id', auth_rules.user_id_marker())
+);
+```
+
+If the user doesn't have access, the query returns error code `42501`
+instead of an empty result:
+
+```typescript title="app.ts"
+const { data, error } = await supabase
+  .from('user_settings')
+  .select('*')
+  .single()
+
+if (error?.code === '42501') {
+  // Permission denied
+}
+if (error?.code === 'PGRST116') {
+  // Row doesn't exist
+}
+```
+
+## select() vs. select_strict()
+
+Both enforce the same authorization logic. The difference is what
+happens when a user hits a row they can't access:
+
+- `select()` — row is excluded silently.
+- `select_strict()` — query returns error `42501`.
+
+## How it works
+
+Under the hood, `select_strict()` adds a `require()` function call to
+the generated view's WHERE clause. This function checks the user's
+claim for each row and raises a `42501` exception if the check fails.
+
+Because `require()` runs per row, `select_strict()` adds overhead
+proportional to the number of rows the query examines. For a lookup
+by primary key, this is negligible. For queries that scan large
+tables, factor this into your performance testing.

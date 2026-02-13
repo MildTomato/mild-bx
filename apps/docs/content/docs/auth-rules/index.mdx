@@ -3,7 +3,9 @@ title: Auth Rules
 description: Declarative authorization for Supabase
 ---
 
-Auth Rules lets you define who can access what in your Supabase app using simple SQL. Write rules once, and your API automatically enforces them.
+Auth Rules lets you define who can access what in your Supabase app
+using simple SQL. Write rules once, and your API automatically
+enforces them.
 
 ## The problem
 
@@ -16,9 +18,13 @@ Row Level Security can be frustrating:
 
 ## The solution
 
-With Auth Rules, you define access in two parts: **claims** (what users have access to) and **rules** (what they can do with it).
+Auth Rules splits access control into two parts. **Claims** describe
+which entities each user is related to — which orgs they belong to,
+which teams they're on. **Rules** use those claims to control what
+operations are allowed on your tables.
 
-Here's a complete example. Say you have users, organizations, and documents. Users should only see documents in orgs they belong to.
+Here's a complete example. Say you have users, organizations, and
+documents. Users can only see documents in orgs they belong to.
 
 First, define the claim — the relationship between users and orgs:
 
@@ -46,7 +52,7 @@ SELECT auth_rules.rule('documents',
 -- Users can only delete their own documents
 SELECT auth_rules.rule('documents',
   auth_rules.delete(),
-  auth_rules.eq('created_by', auth_rules.user_id())
+  auth_rules.eq('created_by', auth_rules.user_id_marker())
 );
 ```
 
@@ -74,9 +80,11 @@ Auth Rules gives you:
 Learn more about Auth Rules:
 
 <Cards>
-  <Card title="Basic Usage" href="/docs/auth-rules/basic-usage" />
   <Card title="Claims" href="/docs/auth-rules/claims" />
+  <Card title="Rules" href="/docs/auth-rules/rules" />
+  <Card title="Common Patterns" href="/docs/auth-rules/common-patterns" />
   <Card title="Role-Based Access" href="/docs/auth-rules/check-claim" />
-  <Card title="Advanced Patterns" href="/docs/auth-rules/advanced" />
+  <Card title="Require on SELECT" href="/docs/auth-rules/strict-mode" />
+  <Card title="File Sharing" href="/docs/auth-rules/use-cases/file-sharing" />
   <Card title="How It Works" href="/docs/auth-rules/internals" />
 </Cards>

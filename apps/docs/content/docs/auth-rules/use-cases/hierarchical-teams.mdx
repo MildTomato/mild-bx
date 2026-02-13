@@ -1,0 +1,88 @@
+---
+title: Hierarchical teams
+description: Grant access through parent-child team relationships
+---
+
+Users in a parent team often need access to all child team resources.
+A recursive claim expands team membership downward through the
+hierarchy automatically.
+
+## The schema
+
+Teams reference their parent via `parent_team_id`:
+
+```sql title="schema.sql"
+CREATE TABLE teams (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  parent_team_id UUID REFERENCES teams(id)
+);
+
+CREATE TABLE team_members (
+  user_id UUID NOT NULL,
+  team_id UUID NOT NULL
+);
+```
+
+For example:
+
+```
+Engineering (user is member)
+├── Frontend
+│   └── React Squad
+└── Backend
+```
+
+A member of "Engineering" can access resources for Frontend, Backend,
+and React Squad.
+
+## The claim
+
+Use a recursive CTE to expand team membership to all descendants:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('accessible_team_ids', $$
+  WITH RECURSIVE team_tree AS (
+    -- Direct membership
+    SELECT user_id, team_id FROM team_members
+    UNION
+    -- Inherit access to child teams
+    SELECT tt.user_id, t.id AS team_id
+    FROM team_tree tt
+    JOIN teams t ON t.parent_team_id = tt.team_id
+  )
+  SELECT DISTINCT user_id, team_id FROM team_tree
+$$);
+```
+
+## The rule
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('team_resources',
+  auth_rules.select('id', 'team_id', 'name'),
+  auth_rules.eq('team_id', auth_rules.one_of('accessible_team_ids'))
+);
+```
+
+## Client code
+
+```typescript title="app.ts"
+// Returns resources from user's team and all child teams
+const { data } = await supabase
+  .from('team_resources')
+  .select('*')
+  .schema('data_api')
+```
+
+## Performance
+
+Index `teams.parent_team_id` and `team_members.user_id` for efficient
+recursive lookups:
+
+```sql title="indexes.sql"
+CREATE INDEX idx_teams_parent ON teams(parent_team_id);
+CREATE INDEX idx_team_members_user ON team_members(user_id);
+```
+
+For very deep hierarchies (100+ levels), consider capping the recursion
+with a depth counter in the CTE to prevent timeouts.

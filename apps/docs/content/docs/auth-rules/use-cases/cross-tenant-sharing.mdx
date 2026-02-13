@@ -1,0 +1,77 @@
+---
+title: Cross-tenant sharing
+description: Share resources between separate tenants
+---
+
+Multi-tenant apps sometimes need to share specific resources across
+tenant boundaries — for example, when Tenant A shares a report with
+Tenant B. This requires combining owned and shared access paths.
+
+## The schema
+
+```sql title="schema.sql"
+CREATE TABLE tenants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL
+);
+
+CREATE TABLE tenant_users (
+  user_id UUID NOT NULL,
+  tenant_id UUID NOT NULL
+);
+
+CREATE TABLE resources (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  name TEXT NOT NULL
+);
+
+CREATE TABLE resource_shares (
+  resource_id UUID NOT NULL,
+  shared_with_tenant_id UUID NOT NULL
+);
+```
+
+## The claims
+
+One claim for the user's own tenants, another for resources shared
+with those tenants:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('tenant_ids', $$
+  SELECT user_id, tenant_id FROM tenant_users
+$$);
+
+SELECT auth_rules.claim('shared_resource_ids', $$
+  SELECT tu.user_id, rs.resource_id
+  FROM tenant_users tu
+  JOIN resource_shares rs ON rs.shared_with_tenant_id = tu.tenant_id
+$$);
+```
+
+## The rule
+
+Combine owned and shared access with `or_()`:
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('resources',
+  auth_rules.select('id', 'tenant_id', 'name'),
+  auth_rules.or_(
+    auth_rules.eq('tenant_id', auth_rules.one_of('tenant_ids')),
+    auth_rules.eq('id', auth_rules.one_of('shared_resource_ids'))
+  )
+);
+```
+
+Users see all resources from their own tenants, plus any resources
+explicitly shared with their tenants.
+
+## Client code
+
+```typescript title="app.ts"
+// Returns owned + shared resources
+const { data } = await supabase
+  .from('resources')
+  .select('*')
+  .schema('data_api')
+```

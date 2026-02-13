@@ -1,0 +1,68 @@
+---
+title: Time-limited access
+description: Automatically expire access based on dates
+---
+
+Subscriptions, enrollments, and trial periods all need access that
+starts and stops at specific times. Because claims are live SQL
+queries, you can filter by `now()` and access expires automatically.
+
+## The claim
+
+Filter memberships to only active time ranges:
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('active_course_ids', $$
+  SELECT user_id, course_id
+  FROM enrollments
+  WHERE starts_at <= now() AND ends_at >= now()
+$$);
+```
+
+The `now()` is evaluated at query time, so when the enrollment period
+ends, access stops immediately — no background jobs or cache
+invalidation needed.
+
+## The rule
+
+```sql title="rules.sql"
+SELECT auth_rules.rule('course_content',
+  auth_rules.select('id', 'course_id', 'title', 'video_url'),
+  auth_rules.eq('course_id', auth_rules.one_of('active_course_ids'))
+);
+```
+
+## Client code
+
+```typescript title="app.ts"
+// Only returns content for active enrollments
+const { data } = await supabase
+  .from('course_content')
+  .select('*')
+  .schema('data_api')
+```
+
+## Other time-based patterns
+
+The same approach works for any time-constrained access.
+
+### Subscription tiers
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('active_subscription_org_ids', $$
+  SELECT om.user_id, o.id AS org_id
+  FROM org_members om
+  JOIN organizations o ON o.id = om.org_id
+  WHERE o.subscription_ends_at >= now()
+$$);
+```
+
+### Temporary link shares
+
+```sql title="claims.sql"
+SELECT auth_rules.claim('valid_link_file_ids', $$
+  SELECT ls.created_by AS user_id, ls.resource_id AS file_id
+  FROM link_shares ls
+  WHERE ls.expires_at IS NULL OR ls.expires_at >= now()
+$$);
+```

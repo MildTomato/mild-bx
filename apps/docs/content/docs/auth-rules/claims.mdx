@@ -3,9 +3,15 @@ title: Claims
 description: Define user relationships for access control
 ---
 
-Claims answer the question "what does this user have access to?" They're the
-foundation of Auth Rules — you define relationships once, then reference them
-in your rules.
+A claim maps users to entities they're related to — orgs, teams,
+folders, courses. It's a SQL query that returns these relationships
+from your existing tables.
+
+For example, a claim might say "user Alice is in orgs `org-1` and
+`org-2`" or "user Bob is a member of team `team-5`." The claim
+doesn't grant access — it just describes the relationship.
+[Rules](/docs/auth-rules/rules) use claims to decide what operations
+are allowed.
 
 ## Creating a claim
 
@@ -18,11 +24,29 @@ SELECT auth_rules.claim('org_ids', $$
 $$);
 ```
 
-This creates a claim called `org_ids` that maps each user to their organization IDs.
+Breaking this down:
+
+```sql
+SELECT auth_rules.claim('org_ids', $$
+--                       ^^^^^^^^
+--                       Name — referenced by rules later
+
+  SELECT user_id, org_id FROM org_members
+--       ^^^^^^^  ^^^^^^      ^^^^^^^^^^^
+--       │        │           Source table (your existing data)
+--       │        Value column (the entity)
+--       Required first column
+$$);
+```
+
+Now the system knows which org IDs belong to each user. Nothing is
+enforced yet — [rules](/docs/auth-rules/rules) use this claim to
+control what users can actually do.
 
 ## Using claims in rules
 
-Reference claims with `auth_rules.one_of()`:
+Reference a claim with `auth_rules.one_of()` inside an `eq()`
+filter:
 
 ```sql title="rules.sql"
 SELECT auth_rules.rule('documents',
@@ -31,28 +55,12 @@ SELECT auth_rules.rule('documents',
 );
 ```
 
-This means "only return documents where `org_id` is one of the user's `org_ids`".
+This means "only return documents where `org_id` is one of the
+user's `org_ids`."
 
-## Claims with multiple columns
-
-Claims can include additional information like roles, which is useful for
-role-based access control. Include the role in your claim:
-
-```sql title="claims.sql"
-SELECT auth_rules.claim('org_roles', $$
-  SELECT user_id, org_id, role FROM org_members
-$$);
-```
-
-Then use `check()` to filter by role (see [Role-Based Access](/docs/auth-rules/check-claim)):
-
-```sql title="rules.sql"
-SELECT auth_rules.rule('billing',
-  auth_rules.select('id', 'org_id', 'amount'),
-  auth_rules.in_claim('org_id', 'org_ids',
-    auth_rules.check('org_roles', 'role', ARRAY['admin', 'owner']))
-);
-```
+For more advanced scenarios — like filtering by a user's role
+within a claim — use `in_claim()` with `check()`. See
+[Role-based access](/docs/auth-rules/check-claim) for details.
 
 ## Common claim patterns
 
@@ -177,6 +185,8 @@ CREATE INDEX idx_org_members_user ON org_members(user_id);
 CREATE INDEX idx_team_members_user ON team_members(user_id);
 ```
 
-**Keep claims simple** when possible. Complex JOINs and recursive CTEs are fine, but simpler queries are faster.
+**Keep claims simple** when possible. Complex JOINs and recursive
+CTEs are fine, but simpler queries are faster.
 
-**Changes apply immediately** — when you add a user to an org, they can access that org's data right away. No cache to invalidate.
+**Changes apply immediately** — when you add a user to an org,
+they can access that org's data right away. No cache to invalidate.

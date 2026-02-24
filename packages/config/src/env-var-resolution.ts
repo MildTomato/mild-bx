@@ -5,7 +5,7 @@
  */
 import type { ProjectConfig } from "./types.js";
 import type { FeatureRequirement, FeatureVariable } from "./feature-registry.js";
-import { getNestedValue, isEnvRef, extractEnvRef } from "./canonical.js";
+import { getNestedValue, isEnvVarBinding, parseEnvVarBinding } from "./env-var-mapping.js";
 
 /**
  * Injected value lookup function.
@@ -44,8 +44,8 @@ export function resolveVariable(
   const configValue = getNestedValue(config, variable.configPath);
 
   // 1. Check for explicit env() reference
-  if (typeof configValue === "string" && isEnvRef(configValue)) {
-    const envVarName = extractEnvRef(configValue)!;
+  if (typeof configValue === "string" && isEnvVarBinding(configValue)) {
+    const envVarName = parseEnvVarBinding(configValue)!;
     const value = lookup(envVarName);
     return {
       configPath: variable.configPath,

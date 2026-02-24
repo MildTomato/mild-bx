@@ -13,6 +13,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { createClient } from "@/lib/api.js";
+import { SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
 import { resolveProjectContext, requireTTY } from "@/lib/resolve-project.js";
 import {
   buildPostgrestPayload,
@@ -288,7 +289,7 @@ export async function pushCommand(options: PushOptions) {
           JSON.stringify({
             status: "error",
             message: "Project is paused",
-            dashboardUrl: `https://supabase.com/dashboard/project/${projectRef}`,
+            dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${projectRef}`,
           })
         );
         process.exit(1);
@@ -450,7 +451,7 @@ export async function pushCommand(options: PushOptions) {
 
     if (project.status === "INACTIVE") {
       spinner.stop(chalk.red("Project is paused"));
-      console.log(chalk.dim(`Restore from: https://supabase.com/dashboard/project/${projectRef}`));
+      console.log(chalk.dim(`Restore from: ${SUPABASE_DASHBOARD_URL}/project/${projectRef}`));
       process.exit(1);
     }
 

@@ -9,7 +9,7 @@ import { getSensitiveFields } from "./feature-registry.js";
  * Convert a config path to canonical SUPABASE_* environment variable name
  * Example: "auth.external.google.secret" -> "SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET"
  */
-export function toCanonicalName(configPath: string): string {
+export function configPathToEnvVar(configPath: string): string {
   const normalized = configPath
     .replace(/\./g, "_")
     .replace(/[^A-Za-z0-9_]/g, "_")
@@ -21,16 +21,16 @@ export function toCanonicalName(configPath: string): string {
 /**
  * Check if a value uses env() reference syntax
  */
-export function isEnvRef(value: unknown): boolean {
+export function isEnvVarBinding(value: unknown): boolean {
   if (typeof value !== "string") return false;
   return /^env\([A-Z_][A-Z0-9_]*\)$/.test(value);
 }
 
 /**
- * Extract variable name from env() reference
- * Returns null if not an env reference
+ * Extract variable name from env() binding
+ * Returns null if not an env() binding
  */
-export function extractEnvRef(value: string): string | null {
+export function parseEnvVarBinding(value: string): string | null {
   const match = value.match(/^env\(([A-Z_][A-Z0-9_]*)\)$/);
   return match ? match[1] : null;
 }
@@ -70,8 +70,8 @@ export function validateNoHardcodedSecrets(
       continue;
     }
 
-    // Check if it's an env() reference
-    if (isEnvRef(value)) {
+    // Check if it's an env() binding
+    if (isEnvVarBinding(value)) {
       continue;
     }
 
@@ -92,5 +92,5 @@ export function validateNoHardcodedSecrets(
  * Generate suggested environment variable name for a config path
  */
 export function suggestEnvVarName(configPath: string): string {
-  return toCanonicalName(configPath);
+  return configPathToEnvVar(configPath);
 }

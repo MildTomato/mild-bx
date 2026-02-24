@@ -14,6 +14,7 @@ import {
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { createClient } from "@/lib/api.js";
+import { SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
 import { requireAuth, loadProjectConfig, getWorkflowProfile } from "@/lib/config.js";
 import { type Region, REGIONS } from "@/lib/constants.js";
 import { createProject as createProjectOp } from "@/lib/operations.js";
@@ -103,7 +104,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
     } else if (projectId) {
       // Case: fully initialized with a project — show current state
       const profile = config ? getWorkflowProfile(config) : "unknown";
-      const dashboardUrl = `https://supabase.com/dashboard/project/${projectId}`;
+      const dashboardUrl = `${SUPABASE_DASHBOARD_URL}/project/${projectId}`;
       const profileDef = WORKFLOW_PROFILES.find((pr) => pr.name === profile);
 
       if (options.json) {
@@ -155,6 +156,19 @@ export async function initCommand(options: InitOptions): Promise<void> {
 
   // Non-interactive mode: use flags if provided
   if (options.project) {
+    // Refuse to overwrite an existing initialised project
+    if (existsSync(join(supabaseDir, "config.json"))) {
+      const existing = loadProjectConfig(cwd);
+      if (existing?.project_id) {
+        if (options.json) {
+          console.log(JSON.stringify({ status: "error", message: `Already initialised with project ${existing.project_id}. Remove supabase/config.json to re-initialise.` }));
+        } else {
+          console.error(`Error: Already initialised with project ${existing.project_id}.`);
+          console.error("Remove supabase/config.json to re-initialise.");
+        }
+        process.exit(1);
+      }
+    }
     const client = createClient(token);
     try {
       const projects = await client.listProjects();
@@ -466,7 +480,7 @@ async function writePlatformProject(
       project: {
         id: projectRef,
         name: projectName,
-        dashboardUrl: `https://supabase.com/dashboard/project/${projectRef}`,
+        dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${projectRef}`,
       },
       api: {
         url: apiUrl,
@@ -492,7 +506,7 @@ async function writePlatformProject(
       },
     }));
   } else {
-    const dashboardUrl = `https://supabase.com/dashboard/project/${projectRef}`;
+    const dashboardUrl = `${SUPABASE_DASHBOARD_URL}/project/${projectRef}`;
 
     console.log();
     console.log(chalk.green("✓") + " Initialized Supabase");

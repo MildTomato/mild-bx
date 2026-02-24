@@ -9,6 +9,7 @@ import { watch as chokidarWatch } from "chokidar";
 import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, dirname, relative, basename } from "node:path";
 import { createClient } from "@/lib/api.js";
+import { SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
 import {
   requireAuth,
   loadProjectConfig,
@@ -269,14 +270,14 @@ export async function devCommand(options: DevOptions): Promise<void> {
                 status: "error",
                 message: "Project is paused",
                 hint: "Restore the project from the Supabase dashboard",
-                dashboardUrl: `https://supabase.com/dashboard/project/${projectRef}`,
+                dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${projectRef}`,
               }),
             );
           } else {
             process.stdout.write("\r\x1b[K");
             console.error(`\n${C.error}Error:${C.reset} Project is paused`);
             console.error(
-              `  Restore from: ${C.value}https://supabase.com/dashboard/project/${projectRef}${C.reset}\n`,
+              `  Restore from: ${C.value}${SUPABASE_DASHBOARD_URL}/project/${projectRef}${C.reset}\n`,
             );
           }
           return false;
@@ -387,7 +388,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
         `\n${C.error}Error:${C.reset} Timed out after ${C.value}${elapsed}s${C.reset} (status: ${C.value}${lastStatus}${C.reset})`,
       );
       console.error(
-        `  Check: ${C.value}https://supabase.com/dashboard/project/${projectRef}${C.reset}\n`,
+        `  Check: ${C.value}${SUPABASE_DASHBOARD_URL}/project/${projectRef}${C.reset}\n`,
       );
     }
     return false;
@@ -403,13 +404,13 @@ export async function devCommand(options: DevOptions): Promise<void> {
             status: "error",
             message: "Project is paused",
             hint: "Restore the project from the Supabase dashboard",
-            dashboardUrl: `https://supabase.com/dashboard/project/${projectRef}`,
+            dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${projectRef}`,
           }),
         );
       } else {
         console.error(`\n${C.error}Error:${C.reset} Project is paused`);
         console.error(
-          `  Restore from: ${C.value}https://supabase.com/dashboard/project/${projectRef}${C.reset}\n`,
+          `  Restore from: ${C.value}${SUPABASE_DASHBOARD_URL}/project/${projectRef}${C.reset}\n`,
         );
       }
       process.exitCode = 1;
@@ -1008,7 +1009,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
   });
   console.log(S_BAR);
   console.log(`${S_BAR}  ${C.secondary}Project:${C.reset}  ${projectRef}`);
-  console.log(`${S_BAR}  ${C.secondary}Dashboard:${C.reset} https://supabase.com/dashboard/project/${projectRef}`);
+  console.log(`${S_BAR}  ${C.secondary}Dashboard:${C.reset} ${SUPABASE_DASHBOARD_URL}/project/${projectRef}`);
   console.log(`${S_BAR}  ${C.secondary}Profile:${C.reset}  ${profile?.name || "default"}`);
   console.log(`${S_BAR}  ${C.secondary}Branch:${C.reset}   ${currentBranch}`);
   console.log(`${S_BAR}  ${C.secondary}Schema:${C.reset}   ${relative(cwd, schemaDir)}`);

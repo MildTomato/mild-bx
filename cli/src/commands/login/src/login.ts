@@ -16,8 +16,10 @@ import {
 } from "@/lib/config.js";
 import { generateKeyPair, decryptToken } from "./encryption.js";
 
-const DASHBOARD_URL = "https://supabase.com/dashboard";
-const API_URL = "https://api.supabase.com";
+import { SUPABASE_API_URL, SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
+
+const DASHBOARD_URL = SUPABASE_DASHBOARD_URL;
+const API_URL = SUPABASE_API_URL;
 
 interface LoginOptions {
   token?: string;

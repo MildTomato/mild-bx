@@ -21,7 +21,9 @@ export type CreateProjectBody = components["schemas"]["V1CreateProjectBody"];
 export type CreateBranchBody = components["schemas"]["CreateBranchBody"];
 export type ApiKey = components["schemas"]["ApiKeyResponse"];
 
-const BASE_URL = "https://api.supabase.com";
+import { SUPABASE_API_URL } from "./env.js";
+
+const BASE_URL = SUPABASE_API_URL;
 
 export class APIError extends Error {
   constructor(

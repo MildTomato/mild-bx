@@ -8,10 +8,13 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+
+
 import { getCommand, suggestCommand, commandSpecs } from "@/commands/index.js";
 import { renderHelp } from "@/util/commands/help.js";
 import type { Command } from "@/util/commands/types.js";
 import { getAccessTokenAsync } from "@/lib/config.js";
+import { SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
 import { C } from "@/lib/colors.js";
 
 const CLI_NAME = "supa";
@@ -94,7 +97,7 @@ async function checkAuth(commandName: string): Promise<boolean> {
   const token = await getAccessTokenAsync();
   if (!token) {
     console.error("Not logged in. Run `supa login` or set SUPABASE_ACCESS_TOKEN environment variable.");
-    console.error("Get a token at: https://supabase.com/dashboard/account/tokens");
+    console.error(`Get a token at: ${SUPABASE_DASHBOARD_URL}/account/tokens`);
     return false;
   }
 

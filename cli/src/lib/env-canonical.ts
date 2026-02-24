@@ -2,9 +2,9 @@
  * Canonical environment variable name mapping - re-exported from @supabase-dx/config
  */
 export {
-  toCanonicalName,
-  isEnvRef,
-  extractEnvRef,
+  configPathToEnvVar,
+  isEnvVarBinding,
+  parseEnvVarBinding,
   getNestedValue,
   validateNoHardcodedSecrets,
   suggestEnvVarName,

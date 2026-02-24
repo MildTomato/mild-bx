@@ -2,11 +2,9 @@
  * Feature registry - maps enabled features to their required environment variables.
  * Derives feature requirements from the config schema JSON.
  */
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { ProjectConfig } from "./types.js";
-import { toCanonicalName, getNestedValue } from "./canonical.js";
+import { configPathToEnvVar, getNestedValue } from "./env-var-mapping.js";
+import configSchema from "../config-schema/config.schema.json";
 
 export interface FeatureVariable {
   configPath: string;
@@ -42,39 +40,13 @@ const REQUIRED_SMTP_FIELDS = new Set(["host", "port", "user", "pass"]);
 const SECRET_SMTP_FIELDS = new Set(["pass"]);
 
 /**
- * Load the config schema JSON bundled with the package
- */
-function loadSchema(): Record<string, unknown> | null {
-  try {
-    const sourceDir = fileURLToPath(new URL(".", import.meta.url));
-
-    const possiblePaths = [
-      join(sourceDir, "../config-schema/config.schema.json"),
-      join(sourceDir, "../../config-schema/config.schema.json"),
-    ];
-
-    for (const schemaPath of possiblePaths) {
-      try {
-        return JSON.parse(readFileSync(schemaPath, "utf-8"));
-      } catch {
-        continue;
-      }
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Build feature registry from the config schema.
  * Registers auth external providers and SMTP as features with required variables.
  */
 export function buildFeatureRegistry(
   schema?: Record<string, unknown>
 ): FeatureRequirement[] {
-  const schemaObj = schema ?? loadSchema();
+  const schemaObj = schema ?? (configSchema as unknown as Record<string, unknown>);
   if (!schemaObj) return [];
 
   const features: FeatureRequirement[] = [];
@@ -111,7 +83,7 @@ export function buildFeatureRegistry(
 
         variables.push({
           configPath,
-          canonicalName: toCanonicalName(configPath),
+          canonicalName: configPathToEnvVar(configPath),
           secret: isSecret,
           required: isRequired,
         });
@@ -143,7 +115,7 @@ export function buildFeatureRegistry(
 
       variables.push({
         configPath,
-        canonicalName: toCanonicalName(configPath),
+        canonicalName: configPathToEnvVar(configPath),
         secret: isSecret,
         required: isRequired,
       });

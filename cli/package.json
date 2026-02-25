@@ -28,6 +28,7 @@
     "@electric-sql/pglite": "^0.3.15",
     "@electric-sql/pglite-socket": "^0.0.20",
     "@supabase-dx/config": "workspace:*",
+    "@supabase-dx/env-vars": "workspace:*",
     "@supabase/pg-delta": "1.0.0-alpha.2",
     "arg": "^5.0.2",
     "chalk": "^5.3.0",

@@ -34,7 +34,7 @@ export default async function list(argv: string[]): Promise<number> {
   }
 
   await listHandler({
-    environment: args["--environment"],
+    environment: args["--environment"] as "production" | "preview" | "development" | undefined,
     branch: args["--branch"],
     json: args["--json"],
     profile: args["--profile"],

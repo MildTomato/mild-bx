@@ -6,9 +6,11 @@ import * as p from "@clack/prompts";
 import chalk from "chalk";
 import { setupEnvCommand } from "../../setup.js";
 import { createClient } from "@/lib/api.js";
+import { handleCommandError } from "@/lib/command-error.js";
 import { loadLocalEnvVars } from "@/lib/env-file.js";
-import { listRemoteVariables, bulkPushVariables } from "@/lib/env-api-bridge.js";
+import { listRemoteVariables, bulkPushVariables, setRemoteVariable } from "@/lib/env-api-bridge.js";
 import { computeEnvDiff, formatEnvDiff, hasChanges, getDiffSummary } from "@/lib/env-diff.js";
+import { SENTINEL_CONFIG_SOURCE } from "@supabase-dx/env-vars";
 
 export interface PushOptions {
   environment?: string;
@@ -54,15 +56,8 @@ export async function pushCommand(options: PushOptions): Promise<void> {
   try {
     remoteVars = await listRemoteVariables(client, ctx.projectRef);
   } catch (error) {
-    spinner?.stop(chalk.red("Failed to fetch remote variables"));
-    const msg = error instanceof Error ? error.message : String(error);
-    if (options.json) {
-      console.error(JSON.stringify({ status: "error", message: msg }));
-    } else {
-      p.log.error(msg);
-    }
-    process.exit(1);
-    return; // unreachable, for TS
+    spinner?.stop(chalk.red("Failed"));
+    await handleCommandError(error, options, client, ctx.projectRef);
   }
 
   // 3. Compute diff
@@ -122,6 +117,10 @@ export async function pushCommand(options: PushOptions): Promise<void> {
       prune: options.prune,
     });
 
+    // Write sentinel so the dashboard knows this project is config-in-code
+    const configSource = (ctx.config.config_source as string | undefined) ?? "code";
+    await setRemoteVariable(client, ctx.projectRef, SENTINEL_CONFIG_SOURCE, configSource, false);
+
     pushSpinner?.stop(
       `Pushed ${result.pushed} variable(s)${result.deleted > 0 ? `, removed ${result.deleted}` : ""}`
     );
@@ -134,13 +133,7 @@ export async function pushCommand(options: PushOptions): Promise<void> {
       }));
     }
   } catch (error) {
-    pushSpinner?.stop(chalk.red("Push failed"));
-    const msg = error instanceof Error ? error.message : String(error);
-    if (options.json) {
-      console.error(JSON.stringify({ status: "error", message: msg }));
-    } else {
-      p.log.error(msg);
-    }
-    process.exit(1);
+    pushSpinner?.stop(chalk.red("Failed"));
+    await handleCommandError(error, options, client, ctx.projectRef);
   }
 }

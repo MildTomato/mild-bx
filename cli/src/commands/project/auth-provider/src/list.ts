@@ -1,7 +1,8 @@
 import * as p from "@clack/prompts";
 import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
-import { resolveProjectContext, requireTTY } from "@/lib/resolve-project.js";
+import { handleCommandError } from "@/lib/command-error.js";
+import { resolveProjectContext } from "@/lib/resolve-project.js";
 import { printCommandHeader, S_BAR } from "@/components/command-header.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
 import {
@@ -37,24 +38,8 @@ export async function listAuthProviders(options: ListOptions = {}): Promise<void
 
     spinner?.stop("Providers loaded");
   } catch (error) {
-    spinner?.stop("Failed to fetch providers");
-
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    if (options.json) {
-      console.error(JSON.stringify({
-        error: "NetworkError",
-        message: "Failed to fetch provider configuration",
-        details: errorMessage,
-        exitCode: EXIT_CODES.NETWORK_ERROR,
-      }, null, 2));
-    } else {
-      p.log.error(`Failed to fetch provider configuration: ${errorMessage}`);
-      if (errorMessage.includes("timeout") || errorMessage.includes("ETIMEDOUT")) {
-        p.log.message("\nThis might be a network issue. Check your connection and try again.");
-      }
-    }
-    process.exit(EXIT_CODES.NETWORK_ERROR);
+    spinner?.stop(chalk.red("Failed"));
+    await handleCommandError(error, options, client, projectRef);
   }
 
   // Parse providers from remote config

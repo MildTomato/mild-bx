@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
+import { handleCommandError } from "@/lib/command-error.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
 import { printCommandHeader, S_BAR } from "@/components/command-header.js";
 import { findProvider, buildProviderPayload, parseProviderFromRemote, PROVIDER_DEFINITIONS } from "@/lib/auth-providers.js";
@@ -141,25 +142,8 @@ export async function toggleAuthProvider(
 
     spinner?.stop(`${provider.displayName} ${enable ? "enabled" : "disabled"}`);
   } catch (error) {
-    spinner?.stop(`Failed to ${action} provider`);
-
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    if (options.json) {
-      console.error(JSON.stringify({
-        error: "NetworkError",
-        message: `Failed to ${action} provider`,
-        details: errorMessage,
-        provider: provider.key,
-        exitCode: EXIT_CODES.NETWORK_ERROR,
-      }, null, 2));
-    } else {
-      p.log.error(`Failed to ${action} provider: ${errorMessage}`);
-      if (errorMessage.includes("timeout") || errorMessage.includes("ETIMEDOUT")) {
-        p.log.message("\nThis might be a network issue. Check your connection and try again.");
-      }
-    }
-    process.exit(EXIT_CODES.NETWORK_ERROR);
+    spinner?.stop(chalk.red("Failed"));
+    await handleCommandError(error, options, client, projectRef);
   }
 
   // Update local config.json (atomic write)

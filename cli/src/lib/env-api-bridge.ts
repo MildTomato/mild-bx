@@ -6,15 +6,37 @@
  * Key constraint: secrets API rejects names starting with `SUPABASE_`.
  * Platform variables (SUPABASE_AUTH_*, SUPABASE_API_*) go through their
  * respective config APIs.
+ *
+ * PROTOTYPE NOTE: The secrets API (/v1/projects/{ref}/secrets) is designed
+ * for Edge Function secrets, not general project environment variables. We're
+ * using it here as a temporary storage mechanism for the prototype because a
+ * dedicated project env vars API doesn't exist yet. This needs to be replaced
+ * with the real API once it's available on the platform.
  */
 import type { SupabaseClient } from "./api.js";
 import type { EnvVariable } from "./env-types.js";
+import { isPlatformVar } from "@supabase-dx/env-vars";
+import { parseScopedVarName } from "@supabase-dx/env-vars";
 
 /**
- * Check if a key is a platform variable (routed to config APIs, not secrets API)
+ * Check if a key is a platform variable (routed to config APIs, not secrets API).
+ * Strips scope suffix before checking so VAR__preview is treated same as VAR.
  */
 export function isPlatformVariable(key: string): boolean {
-  return key.startsWith("SUPABASE_");
+  const { base } = parseScopedVarName(key);
+  return isPlatformVar(base);
+}
+
+/**
+ * Warn if a SUPABASE_* var is not in the platform registry.
+ * These are likely typos or unsupported vars.
+ */
+export function warnIfUnrecognisedPlatformVar(key: string): string | null {
+  const { base } = parseScopedVarName(key);
+  if (base.startsWith("SUPABASE_") && !isPlatformVar(base)) {
+    return `Warning: ${base} starts with SUPABASE_ but is not a recognised platform variable. Check the name is correct.`;
+  }
+  return null;
 }
 
 /**
@@ -26,43 +48,34 @@ export async function listRemoteVariables(
 ): Promise<EnvVariable[]> {
   const variables: EnvVariable[] = [];
 
-  // Fetch from secrets API (non-SUPABASE_ vars)
-  try {
-    const secrets = await client.listSecrets(projectRef);
-    for (const s of secrets) {
-      variables.push({
-        key: s.name,
-        value: s.value ?? "",
-        secret: true,
-      });
-    }
-  } catch {
-    // Secrets API might fail, continue with config APIs
+  // PROTOTYPE: Using Edge Function secrets API as a stand-in for project env vars.
+  const secrets = await client.listSecrets(projectRef);
+  for (const s of secrets) {
+    variables.push({
+      key: s.name,
+      value: s.value ?? "",
+      secret: true,
+    });
   }
 
   // Fetch auth config for SUPABASE_AUTH_* variables
-  try {
-    const authConfig = await client.getAuthConfig(projectRef);
-    const authRecord = authConfig as unknown as Record<string, unknown>;
+  const authConfig = await client.getAuthConfig(projectRef);
+  const authRecord = authConfig as unknown as Record<string, unknown>;
 
-    // Extract external provider values
-    for (const [key, value] of Object.entries(authRecord)) {
-      if (
-        key.startsWith("external_") &&
-        typeof value === "string" &&
-        value !== ""
-      ) {
-        const canonicalKey = `SUPABASE_AUTH_${key.toUpperCase()}`;
-        const isSecret = key.endsWith("_secret");
-        variables.push({
-          key: canonicalKey,
-          value: isSecret ? "" : String(value),
-          secret: isSecret,
-        });
-      }
+  for (const [key, value] of Object.entries(authRecord)) {
+    if (
+      key.startsWith("external_") &&
+      typeof value === "string" &&
+      value !== ""
+    ) {
+      const canonicalKey = `SUPABASE_AUTH_${key.toUpperCase()}`;
+      const isSecret = key.endsWith("_secret");
+      variables.push({
+        key: canonicalKey,
+        value: isSecret ? "" : String(value),
+        secret: isSecret,
+      });
     }
-  } catch {
-    // Auth config might fail, continue
   }
 
   return variables;
@@ -92,7 +105,7 @@ export async function setRemoteVariable(
       } as Record<string, unknown>);
     }
   } else {
-    // Use secrets API for non-platform variables
+    // PROTOTYPE: Using Edge Function secrets API as a stand-in for project env vars.
     await client.createSecrets(projectRef, [{ name: key, value }]);
   }
 }
@@ -134,7 +147,7 @@ export async function bulkPushVariables(
   const platformVars = variables.filter((v) => isPlatformVariable(v.key));
   const secretVars = variables.filter((v) => !isPlatformVariable(v.key));
 
-  // Push non-platform variables via secrets API
+  // PROTOTYPE: Using Edge Function secrets API as a stand-in for project env vars.
   if (secretVars.length > 0) {
     const secretPayload = secretVars.map((v) => ({
       name: v.key,

@@ -108,14 +108,6 @@ export async function profileSelect(
         }
 
         lines.push(`${S_BAR}`);
-
-        // Show ASCII art for current selection
-        const artLines = colorizeArt(currentProfile.art).trim().split("\n");
-        for (const artLine of artLines) {
-          lines.push(`${S_BAR}  ${artLine}`);
-        }
-
-        lines.push(`${S_BAR}`);
         lines.push(`${S_BAR}  ${pc.dim(currentProfile.description)}`);
         lines.push(`${S_BAR}  ${pc.dim(`Vibe: ${currentProfile.vibe}`)}`);
         lines.push(`${S_BAR}`);

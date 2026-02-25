@@ -44,7 +44,7 @@ export default async function set(argv: string[]): Promise<number> {
   await setHandler({
     key,
     value,
-    environment: args["--environment"],
+    scope: args["--scope"] as "production" | "preview" | "branch" | undefined,
     branch: args["--branch"],
     secret: args["--secret"],
     json: args["--json"],

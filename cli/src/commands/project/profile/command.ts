@@ -17,7 +17,7 @@ export const profileSubcommand = {
       type: String,
       argument: "PROFILE",
       deprecated: false,
-      description: "Set workflow profile (solo, staged, preview, preview-git)",
+      description: "Set workflow profile (remote, local, branching-remote, branching-local)",
     },
     { ...jsonOption },
   ],

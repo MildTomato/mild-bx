@@ -321,7 +321,18 @@ const ProfileSchema = z.object({
 });
 
 // Workflow profile types (new DX concept)
-export const WorkflowProfileType = z.enum(["solo", "staged", "preview", "preview-git"]);
+export const WorkflowProfileType = z.enum([
+  // Current profiles (branching × dev environment)
+  "remote",
+  "local",
+  "branching-remote",
+  "branching-local",
+  // Legacy profiles (kept for backwards compatibility)
+  "solo",
+  "staged",
+  "preview",
+  "preview-git",
+]);
 export type WorkflowProfile = z.infer<typeof WorkflowProfileType>;
 
 // Our DX config extends the base Supabase config with profiles
@@ -523,7 +534,7 @@ export function listProfileNames(config: ProjectConfig): string[] {
  * Defaults to 'solo' if not specified
  */
 export function getWorkflowProfile(config: ProjectConfig): WorkflowProfile {
-  return config.workflow_profile || "solo";
+  return config.workflow_profile || "remote";
 }
 
 /**

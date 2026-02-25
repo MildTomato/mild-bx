@@ -14,7 +14,7 @@ import {
 import { dirname, join } from "node:path";
 import { createClient } from "@/lib/api.js";
 import { SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
-import { resolveProjectContext, requireTTY } from "@/lib/resolve-project.js";
+import { resolveProjectContext } from "@/lib/resolve-project.js";
 import {
   buildPostgrestPayload,
   buildAuthPayload,
@@ -276,7 +276,6 @@ export async function pushCommand(options: PushOptions) {
   }
 
   if (!options.json) {
-    requireTTY();
   }
 
   // JSON mode

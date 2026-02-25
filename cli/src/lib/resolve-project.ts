@@ -7,7 +7,7 @@
 
 import chalk from "chalk";
 import {
-  requireAuth,
+  getAccessTokenAsync,
   loadProjectConfig,
   getProfileOrAuto,
   getProjectRef,
@@ -53,7 +53,41 @@ export async function resolveProjectContext(options: {
     process.exit(EXIT_CODES.CONFIG_NOT_FOUND);
   }
 
-  const token = await requireAuth({ json: options.json });
+  let token = await getAccessTokenAsync();
+
+  if (!token) {
+    if (!options.json && process.stdin.isTTY) {
+      // Pit of success: inline login before proceeding
+      const { loginCommand } = await import("../commands/login/src/login.js");
+      await loginCommand({});
+      token = await getAccessTokenAsync();
+      if (!token) {
+        // loginCommand already printed the failure reason
+        process.exit(EXIT_CODES.AUTH_FAILURE);
+      }
+    } else {
+      if (options.json) {
+        console.log(
+          JSON.stringify({
+            status: "error",
+            message: "Not authenticated",
+            hint: "Set SUPABASE_ACCESS_TOKEN or run `supa login`",
+            exitCode: EXIT_CODES.AUTH_FAILURE,
+          })
+        );
+      } else {
+        console.error(
+          chalk.red("Not logged in.") +
+            " Run " +
+            chalk.cyan("`supa login`") +
+            " or set " +
+            chalk.cyan("SUPABASE_ACCESS_TOKEN") +
+            "."
+        );
+      }
+      process.exit(EXIT_CODES.AUTH_FAILURE);
+    }
+  }
 
   return { cwd, config, branch, profile, projectRef, token };
 }

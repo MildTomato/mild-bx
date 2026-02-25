@@ -8,7 +8,7 @@ import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { createClient } from "@/lib/api.js";
 import { SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
-import { resolveProjectContext, requireTTY } from "@/lib/resolve-project.js";
+import { resolveProjectContext } from "@/lib/resolve-project.js";
 import {
   buildPostgrestPayload,
   buildAuthPayload,
@@ -55,7 +55,6 @@ export async function pullCommand(options: PullOptions) {
   const client = createClient(token);
 
   if (!options.json) {
-    requireTTY();
   }
 
   // JSON mode

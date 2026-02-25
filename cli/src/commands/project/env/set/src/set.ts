@@ -6,14 +6,15 @@ import * as p from "@clack/prompts";
 import chalk from "chalk";
 import { setupEnvCommand } from "../../setup.js";
 import { createClient } from "@/lib/api.js";
-import { loadLocalEnvVars, writeEnvFile, isSensitiveKey } from "@/lib/env-file.js";
-import { setRemoteVariable } from "@/lib/env-api-bridge.js";
-import type { EnvVariable } from "@/lib/env-types.js";
+import { handleCommandError } from "@/lib/command-error.js";
+import { isSensitiveKey } from "@/lib/env-file.js";
+import { setRemoteVariable, warnIfUnrecognisedPlatformVar } from "@/lib/env-api-bridge.js";
+import { scopedVarName, type Scope } from "@supabase-dx/env-vars";
 
 export interface SetOptions {
   key: string;
   value?: string;
-  environment?: string;
+  scope?: Scope;
   branch?: string;
   secret?: boolean;
   json?: boolean;
@@ -21,14 +22,22 @@ export interface SetOptions {
 }
 
 export async function setCommand(options: SetOptions): Promise<void> {
-  const environment = options.environment || "development";
-  const target = options.branch
-    ? `${environment} (branch: ${options.branch})`
-    : environment;
+  const scope = options.scope ?? "production";
+
+  if (scope === "branch" && !options.branch) {
+    console.error("Error: --branch is required when --scope is 'branch'");
+    process.exit(1);
+  }
+
+  const storedKey = scopedVarName(options.key, scope, options.branch);
+
+  const scopeLabel = scope === "branch"
+    ? `branch:${options.branch}`
+    : scope;
 
   const context: [string, string][] = [
-    ["Env", target],
-    ["Key", options.key],
+    ["Key", storedKey],
+    ["Scope", scopeLabel],
   ];
   if (options.secret) {
     context.push(["Secret", chalk.yellow("yes")]);
@@ -85,56 +94,34 @@ export async function setCommand(options: SetOptions): Promise<void> {
   }
   isSecret = isSecret ?? isSensitiveKey(options.key);
 
-  if (environment === "development") {
-    // Write to supabase/.env
-    const existing = loadLocalEnvVars(ctx.cwd);
-    const existingMap = new Map(existing.variables.map((v) => [v.key, v]));
+  const warning = warnIfUnrecognisedPlatformVar(options.key);
+  if (warning) {
+    if (options.json) {
+      console.error(JSON.stringify({ status: "warning", message: warning }));
+    } else {
+      p.log.warn(warning);
+    }
+  }
 
-    existingMap.set(options.key, {
-      key: options.key,
-      value,
-      secret: isSecret,
-    });
+  // Push to remote with the scoped key
+  const client = createClient(ctx.token);
+  const spinner = options.json ? null : p.spinner();
+  spinner?.start(`Setting ${storedKey}...`);
 
-    const variables: EnvVariable[] = Array.from(existingMap.values());
-    writeEnvFile(ctx.cwd, variables, existing.header);
+  try {
+    await setRemoteVariable(client, ctx.projectRef, storedKey, value, isSecret ?? false);
+    spinner?.stop(`Set ${chalk.cyan(storedKey)} (scope: ${scopeLabel})`);
 
     if (options.json) {
       console.log(JSON.stringify({
         status: "success",
         key: options.key,
-        environment: "development",
-        file: "supabase/.env",
+        storedKey,
+        scope: scopeLabel,
       }));
-    } else {
-      p.log.success(`Set ${chalk.cyan(options.key)} in supabase/.env`);
     }
-  } else {
-    // Push to remote
-    const client = createClient(ctx.token);
-    const spinner = options.json ? null : p.spinner();
-    spinner?.start(`Setting ${options.key}...`);
-
-    try {
-      await setRemoteVariable(client, ctx.projectRef, options.key, value, isSecret);
-      spinner?.stop(`Set ${chalk.cyan(options.key)} in ${environment}`);
-
-      if (options.json) {
-        console.log(JSON.stringify({
-          status: "success",
-          key: options.key,
-          environment,
-        }));
-      }
-    } catch (error) {
-      spinner?.stop(chalk.red("Failed"));
-      const msg = error instanceof Error ? error.message : String(error);
-      if (options.json) {
-        console.error(JSON.stringify({ status: "error", message: msg }));
-      } else {
-        p.log.error(`Failed to set variable: ${msg}`);
-      }
-      process.exit(1);
-    }
+  } catch (error) {
+    spinner?.stop(chalk.red("Failed"));
+    await handleCommandError(error, options, client, ctx.projectRef);
   }
 }

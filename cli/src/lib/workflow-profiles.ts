@@ -23,13 +23,64 @@ export interface WorkflowProfileDefinition {
 }
 
 /**
- * Available workflow profiles with ASCII art diagrams.
+ * Current workflow profiles.
  *
- * The `art` field is plain text - colors are applied at render time
- * by parsing content and wrapping in Ink `<Text>` components.
- * See profile.tsx ProfileDisplayUI for the color mapping.
+ * Two axes: branching (on/off) × dev environment (remote/local).
  */
 export const WORKFLOW_PROFILES: WorkflowProfileDefinition[] = [
+  {
+    name: "remote",
+    title: "Remote dev, no branching",
+    art: `
+▓▓▓▓▓▓▓▓▓▓▓▓▓▓        supa push        ▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+▓ Remote Dev ▓ ──────────────────────► ▓ PRODUCTION ▓
+▓▓▓▓▓▓▓▓▓▓▓▓▓▓                         ▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+`,
+    description: "Work directly against a remote project. No local services.",
+    vibe: "Side project, indie hacker, always-on remote",
+  },
+  {
+    name: "local",
+    title: "Local dev, no branching",
+    art: `
+▓▓▓▓▓▓▓▓▓        supa push        ▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+▓ Local  ▓ ──────────────────────► ▓ PRODUCTION ▓
+▓▓▓▓▓▓▓▓▓                          ▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+`,
+    description: "Run Supabase locally. Push to production when ready.",
+    vibe: "Prefer local services, full offline capability",
+  },
+  {
+    name: "branching-remote",
+    title: "Branching, remote dev",
+    art: `
+              ▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+feat/x ──────► ▓ dev/alice  ▓ ─╮
+              ▓ dev/bob    ▓ ─┼──► ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓   merge   ▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+              ▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ╯   ▓ preview/feat  ▓ ──────────► ▓ PRODUCTION ▓
+                                   ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓            ▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+`,
+    description: "Personal remote dev environment per developer per branch. Shared preview per branch.",
+    vibe: "Team working against remote, Convex-style isolation",
+  },
+  {
+    name: "branching-local",
+    title: "Branching, local dev",
+    art: `
+▓▓▓▓▓▓▓▓▓   git push   ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓   merge PR   ▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+▓ Local  ▓ ──────────► ▓ preview/feat   ▓ ──────────► ▓ PRODUCTION ▓
+▓▓▓▓▓▓▓▓▓              ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓               ▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+`,
+    description: "Run Supabase locally. Git push triggers a shared preview per branch.",
+    vibe: "Team workflow, local services, Git-driven previews",
+  },
+];
+
+/**
+ * Legacy profiles — kept for reference and backwards compatibility.
+ * Do not use for new projects.
+ */
+export const LEGACY_WORKFLOW_PROFILES: WorkflowProfileDefinition[] = [
   {
     name: "solo",
     title: "Just ship it",
@@ -56,7 +107,7 @@ export const WORKFLOW_PROFILES: WorkflowProfileDefinition[] = [
     name: "preview",
     title: "Multiple preview environments",
     art: `
-▓▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓               
+▓▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
 ▓ Local ▓ ───► ▓ preview-alice ▓ ─╮            ▓▓▓▓▓▓▓▓▓▓▓▓▓▓
 ▓▓▓▓▓▓▓▓▓   ╭─ ▓ preview-bob   ▓ ─┼──────────► ▓ PRODUCTION ▓
             ╰► ▓ preview-carol ▓ ─╯            ▓▓▓▓▓▓▓▓▓▓▓▓▓▓
@@ -76,8 +127,7 @@ feature/dash ──► ▓ preview-pay  ▓ ─┤           ▓▓▓▓▓▓�
                  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  │           ▓▓▓▓▓▓▓▓▓▓▓▓▓▓
                          merge PR ─╯
 `,
-    description:
-      "Automatic preview environments per Git branch. CI/CD friendly.",
+    description: "Automatic preview environments per Git branch. CI/CD friendly.",
     vibe: "Team workflow, CI/CD, ephemeral preview environments",
   },
 ];

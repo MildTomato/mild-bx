@@ -43,7 +43,7 @@ export default async function unset(argv: string[]): Promise<number> {
 
   await unsetHandler({
     key,
-    environment: args["--environment"],
+    scope: args["--scope"] as "production" | "preview" | "branch" | undefined,
     branch: args["--branch"],
     yes: args["--yes"],
     json: args["--json"],

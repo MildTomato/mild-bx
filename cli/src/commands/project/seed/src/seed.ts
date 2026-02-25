@@ -5,7 +5,7 @@
 import { join, relative } from "node:path";
 import { existsSync } from "node:fs";
 import { createClient } from "@/lib/api.js";
-import { resolveProjectContext, resolveConfig, requireTTY } from "@/lib/resolve-project.js";
+import { resolveProjectContext, resolveConfig } from "@/lib/resolve-project.js";
 import {
   applySeedFiles,
   findSeedFiles,
@@ -134,7 +134,6 @@ export async function seedCommand(options: SeedOptions): Promise<void> {
   }
 
   if (!options.json) {
-    requireTTY();
   }
 
   // Dry run - just show what would be seeded

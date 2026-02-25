@@ -94,11 +94,22 @@ async function checkAuth(commandName: string): Promise<boolean> {
     return true;
   }
 
-  const token = await getAccessTokenAsync();
+  let token = await getAccessTokenAsync();
+
   if (!token) {
-    console.error("Not logged in. Run `supa login` or set SUPABASE_ACCESS_TOKEN environment variable.");
-    console.error(`Get a token at: ${SUPABASE_DASHBOARD_URL}/account/tokens`);
-    return false;
+    if (process.stdin.isTTY) {
+      // Pit of success: run login inline then continue with the original command
+      const { loginCommand } = await import("./commands/login/src/login.js");
+      await loginCommand({ reason: "You need to be logged in to run this command." });
+      token = await getAccessTokenAsync();
+      if (!token) {
+        // loginCommand already printed the failure reason
+        return false;
+      }
+    } else {
+      console.error("Not logged in. Set SUPABASE_ACCESS_TOKEN or run `supa login`.");
+      return false;
+    }
   }
 
   // Set env var so commands can use it
@@ -184,6 +195,9 @@ async function main(): Promise<number> {
     return 1;
   }
 
+  // Top padding — all spacing owned here, not in individual commands
+  console.log();
+
   // Check auth (skip for --help on any command)
   if (!rest.includes("--help") && !rest.includes("-h")) {
     if (!(await checkAuth(commandName))) {
@@ -194,8 +208,7 @@ async function main(): Promise<number> {
   // Run command handler
   try {
     const exitCode = await command.handler(rest);
-    // Ensure trailing newline for consistent bottom padding on all commands
-    console.log();
+    console.log(); // bottom padding
     return exitCode ?? 0;
   } catch (err) {
     if (err instanceof Error) {

@@ -287,10 +287,10 @@ export async function runInitWizard(): Promise<InitResult> {
   const workflowProfile = profileChoice.name;
 
   // ─────────────────────────────────────────────────────────────
-  // GitHub (only for preview-git)
+  // GitHub (only for branching profiles)
   // ─────────────────────────────────────────────────────────────
 
-  if (workflowProfile === "preview-git") {
+  if (workflowProfile === "branching-remote" || workflowProfile === "branching-local") {
     const connectGithub = await p.confirm({
       message: "Connect GitHub repository?",
     });

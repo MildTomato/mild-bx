@@ -37,9 +37,9 @@ export const configSpec: ConfigSectionSpec[] = [
       },
       {
         name: "workflow_profile",
-        type: '"solo" | "staged" | "preview" | "preview-git"',
+        type: '"remote" | "local" | "branching-remote" | "branching-local"',
         description: "Deployment workflow profile",
-        default: '"solo"',
+        default: '"remote"',
       },
       {
         name: "schema_management",

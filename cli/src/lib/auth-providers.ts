@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ExternalProviderConfig } from './config-types.js';
+import { projectUrlFromDbHost } from './env.js';
 
 export type ProviderCategory = 'popular' | 'social' | 'enterprise';
 
@@ -32,7 +33,7 @@ function loadProvidersFromSchema(): ProviderDefinition[] {
 
     const possiblePaths = [
       join(binaryDir, 'config-schema', 'config.schema.json'),
-      join(sourceDir, '../../config-schema/config.schema.json'),
+      join(sourceDir, '../../packages/config/config-schema/config.schema.json'),
     ];
 
     let schema;
@@ -229,8 +230,8 @@ export function parseProviderFromRemote(
 }
 
 /**
- * Get callback URL for a project
+ * Get callback URL for a project, derived from the database host returned by the management API.
  */
-export function getCallbackUrl(projectRef: string): string {
-  return `https://${projectRef}.supabase.co/auth/v1/callback`;
+export function getCallbackUrl(dbHost: string, projectRef: string): string {
+  return `${projectUrlFromDbHost(dbHost, projectRef)}/auth/v1/callback`;
 }

@@ -476,7 +476,7 @@ function createScratchProject(workdir: string): void {
   }
 
   const config: Record<string, unknown> = {
-    $schema: "../../../cli/config-schema/config.schema.json",
+    $schema: "../../../packages/config/config-schema/config.schema.json",
     schema_management: "declarative",
     config_source: "code",
   };

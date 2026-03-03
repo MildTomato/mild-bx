@@ -6,7 +6,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch"
+    "dev": "tsup --watch",
+    "generate": "bun run generate.ts"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

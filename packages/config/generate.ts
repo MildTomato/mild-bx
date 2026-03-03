@@ -58,7 +58,7 @@ const extendedSchema = {
 };
 
 // Write the extended schema
-const outputPath = join(__dirname, "config.schema.json");
+const outputPath = join(__dirname, "config-schema", "config.schema.json");
 writeFileSync(outputPath, JSON.stringify(extendedSchema, null, 2));
 
 console.log(`Extended schema written to ${outputPath}`);

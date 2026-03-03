@@ -8,8 +8,8 @@
   },
   "scripts": {
     "build": "npm run build:prod",
-    "build:prod": "tsup && bun build dist/index.js --compile --minify --outfile bin/supa --target=bun && codesign -s - -f bin/supa && mkdir -p bin/pglite bin/auth-migrations bin/config-schema && cp node_modules/@electric-sql/pglite/dist/pglite.wasm node_modules/@electric-sql/pglite/dist/pglite.data bin/pglite/ && cp ../vendor/supabase-auth/migrations/*.up.sql bin/auth-migrations/ && cp config-schema/config.schema.json bin/config-schema/",
-    "build:local": "BUILD_TARGET=local tsup && bun build dist/index.js --compile --minify --outfile bin/supa --target=bun && codesign -s - -f bin/supa && mkdir -p bin/pglite bin/auth-migrations bin/config-schema && cp node_modules/@electric-sql/pglite/dist/pglite.wasm node_modules/@electric-sql/pglite/dist/pglite.data bin/pglite/ && cp ../vendor/supabase-auth/migrations/*.up.sql bin/auth-migrations/ && cp config-schema/config.schema.json bin/config-schema/",
+    "build:prod": "tsup && bun build dist/index.js --compile --minify --outfile bin/supa --target=bun && codesign -s - -f bin/supa && mkdir -p bin/pglite bin/auth-migrations bin/config-schema && cp node_modules/@electric-sql/pglite/dist/pglite.wasm node_modules/@electric-sql/pglite/dist/pglite.data bin/pglite/ && cp ../vendor/supabase-auth/migrations/*.up.sql bin/auth-migrations/ && cp ../packages/config/config-schema/config.schema.json bin/config-schema/",
+    "build:local": "BUILD_TARGET=local tsup && bun build dist/index.js --compile --minify --outfile bin/supa --target=bun && codesign -s - -f bin/supa && mkdir -p bin/pglite bin/auth-migrations bin/config-schema && cp node_modules/@electric-sql/pglite/dist/pglite.wasm node_modules/@electric-sql/pglite/dist/pglite.data bin/pglite/ && cp ../vendor/supabase-auth/migrations/*.up.sql bin/auth-migrations/ && cp ../packages/config/config-schema/config.schema.json bin/config-schema/",
     "dev": "tsup --watch",
     "start": "node dist/index.js",
     "test": "vitest run",

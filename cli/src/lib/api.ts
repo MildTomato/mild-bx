@@ -21,7 +21,9 @@ export type CreateProjectBody = components["schemas"]["V1CreateProjectBody"];
 export type CreateBranchBody = components["schemas"]["CreateBranchBody"];
 export type ApiKey = components["schemas"]["ApiKeyResponse"];
 
-const BASE_URL = "https://api.supabase.com";
+import { SUPABASE_API_URL } from "./env.js";
+
+const BASE_URL = SUPABASE_API_URL;
 
 export class APIError extends Error {
   constructor(
@@ -30,6 +32,13 @@ export class APIError extends Error {
   ) {
     super(message);
     this.name = "APIError";
+  }
+}
+
+export class AuthError extends APIError {
+  constructor(statusCode: 401 | 403, message: string) {
+    super(statusCode, message);
+    this.name = "AuthError";
   }
 }
 
@@ -61,7 +70,22 @@ export class SupabaseClient {
 
     if (!response.ok) {
       const text = await response.text();
-      throw new APIError(response.status, text || `HTTP ${response.status}`);
+      let message = text || `HTTP ${response.status}`;
+
+      // Parse JSON error body and extract human-readable message
+      try {
+        const json = JSON.parse(text);
+        if (typeof json.message === "string") message = json.message;
+        else if (typeof json.error === "string") message = json.error;
+      } catch {
+        // not JSON — use raw text
+      }
+
+      if (response.status === 401 || response.status === 403) {
+        throw new AuthError(response.status as 401 | 403, message);
+      }
+
+      throw new APIError(response.status, message);
     }
 
     const contentType = response.headers.get("content-type");
@@ -114,6 +138,17 @@ export class SupabaseClient {
       `/v1/projects/${projectRef}/branches`,
       params,
     );
+  }
+
+  async updateBranch(
+    branchRef: string,
+    params: components["schemas"]["UpdateBranchBody"],
+  ): Promise<Branch> {
+    return this.request<Branch>("PATCH", `/v1/branches/${branchRef}`, params);
+  }
+
+  async mergeBranch(branchRef: string): Promise<void> {
+    await this.request("POST", `/v1/branches/${branchRef}/merge`);
   }
 
   async deleteBranch(branchRef: string, force = true): Promise<void> {

@@ -3,7 +3,7 @@
  */
 
 import arg from "arg";
-import { authProviderSubcommand, listSubcommand, addSubcommand, enableSubcommand, disableSubcommand } from "./command.js";
+import { authProviderSubcommand, listSubcommand, addSubcommand, enableSubcommand, disableSubcommand, removeSubcommand } from "./command.js";
 import { getFlagsSpecification } from "@/util/commands/get-flags-specification.js";
 import { globalCommandOptions } from "@/util/commands/arg-common.js";
 import { renderHelp } from "@/util/commands/help.js";
@@ -11,6 +11,7 @@ import { projectCommand } from "@/commands/project/command.js";
 import { listAuthProviders } from "./src/list.js";
 import { addAuthProvider } from "./src/add.js";
 import { enableAuthProvider, disableAuthProvider } from "./src/toggle.js";
+import { removeAuthProvider } from "./src/remove.js";
 
 export { authProviderSubcommand };
 
@@ -139,6 +140,39 @@ export async function authProviderCommand(argv: string[]): Promise<number> {
         return 1;
       }
       await disableAuthProvider(provider, {
+        "dry-run": args["--dry-run"],
+        json: args["--json"],
+        profile: args["--profile"],
+      });
+      return 0;
+    }
+
+    case "remove":
+    case "rm": {
+      const spec = getFlagsSpecification([...removeSubcommand.options, ...globalCommandOptions]);
+      let args: arg.Result<typeof spec>;
+      try {
+        args = arg(spec, { argv: rest, permissive: false });
+      } catch (err) {
+        if (err instanceof Error) {
+          console.error(`Error: ${err.message}`);
+        }
+        return 1;
+      }
+
+      if (args["--help"]) {
+        renderHelp(removeSubcommand, { parent: authProviderSubcommand });
+        return 0;
+      }
+
+      const provider = args._[0];
+      if (!provider) {
+        console.error("Error: Provider argument is required");
+        console.error(`Example: supa project auth-provider remove google`);
+        return 1;
+      }
+      await removeAuthProvider(provider, {
+        yes: args["--yes"],
         "dry-run": args["--dry-run"],
         json: args["--json"],
         profile: args["--profile"],

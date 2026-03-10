@@ -12,6 +12,7 @@ import apiKeys from "./api-keys/index.js";
 import profile from "./profile/index.js";
 import authProvider from "./auth-provider/index.js";
 import env from "./env/index.js";
+import branches from "./branches/index.js";
 import dev from "@/commands/dev/index.js";
 
 export { projectCommand };
@@ -47,6 +48,8 @@ export default async function project(argv: string[]): Promise<number> {
       return authProvider(rest);
     case "env":
       return env(rest);
+    case "branches":
+      return branches(rest);
     default:
       // Check for common mistakes
       if (subcommand === "--set") {

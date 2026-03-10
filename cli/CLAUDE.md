@@ -60,7 +60,9 @@ that dispatches to child directories.
 Command handlers return an exit code:
 
 ```typescript
-export default async function commandName(argv: string[]): Promise<number | void>
+export default async function commandName(
+  argv: string[],
+): Promise<number | void>;
 ```
 
 ### Adding a new command
@@ -131,11 +133,17 @@ the OpenAPI spec. Regenerate with `npm run generate:api-types`.
 
 ## .env setup
 
-The CLI loads `.env`, `supabase/.env`, and `.env.local` from the
-working directory at startup (`src/index.ts`). Several commands (`dev`,
-`push`, `pull`, `seed`) require `SUPABASE_DB_PASSWORD` to be set.
-`supa init` writes this to `.env` automatically when linking a project,
-but when working on the CLI itself you need to add it manually:
+The CLI loads env files from the working directory at startup
+(`src/index.ts`). Priority order (highest → lowest; OS env always wins):
+
+1. `.env.local` — written by `supa init` / `supa dev`; **the single
+   source of truth for credentials** (`SUPABASE_DB_PASSWORD`,
+   `SUPABASE_URL`, `SUPABASE_ANON_KEY`, etc.)
+2. `supabase/.env` — project-level env vars (edge function config, etc.)
+
+Several commands (`dev`, `push`, `pull`, `seed`) require
+`SUPABASE_DB_PASSWORD` to be set. `supa init` writes this to `.env.local` automatically when linking a
+project, but when working on the CLI itself you need to add it manually:
 
 ```
 SUPABASE_DB_PASSWORD=your-db-password
@@ -149,11 +157,11 @@ confirm the CLI is picking it up.
 Every command must have a `docs/` directory. The doc generator merges
 these files into the auto-generated reference pages:
 
-| File | Purpose |
-|------|---------|
-| `docs/intro.md` | Overview prose at the top of the page (required) |
-| `docs/option.<name>.md` | Extra details for a specific option |
-| `docs/example.<slug>.md` | Extra content for a specific example |
+| File                     | Purpose                                          |
+| ------------------------ | ------------------------------------------------ |
+| `docs/intro.md`          | Overview prose at the top of the page (required) |
+| `docs/option.<name>.md`  | Extra details for a specific option              |
+| `docs/example.<slug>.md` | Extra content for a specific example             |
 
 After modifying command specs or docs files, regenerate:
 

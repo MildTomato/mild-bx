@@ -16,13 +16,17 @@ import {
 } from "@/lib/config.js";
 import { generateKeyPair, decryptToken } from "./encryption.js";
 
-const DASHBOARD_URL = "https://supabase.com/dashboard";
-const API_URL = "https://api.supabase.com";
+import { SUPABASE_API_URL, SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
+import { createSpinner } from "@/components/output.js";
+
+const DASHBOARD_URL = SUPABASE_DASHBOARD_URL;
+const API_URL = SUPABASE_API_URL;
 
 interface LoginOptions {
   token?: string;
   json?: boolean;
   noBrowser?: boolean;
+  reason?: string;
 }
 
 interface AccessTokenResponse {
@@ -112,15 +116,15 @@ export async function loginCommand(options: LoginOptions): Promise<void> {
     }
 
     // Verify token by making API call
-    const spinner = options.json ? null : p.spinner();
-    spinner?.start("Verifying token...");
+    const spinner = createSpinner(options);
+    spinner.start("Verifying token...");
 
     try {
       const client = createClient(options.token);
       await client.listOrganizations();
 
       await saveAccessTokenAsync(options.token);
-      spinner?.stop("Token verified");
+      spinner.stop("Token verified");
 
       if (options.json) {
         console.log(JSON.stringify({ status: "success", message: "Logged in successfully" }));
@@ -128,7 +132,7 @@ export async function loginCommand(options: LoginOptions): Promise<void> {
         console.log(chalk.green("You are now logged in. ") + chalk.cyan("Happy coding!"));
       }
     } catch (error) {
-      spinner?.stop("Verification failed");
+      spinner.stop("Verification failed");
       const message = error instanceof Error ? error.message : "Failed to verify token";
 
       if (options.json) {
@@ -172,6 +176,10 @@ export async function loginCommand(options: LoginOptions): Promise<void> {
   }
 
   // Interactive browser-based login flow
+  if (options.reason) {
+    console.log(chalk.yellow(options.reason));
+  }
+
   const { publicKey, privateKey } = await generateKeyPair();
   const sessionId = randomUUID();
   const tokenName = generateTokenName();
@@ -183,11 +191,11 @@ export async function loginCommand(options: LoginOptions): Promise<void> {
     `&public_key=${encodedPublicKey}`;
 
   if (options.noBrowser) {
-    console.log(`\nOpen this URL in your browser to log in:\n`);
+    console.log(`Open this URL in your browser to log in:`);
     console.log(chalk.cyan(loginUrl));
   } else {
     console.log(
-      `\nHello from ${chalk.cyan("Supabase")}! Press ${chalk.cyan("Enter")} to open browser and login automatically.`,
+      `Press ${chalk.cyan("Enter")} to open the browser and log in.`,
     );
 
     // Wait for Enter
@@ -195,7 +203,7 @@ export async function loginCommand(options: LoginOptions): Promise<void> {
       process.stdin.once("data", () => resolve());
     });
 
-    console.log(`\nOpening browser... If it didn't open, visit:`);
+    console.log(`Opening browser... If it didn't open, visit:`);
     console.log(chalk.dim(loginUrl));
 
     try {
@@ -241,8 +249,7 @@ export async function loginCommand(options: LoginOptions): Promise<void> {
       // Save the token
       await saveAccessTokenAsync(accessToken);
 
-      console.log(`\nToken ${chalk.bold(tokenName)} created successfully.\n`);
-      console.log(chalk.green("You are now logged in. ") + chalk.cyan("Happy coding!"));
+      console.log(chalk.green(`Logged in. Token ${chalk.bold(tokenName)} created.`));
       return;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error("Unknown error");

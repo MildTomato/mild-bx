@@ -164,6 +164,18 @@ export const branchOption = {
 } as const satisfies CommandOption;
 
 /**
+ * --scope: Scope for environment variable (production | preview | branch)
+ */
+export const scopeOption = {
+  name: "scope",
+  shorthand: null,
+  type: String,
+  argument: "SCOPE",
+  deprecated: false,
+  description: "Scope for the variable: production, preview, development, or branch (omit for universal default)",
+} as const satisfies CommandOption;
+
+/**
  * --secret: Mark variable as write-only secret
  */
 export const secretOption = {

@@ -12,8 +12,9 @@ import {
   mkdirSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import { createClient } from "@/lib/api.js";
-import { resolveProjectContext, requireTTY } from "@/lib/resolve-project.js";
+import { createClient, type Project } from "@/lib/api.js";
+import { SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
+import { resolveProjectContext } from "@/lib/resolve-project.js";
 import {
   buildPostgrestPayload,
   buildAuthPayload,
@@ -28,6 +29,15 @@ import {
 } from "@/lib/pg-delta.js";
 import { printCommandHeader, S_BAR } from "@/components/command-header.js";
 import { C } from "@/lib/colors.js";
+import { printWarning, createSpinner } from "@/components/output.js";
+import { injectLocalEnvVars } from "@/lib/env-file.js";
+import { checkEnvMatchesBranch } from "@/lib/check-env-branch.js";
+import {
+  getEnabledFeatures,
+  resolveAllVariables,
+  diagnoseBindings,
+  formatDiagnostics,
+} from "@supabase-dx/config";
 
 export interface PushOptions {
   profile?: string;
@@ -65,10 +75,11 @@ function printConfigDiffs(diffs: ConfigDiff[], label: string) {
   const changes = diffs.filter((d) => d.changed);
   if (changes.length === 0) return;
 
-  console.log(chalk.dim(`\n${label}:`));
+  console.log(S_BAR);
+  console.log(`${S_BAR}  ${chalk.dim(`${label}:`)}`);
   for (const diff of changes) {
     console.log(
-      `  ${chalk.yellow(diff.key)}: ${chalk.red(String(diff.local))} → ${chalk.green(String(diff.remote))}`
+      `${S_BAR}    ${chalk.yellow(diff.key)}: ${chalk.red(String(diff.oldValue))} → ${chalk.green(String(diff.newValue))}`
     );
   }
 }
@@ -111,7 +122,7 @@ async function buildPlan(options: {
       }
     }
 
-    const authPayload = buildAuthPayload(config);
+    const authPayload = buildAuthPayload(config, (n) => process.env[n]);
     if (authPayload) {
       plan.config.auth.keys = Object.keys(authPayload);
 
@@ -166,16 +177,46 @@ async function buildPlan(options: {
           log("[pooler] Using session pooler (port 5432)");
           log("[pg-delta] Computing schema diff...");
 
-          const diffResult = await diffSchemaWithPgDelta(connectionString, schemaDir);
-          const statements = diffResult.statements ?? [];
+          const MAX_DIFF_RETRIES = 3;
+          const DIFF_RETRY_DELAY_MS = 4000;
+          let diffResult: Awaited<ReturnType<typeof diffSchemaWithPgDelta>> | undefined;
+          let lastDiffError: Error | undefined;
 
-          log(`[pg-delta] Found ${statements.length} changes`);
+          for (let attempt = 0; attempt < MAX_DIFF_RETRIES; attempt++) {
+            try {
+              diffResult = await diffSchemaWithPgDelta(connectionString, schemaDir);
+              lastDiffError = undefined;
+              break;
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              const isTenantError = /tenant or user not found|tenant/i.test(msg);
+              if (!isTenantError) {
+                // Non-tenant error — propagate immediately
+                throw new Error(`Schema diff failed: ${msg}`);
+              }
+              lastDiffError = err instanceof Error ? err : new Error(msg);
+              log(`[pg-delta] Pooler not ready (attempt ${attempt + 1}/${MAX_DIFF_RETRIES}): ${msg}`);
+              if (attempt < MAX_DIFF_RETRIES - 1) {
+                await new Promise((r) => setTimeout(r, DIFF_RETRY_DELAY_MS));
+              }
+            }
+          }
 
-          plan.schema = {
-            hasChanges: statements.length > 0,
-            statements,
-            connectionString,
-          };
+          if (lastDiffError) {
+            // Exhausted retries on a tenant/pooler error — skip diff and warn
+            warnings.push(
+              "Schema diff skipped: pooler not ready yet (try again in a moment)"
+            );
+            log(`[pg-delta] Skipping schema diff after ${MAX_DIFF_RETRIES} failed attempts`);
+          } else if (diffResult) {
+            const statements = diffResult.statements ?? [];
+            log(`[pg-delta] Found ${statements.length} changes`);
+            plan.schema = {
+              hasChanges: statements.length > 0,
+              statements,
+              connectionString,
+            };
+          }
         }
       } catch (error) {
         throw new Error(
@@ -197,8 +238,12 @@ async function buildPlan(options: {
       }
     }
     plan.migrations.sort();
-  } catch {
-    // No migrations directory
+  } catch (error) {
+    // Migrations directory does not exist — that is fine, this project may use declarative schema only.
+    // Re-throw unexpected errors (e.g. permissions) so they are not silently swallowed.
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
   }
 
   if (migrationsOnly) {
@@ -215,11 +260,37 @@ async function buildPlan(options: {
       }
     }
     plan.functions.sort();
-  } catch {
-    // No functions directory
+  } catch (error) {
+    // Functions directory does not exist — that is fine for projects without Edge Functions.
+    // Re-throw unexpected errors (e.g. permissions) so they are not silently swallowed.
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
   }
 
   return plan;
+}
+
+async function getProjectWithRetry(
+  client: ReturnType<typeof createClient>,
+  projectRef: string,
+  maxRetries = 3
+): Promise<Project> {
+  let lastError: unknown;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await client.getProject(projectRef);
+    } catch (error) {
+      lastError = error;
+      const msg = error instanceof Error ? error.message : String(error);
+      // Retry on "not found" to handle propagation lag for newly-created branch refs
+      if (!msg.includes("not found") && !msg.includes("404")) throw error;
+      if (i < maxRetries - 1) {
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+    }
+  }
+  throw lastError;
 }
 
 export async function pushCommand(options: PushOptions) {
@@ -230,40 +301,76 @@ export async function pushCommand(options: PushOptions) {
 
   setVerbose(options.verbose ?? false);
 
-  const { cwd, config, branch: currentBranch, profile, projectRef, token } =
+  const { cwd, config, branch: currentBranch, profile, projectRef, token, isBranch } =
     await resolveProjectContext(options);
+
+  // Inject local env vars so implicit binding can resolve canonical names
+  injectLocalEnvVars(cwd);
+
+  // Warn if .env.local SUPABASE_URL doesn't match the resolved branch
+  checkEnvMatchesBranch({ cwd, gitBranch: currentBranch, resolvedProjectRef: projectRef, config, json: options.json });
 
   const client = createClient(token);
   const projectConfig = config as ProjectConfig;
 
+  // Validate enabled features have required variables
+  if (!migrationsOnly) {
+    const enabledFeatures = getEnabledFeatures(projectConfig);
+    if (enabledFeatures.length > 0) {
+      const lookup = (varName: string) => process.env[varName];
+      const resolved = resolveAllVariables(enabledFeatures, projectConfig, lookup);
+      const diagnostics = diagnoseBindings(resolved, enabledFeatures);
+      const errors = diagnostics.filter((d) => d.level === "error");
+
+      if (errors.length > 0) {
+        const formatted = formatDiagnostics(diagnostics);
+        if (options.json) {
+          console.log(
+            JSON.stringify({
+              status: "error",
+              message: "Missing required environment variables",
+              diagnostics,
+            })
+          );
+        } else {
+          console.error(chalk.red("\nMissing required environment variables:\n"));
+          console.error(formatted);
+        }
+        process.exit(1);
+      }
+    }
+  }
+
   if (!options.json) {
-    requireTTY();
   }
 
   // JSON mode
   if (options.json) {
     try {
-      const project = await client.getProject(projectRef);
+      // Branch project refs don't work with GET /v1/projects/:ref — skip the health check
+      if (!isBranch) {
+        const project = await getProjectWithRetry(client, projectRef);
 
-      if (project.status === "INACTIVE") {
-        console.log(
-          JSON.stringify({
-            status: "error",
-            message: "Project is paused",
-            dashboardUrl: `https://supabase.com/dashboard/project/${projectRef}`,
-          })
-        );
-        process.exit(1);
-      }
+        if (project.status === "INACTIVE") {
+          console.log(
+            JSON.stringify({
+              status: "error",
+              message: "Project is paused",
+              dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${projectRef}`,
+            })
+          );
+          process.exit(1);
+        }
 
-      if (project.status !== "ACTIVE_HEALTHY" && project.status !== "ACTIVE_UNHEALTHY") {
-        console.log(
-          JSON.stringify({
-            status: "error",
-            message: `Project is not ready (status: ${project.status})`,
-          })
-        );
-        process.exit(1);
+        if (project.status !== "ACTIVE_HEALTHY" && project.status !== "ACTIVE_UNHEALTHY") {
+          console.log(
+            JSON.stringify({
+              status: "error",
+              message: `Project is not ready (status: ${project.status})`,
+            })
+          );
+          process.exit(1);
+        }
       }
 
       const plan = await buildPlan({
@@ -329,7 +436,7 @@ export async function pushCommand(options: PushOptions) {
           await client.updatePostgrestConfig(projectRef, postgrestPayload);
         }
 
-        const authPayload = buildAuthPayload(projectConfig);
+        const authPayload = buildAuthPayload(projectConfig, (n) => process.env[n]);
         if (authPayload && plan.config.auth.keys.length > 0) {
           await client.updateAuthConfig(projectRef, authPayload);
         }
@@ -388,37 +495,38 @@ export async function pushCommand(options: PushOptions) {
   }
 
   // Interactive mode
+  const headerContext: [string, string][] = [
+    ["Project", projectRef],
+    ["Profile", profile?.name || "default"],
+  ]
+  if (currentBranch) headerContext.push(["Branch", currentBranch])
+  if (dryRun) headerContext.push(["Mode", `${C.warning}plan (dry-run)${C.reset}`])
+
   printCommandHeader({
     command: "supa project push",
     description: ["Push local changes to remote."],
+    context: headerContext,
   });
-  console.log(S_BAR);
-  console.log(`${S_BAR}  ${C.secondary}Project:${C.reset}  ${projectRef}`);
-  console.log(`${S_BAR}  ${C.secondary}Profile:${C.reset}  ${profile?.name || "default"}`);
-  if (currentBranch) {
-    console.log(`${S_BAR}  ${C.secondary}Branch:${C.reset}   ${currentBranch}`);
-  }
-  if (dryRun) {
-    console.log(`${S_BAR}  ${C.warning}Mode:${C.reset}     ${C.warning}plan (dry-run)${C.reset}`);
-  }
-  console.log(S_BAR);
 
-  const spinner = p.spinner();
+  const spinner = createSpinner(options);
   spinner.start("Connecting...");
 
   try {
-    // Check project status
-    const project = await client.getProject(projectRef);
+    // Branch project refs don't work with GET /v1/projects/:ref — skip the health check.
+    // For main project refs, retry up to 3 times on "not found" to handle propagation lag.
+    if (!isBranch) {
+      const project = await getProjectWithRetry(client, projectRef);
 
-    if (project.status === "INACTIVE") {
-      spinner.stop(chalk.red("Project is paused"));
-      console.log(chalk.dim(`Restore from: https://supabase.com/dashboard/project/${projectRef}`));
-      process.exit(1);
-    }
+      if (project.status === "INACTIVE") {
+        spinner.stop(chalk.red("Project is paused"));
+        console.log(chalk.dim(`Restore from: ${SUPABASE_DASHBOARD_URL}/project/${projectRef}`));
+        process.exit(1);
+      }
 
-    if (project.status !== "ACTIVE_HEALTHY" && project.status !== "ACTIVE_UNHEALTHY") {
-      spinner.stop(chalk.red(`Project not ready (${project.status})`));
-      process.exit(1);
+      if (project.status !== "ACTIVE_HEALTHY" && project.status !== "ACTIVE_UNHEALTHY") {
+        spinner.stop(chalk.red(`Project not ready (${project.status})`));
+        process.exit(1);
+      }
     }
 
     spinner.message("Building push plan...");
@@ -450,22 +558,24 @@ export async function pushCommand(options: PushOptions) {
 
     spinner.stop("Push plan ready");
 
-    // Show plan details
+    // Show plan details inside the clack rail
     if (hasSchemaChanges && plan.schema.statements.length > 0) {
-      console.log(chalk.dim(`\nSchema changes (${plan.schema.statements.length}):`));
+      console.log(S_BAR);
+      console.log(`${S_BAR}  ${chalk.dim(`Schema changes (${plan.schema.statements.length}):`)}`);
       for (const stmt of plan.schema.statements.slice(0, 10)) {
         const display = stmt.length > 80 ? stmt.slice(0, 77) + "..." : stmt;
-        console.log(`  ${chalk.gray("-")} ${display}`);
+        console.log(`${S_BAR}    ${chalk.gray("-")} ${display}`);
       }
       if (plan.schema.statements.length > 10) {
-        console.log(chalk.dim(`  ... and ${plan.schema.statements.length - 10} more`));
+        console.log(`${S_BAR}    ${chalk.dim(`... and ${plan.schema.statements.length - 10} more`)}`);
       }
     }
 
     if (hasMigrations) {
-      console.log(chalk.dim("\nMigrations:"));
+      console.log(S_BAR);
+      console.log(`${S_BAR}  ${chalk.dim("Migrations:")}`);
       for (const m of plan.migrations) {
-        console.log(`  ${chalk.green("+")} ${m}`);
+        console.log(`${S_BAR}    ${chalk.green("+")} ${m}`);
       }
     }
 
@@ -473,20 +583,21 @@ export async function pushCommand(options: PushOptions) {
     printConfigDiffs(plan.config.auth.diffs, "Auth config changes");
 
     if (plan.warnings.length > 0) {
-      console.log();
-      for (const warning of plan.warnings) {
-        console.log(chalk.yellow(`Warning: ${warning}`));
+      console.log(S_BAR);
+      for (const w of plan.warnings) {
+        printWarning(w)
       }
     }
 
     // Dry run - just show what would happen
     if (dryRun) {
-      console.log(chalk.yellow("\n(plan mode - no changes applied)"));
+      console.log(S_BAR);
+      console.log(`${S_BAR}  ${chalk.yellow("(plan mode - no changes applied)")}`);
       return;
     }
 
-    // Confirm unless --yes
-    if (!yes) {
+    // Confirm unless --yes or non-TTY (can't prompt without a terminal)
+    if (!yes && process.stdin.isTTY) {
       const proceed = await p.confirm({
         message: "Push these changes?",
       });
@@ -498,7 +609,7 @@ export async function pushCommand(options: PushOptions) {
     }
 
     // Apply changes
-    const applySpinner = p.spinner();
+    const applySpinner = createSpinner(options);
     applySpinner.start("Applying changes...");
 
     let appliedCount = 0;
@@ -513,7 +624,7 @@ export async function pushCommand(options: PushOptions) {
         await client.updatePostgrestConfig(projectRef, postgrestPayload);
       }
 
-      const authPayload = buildAuthPayload(projectConfig);
+      const authPayload = buildAuthPayload(projectConfig, (n) => process.env[n]);
       if (authPayload && plan.config.auth.keys.length > 0) {
         applySpinner.message("Updating Auth config...");
         await client.updateAuthConfig(projectRef, authPayload);
@@ -567,8 +678,8 @@ export async function pushCommand(options: PushOptions) {
     const typesNote = typesRefreshed ? " (types refreshed)" : "";
     applySpinner.stop(chalk.green(`Pushed ${appliedCount} changes${typesNote}`));
 
-    for (const warning of applyWarnings) {
-      console.log(chalk.yellow(`Warning: ${warning}`));
+    for (const w of applyWarnings) {
+      printWarning(w)
     }
   } catch (error) {
     spinner.stop(chalk.red("Push failed"));

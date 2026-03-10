@@ -17,6 +17,11 @@ interface ProfileOptions {
 
 function getPushDescription(profile: string): string {
   switch (profile) {
+    case "remote": return "Push changes directly to production";
+    case "local": return "Push local changes directly to production";
+    case "branching-remote": return "Push changes to your personal dev branch";
+    case "branching-local": return "Push local changes to branch preview environment";
+    // legacy
     case "solo": return "Push local changes directly to production";
     case "staged": return "Push local changes to staging for testing";
     case "preview": return "Push local changes to your preview environment";
@@ -27,6 +32,11 @@ function getPushDescription(profile: string): string {
 
 function getPullDescription(profile: string): string {
   switch (profile) {
+    case "remote": return "Pull production schema to local";
+    case "local": return "Pull production schema to local";
+    case "branching-remote": return "Pull dev branch schema to local";
+    case "branching-local": return "Pull branch preview schema to local";
+    // legacy
     case "solo": return "Pull production schema to local";
     case "staged": return "Pull staging schema to local";
     case "preview": return "Pull preview environment schema to local";
@@ -36,11 +46,15 @@ function getPullDescription(profile: string): string {
 }
 
 function hasMerge(profile: string): boolean {
-  return profile !== "solo";
+  return profile === "branching-remote" || profile === "branching-local"
+    || profile === "staged" || profile === "preview" || profile === "preview-git";
 }
 
 function getMergeDescription(profile: string): string {
   switch (profile) {
+    case "branching-remote": return "Merge preview branch to production (or use PR merge)";
+    case "branching-local": return "Merge preview branch to production (or use PR merge)";
+    // legacy
     case "staged": return "Promote staging to production";
     case "preview": return "Merge between environments (e.g. preview → production)";
     case "preview-git": return "Merge between environments (or use PR merge)";

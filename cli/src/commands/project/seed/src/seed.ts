@@ -5,7 +5,7 @@
 import { join, relative } from "node:path";
 import { existsSync } from "node:fs";
 import { createClient } from "@/lib/api.js";
-import { resolveProjectContext, resolveConfig, requireTTY } from "@/lib/resolve-project.js";
+import { resolveProjectContext, resolveConfig } from "@/lib/resolve-project.js";
 import {
   applySeedFiles,
   findSeedFiles,
@@ -14,6 +14,7 @@ import {
 } from "@/lib/pg-delta.js";
 import { getSeedConfig } from "@/lib/seed-config.js";
 import { C } from "@/lib/colors.js";
+import { printKeyValue, printSectionHeader } from "@/components/output.js";
 
 interface SeedOptions {
   profile?: string;
@@ -134,7 +135,6 @@ export async function seedCommand(options: SeedOptions): Promise<void> {
   }
 
   if (!options.json) {
-    requireTTY();
   }
 
   // Dry run - just show what would be seeded
@@ -171,15 +171,9 @@ export async function seedCommand(options: SeedOptions): Promise<void> {
       `${C.bold}supa seed${C.reset} ${C.secondary}— seeding database${C.reset}`,
     );
     console.log("");
-    console.log(
-      `${C.secondary}Project:${C.reset} ${C.value}${projectRef}${C.reset}`,
-    );
-    console.log(
-      `${C.secondary}Profile:${C.reset} ${C.value}${profile?.name || "default"}${C.reset}`,
-    );
-    console.log(
-      `${C.secondary}Files:${C.reset}   ${C.value}${seedFiles.length}${C.reset}`,
-    );
+    printKeyValue("Project", `${C.value}${projectRef}${C.reset}`)
+    printKeyValue("Profile", `${C.value}${profile?.name || "default"}${C.reset}`)
+    printKeyValue("Files",   `${C.value}${seedFiles.length}${C.reset}`)
     console.log("");
   }
 
@@ -263,14 +257,10 @@ export async function seedStatusCommand(options: {
     );
   } else {
     console.log("");
-    console.log(`${C.bold}Seed Configuration${C.reset}`);
+    printSectionHeader("Seed Configuration", 0)
     console.log("");
-    console.log(
-      `${C.secondary}Enabled:${C.reset} ${seedConfig.enabled ? `${C.success}yes${C.reset}` : `${C.error}no${C.reset}`}`,
-    );
-    console.log(
-      `${C.secondary}Paths:${C.reset}   ${seedConfig.paths.join(", ")}`,
-    );
+    printKeyValue("Enabled", seedConfig.enabled ? `${C.success}yes${C.reset}` : `${C.error}no${C.reset}`, undefined, 0)
+    printKeyValue("Paths",   seedConfig.paths.join(", "), undefined, 0)
     console.log("");
 
     if (seedFiles.length === 0) {

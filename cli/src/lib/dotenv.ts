@@ -9,6 +9,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { createClient } from "@/lib/api.js";
+import { projectUrlFromDbHost, projectDbHost } from "./env.js";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -186,7 +187,15 @@ export async function resolveProjectEnv(
   projectRef: string,
   password?: string,
 ): Promise<EnvContext> {
-  // Fetch API keys
+  // Fetch project to get database.host, then fetch API keys
+  let dbHostFromProject = "";
+  try {
+    const project = await client.getProject(projectRef);
+    dbHostFromProject = project.database.host;
+  } catch {
+    // Project may not be ready yet — fall back to empty string; callers handle this
+  }
+
   let anonKey = "";
   let serviceRoleKey = "";
   try {
@@ -204,7 +213,8 @@ export async function resolveProjectEnv(
   }
 
   // Fetch pooler config
-  let poolerHost = `db.${projectRef}.supabase.co`;
+  // Fall back to the project db_host (direct connection host) if pooler is unavailable
+  let poolerHost = projectDbHost(dbHostFromProject);
   let poolerPort = 6543;
   let directPort = 5432;
   try {
@@ -242,9 +252,9 @@ export async function resolveProjectEnv(
   return {
     anonKey,
     serviceRoleKey,
-    supabaseUrl: `https://${projectRef}.supabase.co`,
+    supabaseUrl: projectUrlFromDbHost(dbHostFromProject, projectRef),
     postgresUrl: `postgresql://${dbUser}.${projectRef}:${pw}@${poolerHost}:${poolerPort}/${dbName}`,
-    postgresUrlNonPooling: `postgresql://${dbUser}.${projectRef}:${pw}@db.${projectRef}.supabase.co:${directPort}/${dbName}`,
+    postgresUrlNonPooling: `postgresql://${dbUser}.${projectRef}:${pw}@${projectDbHost(dbHostFromProject)}:${directPort}/${dbName}`,
     dbUser: `${dbUser}.${projectRef}`,
     dbHost: poolerHost,
     dbPassword: pw,

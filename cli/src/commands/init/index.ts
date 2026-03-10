@@ -36,8 +36,13 @@ export default async function init(argv: string[]): Promise<number> {
     local: args["--local"],
     org: args["--org"],
     project: args["--project"],
+    newProject: args["--new"],
+    link: args["--link"],
     name: args["--name"],
     region: args["--region"],
+    workflowProfile: args["--workflow-profile"],
+    schemaManagement: args["--schema-management"],
+    configSource: args["--config-source"],
     dryRun: args["--dry-run"],
   });
 

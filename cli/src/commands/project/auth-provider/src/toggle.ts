@@ -3,12 +3,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
+import { handleCommandError } from "@/lib/command-error.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
 import { printCommandHeader, S_BAR } from "@/components/command-header.js";
 import { findProvider, buildProviderPayload, parseProviderFromRemote, PROVIDER_DEFINITIONS } from "@/lib/auth-providers.js";
 import { writeJsonAtomic } from "@/lib/fs-atomic.js";
 import { findSimilar } from "@/lib/string-similarity.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
+import { createSpinner } from "@/components/output.js";
 
 export interface ToggleOptions {
   "dry-run"?: boolean;
@@ -24,7 +26,7 @@ export async function toggleAuthProvider(
   const isTTY = process.stdout.isTTY && !options.json;
   const action = enable ? "enable" : "disable";
   const isDryRun = options["dry-run"] || false;
-  const spinner = isTTY ? p.spinner() : null;
+  const spinner = createSpinner(options);
 
   if (isTTY) {
     printCommandHeader({
@@ -69,7 +71,7 @@ export async function toggleAuthProvider(
   const { projectRef, token: authToken, cwd } = await resolveProjectContext(options);
 
   // Check current state
-  spinner?.start("Checking current state...");
+  spinner.start("Checking current state...");
   const client = createClient(authToken);
   let currentState: boolean | null = null;
 
@@ -77,15 +79,15 @@ export async function toggleAuthProvider(
     const remoteConfig = await client.getAuthConfig(projectRef);
     const currentConfig = parseProviderFromRemote(provider, remoteConfig);
     currentState = currentConfig?.enabled ?? false;
-    spinner?.stop("Current state checked");
+    spinner.stop("Current state checked");
   } catch (error) {
-    spinner?.stop("Failed to check current state");
+    spinner.stop("Failed to check current state");
     // Continue anyway - we'll try to set it
   }
 
   // Check if already in desired state
   if (currentState === enable) {
-    spinner?.stop();
+    spinner.stop();
     console.log(S_BAR);
     console.log(`${chalk.dim("└")}`);
     console.log();
@@ -134,32 +136,15 @@ export async function toggleAuthProvider(
   }
 
   // Push to remote
-  spinner?.start(`${enable ? "Enabling" : "Disabling"} ${provider.displayName}...`);
+  spinner.start(`${enable ? "Enabling" : "Disabling"} ${provider.displayName}...`);
 
   try {
     await client.updateAuthConfig(projectRef, apiPayload);
 
-    spinner?.stop(`${provider.displayName} ${enable ? "enabled" : "disabled"}`);
+    spinner.stop(`${provider.displayName} ${enable ? "enabled" : "disabled"}`);
   } catch (error) {
-    spinner?.stop(`Failed to ${action} provider`);
-
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    if (options.json) {
-      console.error(JSON.stringify({
-        error: "NetworkError",
-        message: `Failed to ${action} provider`,
-        details: errorMessage,
-        provider: provider.key,
-        exitCode: EXIT_CODES.NETWORK_ERROR,
-      }, null, 2));
-    } else {
-      p.log.error(`Failed to ${action} provider: ${errorMessage}`);
-      if (errorMessage.includes("timeout") || errorMessage.includes("ETIMEDOUT")) {
-        p.log.message("\nThis might be a network issue. Check your connection and try again.");
-      }
-    }
-    process.exit(EXIT_CODES.NETWORK_ERROR);
+    spinner.stop(chalk.red("Failed"));
+    await handleCommandError(error, options, client, projectRef);
   }
 
   // Update local config.json (atomic write)

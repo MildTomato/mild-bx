@@ -18,6 +18,7 @@ import { join, dirname } from "node:path";
 import { parse as parseToml } from "toml";
 import { z } from "zod";
 import { credentialStore } from "./credentials.js";
+import { WORKFLOW_PROFILE_VALUES } from "@supabase-dx/config";
 
 /**
  * Access token format: sbp_[a-f0-9]{40} or sbp_oauth_[a-f0-9]{40}
@@ -321,7 +322,7 @@ const ProfileSchema = z.object({
 });
 
 // Workflow profile types (new DX concept)
-export const WorkflowProfileType = z.enum(["solo", "staged", "preview", "preview-git"]);
+export const WorkflowProfileType = z.enum(WORKFLOW_PROFILE_VALUES);
 export type WorkflowProfile = z.infer<typeof WorkflowProfileType>;
 
 // Our DX config extends the base Supabase config with profiles
@@ -338,11 +339,17 @@ const ProjectConfigSchema = z
       })
       .optional(),
 
+    // The git branch that maps to production (written by supa init, defaults to main/master)
+    production_branch: z.string().optional(),
+
     // Workflow profile (new: determines how commands behave)
     workflow_profile: WorkflowProfileType.optional(),
 
     // DX-specific profiles (old system: for branch-based environment mapping)
     profiles: z.record(ProfileSchema).optional(),
+
+    // Environment name mappings (branch pattern -> environment name)
+    environments: z.record(z.string()).optional(),
   })
   .passthrough();
 
@@ -520,5 +527,27 @@ export function listProfileNames(config: ProjectConfig): string[] {
  * Defaults to 'solo' if not specified
  */
 export function getWorkflowProfile(config: ProjectConfig): WorkflowProfile {
-  return config.workflow_profile || "solo";
+  return config.workflow_profile || "remote";
+}
+
+/**
+ * Get environment name for a branch using config.environments mapping.
+ * Falls back to "development" if no match.
+ */
+export function getEnvironmentForBranch(
+  config: ProjectConfig,
+  branch: string
+): string {
+  const environments = config.environments as
+    | Record<string, string>
+    | undefined;
+  if (!environments) return "development";
+
+  for (const [pattern, envName] of Object.entries(environments)) {
+    if (matchBranchPattern(branch, pattern)) {
+      return envName;
+    }
+  }
+
+  return "development";
 }

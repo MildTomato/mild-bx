@@ -2,7 +2,8 @@
  * Create a custom environment
  */
 
-import { setupEnvCommand, printNotImplemented } from "../../setup.js";
+import chalk from "chalk";
+import { setupEnvCommand } from "../../setup.js";
 
 export interface CreateOptions {
   name: string;
@@ -28,11 +29,9 @@ export async function createCommand(options: CreateOptions): Promise<void> {
   if (!ctx) return;
 
   // TODO: Implement full create logic when API is available
-  //
-  // 1. Validate name (alphanumeric, hyphens, underscores only)
-  // 2. Check name is not reserved (development/preview/production)
-  // 3. If --interactive, prompt for --from if not provided
-  // 4. Call client.createEnvironment(projectRef, { name, from? })
-
-  printNotImplemented();
+  if (options.json) {
+    console.log(JSON.stringify({ status: "not_implemented", message: "Environment API not yet available" }));
+  } else {
+    console.log(chalk.yellow("  Environment API not yet available."));
+  }
 }

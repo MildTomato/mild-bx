@@ -1,0 +1,114 @@
+---
+title: Config scoping
+description: Understand which config is global, which is promotable, and which varies per environment
+---
+
+Config in `supabase/config.json` falls into three categories: properties that
+are fixed for the lifetime of a project, properties that are promotable (same
+sensible default across every branch), and properties that are
+environment-specific (differ per branch and can't be promoted).
+
+## Global config
+
+Global properties can't be overridden per environment.
+
+`project_id` belongs in `config.json` — the CLI needs it to know which
+Supabase project it's working with:
+
+| Property | Description |
+|---|---|
+| `project_id` | Tells the CLI which Supabase project this config belongs to |
+
+The rest are project-level settings that don't really belong in `config.json`.
+We may move them to the platform instead:
+
+<Callout type="info">
+We may move these to the platform instead of storing them in `config.json`.
+</Callout>
+
+| Property | Description |
+|---|---|
+| `workflow_profile` | How the CLI handles deployments |
+| `schema_management` | `declarative` or `migrations` |
+| `config_source` | `code` or `remote` |
+| `environments` | The branch→environment mapping |
+| `db.major_version` | Set at project creation, can't vary per branch |
+
+## Promotable config
+
+Promotable properties are diffed and applied to the target when you merge a
+branch. If you changed `auth.enable_signup` on a preview branch and merge it,
+that value gets carried across. Non-promotable fields (ports, URLs, credentials)
+are left untouched on the target.
+
+| Section | Promotable properties |
+|---|---|
+| `api` | `enabled`, `schemas`, `extra_search_path`, `max_rows`, `tls.enabled` |
+| `auth` | `enabled`, `jwt_expiry`, `enable_refresh_token_rotation`, `refresh_token_reuse_interval`, `enable_manual_linking`, `enable_signup`, `enable_anonymous_sign_ins`, `minimum_password_length`, `password_requirements` |
+| `auth.hook` | `*.enabled` |
+| `auth.mfa` | everything |
+| `auth.sessions` | `timebox`, `inactivity_timeout` |
+| `auth.email` | `enable_signup`, `double_confirm_changes`, `enable_confirmations`, `secure_password_change`, `max_frequency`, `otp_length`, `otp_expiry`, all `template.*` |
+| `auth.sms` | `enable_signup`, `enable_confirmations`, `template`, `max_frequency`, provider `*.enabled` |
+| `auth.external` | `*.enabled`, `*.skip_nonce_check` |
+| `db` | `pooler.enabled`, `pooler.pool_mode`, `pooler.default_pool_size`, `pooler.max_client_conn`, `seed.enabled`, `seed.sql_paths` |
+| `edge_runtime` | `enabled`, `policy` |
+| `functions` | everything |
+| `realtime` | everything |
+| `storage` | everything |
+| `analytics` | `enabled`, `backend` |
+| `inbucket` | `enabled` |
+| `experimental` | `orioledb_version` |
+
+## Environment-specific config
+
+Environment-specific properties differ per branch and are never promoted.
+Each branch gets its own values when the CLI provisions it — credentials,
+redirect URLs, and ports are all branch-specific.
+
+| Section | Environment-specific properties |
+|---|---|
+| `auth` | `site_url`, `additional_redirect_urls` |
+| `auth.hook` | `*.uri`, `*.secrets` |
+| `auth.email.smtp` | `host`, `port`, `user`, `pass`, `admin_email`, `sender_name` |
+| `auth.sms` | `test_otp`, provider credentials (`account_sid`, `auth_token`, `api_key`, etc.) |
+| `auth.external` | `*.client_id`, `*.secret`, `*.url`, `*.redirect_uri` |
+| `api` | `port`, `external_url` |
+| `db` | `port`, `shadow_port`, `pooler.port` |
+| `studio` | `enabled`, `port`, `api_url`, `openai_api_key` |
+| `edge_runtime` | `inspector_port` |
+| `inbucket` | `port`, `smtp_port`, `pop3_port` |
+| `analytics` | `port`, `vector_port` |
+| `experimental` | `s3_host`, `s3_region`, `s3_access_key`, `s3_secret_key` |
+
+## Overriding a promotable value on a specific branch
+
+If you need a branch to behave differently — for example, disabling sign-ups
+during a migration — you can override any promotable property using a
+branch-scoped profile in `supabase/config.json`:
+
+```json
+{
+  "auth": {
+    "enable_signup": true
+  },
+  "profiles": {
+    "migration-test": {
+      "branches": ["migration/*"],
+      "overrides": {
+        "auth.enable_signup": false
+      }
+    }
+  }
+}
+```
+
+Overrides apply only to branches matching the profile pattern. All other
+branches use the promotable value.
+
+## Next steps
+
+- [Workflow profiles](/docs/cli/workflow-profiles) — choose how changes flow
+  between branches and environments
+- [Schema sync](/docs/cli/schema-sync) — manage database schema changes
+  alongside config promotion

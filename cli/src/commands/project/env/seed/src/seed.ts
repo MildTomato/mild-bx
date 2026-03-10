@@ -2,7 +2,8 @@
  * Seed one environment from another
  */
 
-import { setupEnvCommand, printNotImplemented } from "../../setup.js";
+import chalk from "chalk";
+import { setupEnvCommand } from "../../setup.js";
 
 export interface SeedOptions {
   target: string;
@@ -27,18 +28,9 @@ export async function seedCommand(options: SeedOptions): Promise<void> {
   if (!ctx) return;
 
   // TODO: Implement full seed logic when API is available
-  //
-  // 1. Validate that target and from environments exist
-  // 2. Fetch variables from source environment
-  // 3. If --interactive, show list with checkboxes to select variables
-  // 4. Show preview of what will be copied
-  // 5. Prompt for confirmation unless --yes
-  // 6. Call client.seedEnvironment(projectRef, target, { from, variables? })
-  //
-  // Notes:
-  // - Secret values are copied (write-only to write-only)
-  // - Existing variables in target are overwritten
-  // - Branch overrides are NOT copied (only base values)
-
-  printNotImplemented();
+  if (options.json) {
+    console.log(JSON.stringify({ status: "not_implemented", message: "Environment API not yet available" }));
+  } else {
+    console.log(chalk.yellow("  Environment API not yet available."));
+  }
 }

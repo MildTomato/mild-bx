@@ -8,28 +8,41 @@ import {
   existsSync,
   mkdirSync,
   writeFileSync,
-  readFileSync,
-  appendFileSync,
 } from "node:fs";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { createClient } from "@/lib/api.js";
+import { SUPABASE_DASHBOARD_URL, projectUrlFromDbHost } from "@/lib/env.js";
 import { requireAuth, loadProjectConfig, getWorkflowProfile } from "@/lib/config.js";
+import { getCurrentBranch } from "@/lib/git.js";
 import { type Region, REGIONS } from "@/lib/constants.js";
 import { createProject as createProjectOp } from "@/lib/operations.js";
 import { buildApiConfigFromRemote, buildAuthConfigFromRemote } from "@/lib/sync.js";
-import { WORKFLOW_PROFILES } from "@/lib/workflow-profiles.js";
+import {
+  WORKFLOW_PROFILES,
+  LEGACY_WORKFLOW_PROFILES,
+  DEFAULT_WORKFLOW_PROFILE,
+  isLegacyProfile,
+  getProfileDefinition,
+} from "@/lib/workflow-profiles.js";
+import { writeProjectEnv } from "@/lib/env-file.js";
 import type { WorkflowProfile, SchemaManagement, ConfigSource } from "@/lib/config-types.js";
 import { runInitWizard, type InitResult } from "@/components/InitWizard.js";
 import { S_BAR } from "@/components/command-header.js";
+import { printKeyValue, printNextSteps, printWarning, printSectionHeader, createSpinner } from "@/components/output.js";
 
 interface InitOptions {
   yes?: boolean;
   json?: boolean;
   org?: string;
   project?: string;
+  newProject?: boolean;
+  link?: string;
   name?: string;
   region?: string;
+  workflowProfile?: string;
+  schemaManagement?: string;
+  configSource?: string;
   dryRun?: boolean;
   local?: boolean;
 }
@@ -39,18 +52,23 @@ interface ConfigData {
   workflowProfile: WorkflowProfile;
   schemaManagement: SchemaManagement;
   configSource: ConfigSource;
+  productionBranch?: string;
   api?: ReturnType<typeof buildApiConfigFromRemote>;
   auth?: ReturnType<typeof buildAuthConfigFromRemote>;
 }
 
 function buildConfigJson(data: ConfigData): string {
   const config: Record<string, unknown> = {
-    $schema: "../../../cli/config-schema/config.schema.json",
+    $schema: "../../../packages/config/config-schema/config.schema.json",
     project_id: data.projectId,
     workflow_profile: data.workflowProfile,
     schema_management: data.schemaManagement,
     config_source: data.configSource,
   };
+
+  if (data.productionBranch) {
+    config.production_branch = data.productionBranch;
+  }
 
   if (data.api && Object.keys(data.api).length > 0) {
     config.api = data.api;
@@ -102,15 +120,17 @@ export async function initCommand(options: InitOptions): Promise<void> {
       }
     } else if (projectId) {
       // Case: fully initialized with a project — show current state
-      const profile = config ? getWorkflowProfile(config) : "unknown";
-      const dashboardUrl = `https://supabase.com/dashboard/project/${projectId}`;
-      const profileDef = WORKFLOW_PROFILES.find((pr) => pr.name === profile);
+      const profile = config ? getWorkflowProfile(config) : "remote";
+      const dashboardUrl = `${SUPABASE_DASHBOARD_URL}/project/${projectId}`;
+      const profileDef = getProfileDefinition(profile);
+      const legacy = isLegacyProfile(profile);
 
       if (options.json) {
         console.log(JSON.stringify({
           status: "already_initialized",
           project_id: projectId,
           workflow_profile: profile,
+          legacy_profile: legacy,
           dashboard_url: dashboardUrl,
           config_path: join(supabaseDir, "config.json"),
         }));
@@ -118,19 +138,27 @@ export async function initCommand(options: InitOptions): Promise<void> {
         console.log();
         console.log("Already initialized in this directory.");
         console.log();
-        console.log(`${chalk.dim("Project:")} ${projectId}`);
-        console.log(`${chalk.dim("Config:")} supabase/config.json`);
-        console.log(`${chalk.dim("Profile:")} ${profile}`);
-        if (profileDef) {
+        printKeyValue("Project", projectId)
+        printKeyValue("Config", "supabase/config.json")
+        printKeyValue(
+          "Profile",
+          `${profile}${legacy ? chalk.yellow(" (legacy)") : ""}`,
+          profileDef?.description,
+        )
+        if (legacy) {
           console.log();
-          console.log(chalk.bold(profileDef.title));
-          console.log(chalk.dim(profileDef.description));
+          printWarning(
+            "Your workflow profile is out of date.",
+            "supa project profile",
+            "to switch to a current profile",
+          )
         }
         console.log();
-        console.log(chalk.dim("Next steps:"));
-        console.log(`  supa dev  ${chalk.dim("Start development watcher")}`);
-        console.log(`  supa project profile  ${chalk.dim("Change workflow profile")}`);
-        console.log(`  supa status  ${chalk.dim("Show project status")}`);
+        printNextSteps([
+          { command: "supa dev",             description: "Start development watcher" },
+          { command: "supa project profile", description: "Change workflow profile" },
+          { command: "supa status",          description: "Show project status" },
+        ])
       }
       return;
     }
@@ -145,16 +173,72 @@ export async function initCommand(options: InitOptions): Promise<void> {
     return;
   }
 
+  // Validate mutual exclusion of --new and --link
+  if (options.newProject && options.link) {
+    if (options.json) {
+      console.log(JSON.stringify({ status: "error", message: "--new and --link are mutually exclusive" }));
+    } else {
+      console.error("Error: --new and --link are mutually exclusive");
+    }
+    process.exit(1);
+  }
+
+  // --link is an alias for --project
+  if (options.link && !options.project) {
+    options.project = options.link;
+  }
+
+  if (options.newProject && (!options.org || !options.name || !options.region)) {
+    if (options.json) {
+      console.log(JSON.stringify({
+        status: "error",
+        message: "--new requires --org, --name, and --region",
+        example: "supa init --new --org my-org --name my-project --region us-east-1",
+      }));
+    } else {
+      console.error("Error: --new requires --org, --name, and --region");
+      console.error("Example: supa init --new --org my-org --name my-project --region us-east-1");
+    }
+    process.exit(1);
+  }
+
   // ─────────────────────────────────────────────────────────────
   // Non-interactive: platform flags (--project, --org/--name/--region)
   // ─────────────────────────────────────────────────────────────
 
   const token = await requireAuth({ json: options.json });
 
+  // Validate --workflow-profile if supplied
+  if (options.workflowProfile !== undefined) {
+    const validProfiles: string[] = ["remote", "local", "branching-remote", "branching-local"];
+    if (!validProfiles.includes(options.workflowProfile)) {
+      if (options.json) {
+        console.log(JSON.stringify({ status: "error", message: `Invalid --workflow-profile: "${options.workflowProfile}". Valid values: ${validProfiles.join(", ")}` }));
+      } else {
+        console.error(`Error: Invalid --workflow-profile: "${options.workflowProfile}"`);
+        console.error(`Valid values: ${validProfiles.join(", ")}`);
+      }
+      process.exit(1);
+    }
+  }
+
   let project: InitResult;
 
   // Non-interactive mode: use flags if provided
   if (options.project) {
+    // Refuse to overwrite an existing initialised project
+    if (existsSync(join(supabaseDir, "config.json"))) {
+      const existing = loadProjectConfig(cwd);
+      if (existing?.project_id) {
+        if (options.json) {
+          console.log(JSON.stringify({ status: "error", message: `Already initialised with project ${existing.project_id}. Remove supabase/config.json to re-initialise.` }));
+        } else {
+          console.error(`Error: Already initialised with project ${existing.project_id}.`);
+          console.error("Remove supabase/config.json to re-initialise.");
+        }
+        process.exit(1);
+      }
+    }
     const client = createClient(token);
     try {
       const projects = await client.listProjects();
@@ -167,7 +251,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
         }
         process.exit(1);
       }
-      project = { ref: found.ref, name: found.name, schemaManagement: "declarative", configSource: "code", workflowProfile: "solo" };
+      project = { ref: found.ref, name: found.name, schemaManagement: (options.schemaManagement as SchemaManagement) ?? "declarative", configSource: (options.configSource as ConfigSource) ?? "code", workflowProfile: (options.workflowProfile as WorkflowProfile) ?? DEFAULT_WORKFLOW_PROFILE };
     } catch (err) {
       if (options.json) {
         console.log(JSON.stringify({ status: "error", message: err instanceof Error ? err.message : "Failed to fetch projects" }));
@@ -198,7 +282,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
         region: options.region as Region,
         name: options.name,
       });
-      project = { ref: newProject.ref, name: options.name, schemaManagement: "declarative", configSource: "code", workflowProfile: "solo", dbPassword };
+      project = { ref: newProject.ref, name: options.name, schemaManagement: (options.schemaManagement as SchemaManagement) ?? "declarative", configSource: (options.configSource as ConfigSource) ?? "code", workflowProfile: (options.workflowProfile as WorkflowProfile) ?? DEFAULT_WORKFLOW_PROFILE, dbPassword };
     } catch (err) {
       if (options.json) {
         console.log(JSON.stringify({ status: "error", message: err instanceof Error ? err.message : "Failed to create project" }));
@@ -219,13 +303,18 @@ export async function initCommand(options: InitOptions): Promise<void> {
     if (options.json) {
       console.log(JSON.stringify({
         status: "error",
-        message: "Non-interactive mode requires flags. Use --project <ref> for existing project, or --org, --name, --region for new project.",
-        hint: 'Run "supa orgs --json" to list organizations, "supa projects list --json" to list projects.',
+        action_required: "choose",
+        message: "Do you want to create a new project or link an existing one?",
+        options: ["create_new", "link_existing"],
+        create_new: "supa init --new --org <slug> --name <name> --region <region>",
+        link_existing: "supa init --link <ref>",
+        hint: 'Run "supa orgs --json" to list your organizations and get your org slug.',
       }));
     } else {
       console.error("Error: Non-interactive mode requires flags.");
-      console.error("Use --project <ref> for existing project, or --org, --name, --region for new project.");
-      console.error('Run "supa orgs --json" to list organizations, "supa projects list --json" to list projects.');
+      console.error("To create a new project: supa init --new --org <slug> --name <name> --region <region>");
+      console.error("To link an existing project: supa init --link <ref>");
+      console.error('Run "supa orgs --json" to list your organizations and get your org slug.');
     }
     process.exit(1);
   } else {
@@ -295,7 +384,7 @@ function runLocalInit(cwd: string, supabaseDir: string, options: InitOptions): v
 
   // Write minimal config (no project_id)
   const config: Record<string, unknown> = {
-    $schema: "../../../cli/config-schema/config.schema.json",
+    $schema: "../../../packages/config/config-schema/config.schema.json",
     schema_management: "declarative",
     config_source: "code",
   };
@@ -323,15 +412,16 @@ function runLocalInit(cwd: string, supabaseDir: string, options: InitOptions): v
     console.log();
     console.log(chalk.green("✓") + " Initialized Supabase (local)");
     console.log();
-    console.log(`  ${chalk.dim("Created in")} ${chalk.bold("./supabase/")}`);
+    printKeyValue("Created in", chalk.bold("./supabase/"))
     console.log(`  ${chalk.dim("📄")} config.json`);
     console.log(`  ${chalk.dim("📁")} schema/public/`);
     console.log(`  ${chalk.dim("📁")} migrations/`);
     console.log(`  ${chalk.dim("📁")} functions/`);
     console.log(`  ${chalk.dim("📁")} types/`);
     console.log();
-    console.log(chalk.dim("  Start writing SQL in supabase/schema/"));
-    console.log(chalk.dim("  When you're ready to deploy, run supa init again to connect to the platform."));
+    printNextSteps([
+      { command: "supa init", description: "Connect to Supabase Platform when ready" },
+    ])
   }
 }
 
@@ -346,20 +436,23 @@ async function writePlatformProject(
   project: InitResult,
   options: InitOptions,
 ): Promise<void> {
-  const { ref: projectRef, name: projectName, schemaManagement = "declarative", configSource = "code", workflowProfile = "solo" } = project;
+  const { ref: projectRef, name: projectName, schemaManagement = "declarative", configSource = "code", workflowProfile = DEFAULT_WORKFLOW_PROFILE } = project;
 
   // Fetch project config
-  const spinner = !options.json && process.stdin.isTTY ? p.spinner() : null;
-  spinner?.start("Fetching project config...");
+  const spinner = createSpinner(options);
+  spinner.start("Fetching project config...");
 
   const client = createClient(token);
   let anonKey = "";
-  const apiUrl = `https://${projectRef}.supabase.co`;
+  let apiUrl = "";
   let apiConfig: ReturnType<typeof buildApiConfigFromRemote> = {};
   let authConfig: ReturnType<typeof buildAuthConfigFromRemote> = {};
 
   try {
     await new Promise((r) => setTimeout(r, 2000));
+
+    const projectData = await client.getProject(projectRef);
+    apiUrl = projectUrlFromDbHost(projectData.database.host, projectRef);
 
     const keys = await client.getProjectApiKeys(projectRef);
     const anonKeyObj = keys.find((k) => k.name === "anon" || k.name === "publishable anon key");
@@ -372,11 +465,16 @@ async function writePlatformProject(
 
     const remoteAuth = await client.getAuthConfig(projectRef);
     authConfig = buildAuthConfigFromRemote(remoteAuth as Record<string, unknown>);
-  } catch {
-    // Config might not be available yet
+  } catch (error) {
+    // The project may still be provisioning — config and API keys are not always
+    // available immediately after creation. This is non-fatal; supa init writes
+    // the config with defaults and the user can run `supa project pull` later.
+    if (options.verbose) {
+      console.error(`[init] Could not fetch project config (project may still be provisioning): ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
-  spinner?.stop("Project config fetched");
+  spinner.stop("Project config fetched");
 
   // Close the timeline from the wizard
   if (!options.json && process.stdin.isTTY) {
@@ -415,7 +513,7 @@ async function writePlatformProject(
       console.log("  supabase/types/");
       console.log("  supabase/schema/public/");
       if (project.dbPassword) {
-        console.log("  .env (with SUPABASE_DB_PASSWORD)");
+        console.log("  .env.local (with SUPABASE_DB_PASSWORD)");
       }
     }
     return;
@@ -433,19 +531,14 @@ async function writePlatformProject(
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   }
 
-  // Write DB password to .env if we created a new project
+  // Inject DB password into process.env so writeProjectEnv writes it to .env.local
   if (project.dbPassword) {
-    const envPath = join(cwd, ".env");
-    const envLine = `SUPABASE_DB_PASSWORD=${project.dbPassword}\n`;
-    if (existsSync(envPath)) {
-      const existingContent = readFileSync(envPath, "utf-8");
-      if (!existingContent.includes("SUPABASE_DB_PASSWORD=")) {
-        appendFileSync(envPath, envLine);
-      }
-    } else {
-      writeFileSync(envPath, envLine);
-    }
+    process.env.SUPABASE_DB_PASSWORD = project.dbPassword;
   }
+
+  // Detect the current git branch to record as the production branch.
+  // This tells supa dev which git branch maps to the main project (not a preview).
+  const detectedProductionBranch = getCurrentBranch(cwd) ?? undefined;
 
   // Write config
   const configContent = buildConfigJson({
@@ -453,6 +546,7 @@ async function writePlatformProject(
     workflowProfile,
     schemaManagement,
     configSource,
+    productionBranch: detectedProductionBranch,
     api: apiConfig,
     auth: authConfig,
   });
@@ -460,13 +554,16 @@ async function writePlatformProject(
   writeFileSync(join(supabaseDir, "migrations", ".gitkeep"), "");
   writeFileSync(join(supabaseDir, "functions", ".gitkeep"), "");
 
+  // Write fresh credentials to .env.local so the project is immediately usable
+  await writeProjectEnv({ cwd, projectRef, token });
+
   if (options.json) {
     console.log(JSON.stringify({
       status: "success",
       project: {
         id: projectRef,
         name: projectName,
-        dashboardUrl: `https://supabase.com/dashboard/project/${projectRef}`,
+        dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${projectRef}`,
       },
       api: {
         url: apiUrl,
@@ -474,52 +571,55 @@ async function writePlatformProject(
         secretKey: '[hidden] run "supa project api-keys --json --reveal"',
       },
       usage: `createClient("${apiUrl}", "<ANON_KEY>")`,
+      schema_management: schemaManagement,
+      workflow_profile: workflowProfile,
       created: [
         "supabase/config.json",
+        "supabase/schema/public/",
         "supabase/migrations/",
         "supabase/functions/",
         "supabase/types/",
-        "supabase/schema/public/",
       ],
+      schema: schemaManagement === "declarative"
+        ? { mode: "declarative", add_tables: "supabase/schema/public/<table>.sql", hint: "Add .sql files to supabase/schema/ — do NOT use supabase/migrations/ for schema changes" }
+        : { mode: "migrations", add_migrations: "supabase/migrations/<timestamp>_<name>.sql" },
       next: {
-        command: "supa dev --json",
-        description: "Start watcher for continuous sync - runs schema changes automatically",
-      },
-      customize: {
-        config: "supabase/config.json - Edit API and auth settings",
-        schema: "supabase/schema/ - Add .sql files to define your database schema",
-        migrations: "supabase/migrations/ - Add version-controlled migration files",
+        command: "supa dev",
+        long_running: true,
+        agent_instruction: "Run in a background shell and continue — do not wait for it to complete.",
       },
     }));
   } else {
-    const dashboardUrl = `https://supabase.com/dashboard/project/${projectRef}`;
+    const dashboardUrl = `${SUPABASE_DASHBOARD_URL}/project/${projectRef}`;
 
     console.log();
     console.log(chalk.green("✓") + " Initialized Supabase");
     console.log(`  Created a new project: ${chalk.bold(`"${projectName}"`)}`);
     console.log();
-    console.log(chalk.dim("  Project"));
-    console.log(`  ${chalk.dim("ID:")} ${projectRef}`);
-    console.log(`  ${chalk.dim("Dashboard:")} ${chalk.cyan(dashboardUrl)}`);
+    printSectionHeader("Project")
+    printKeyValue("ID", projectRef)
+    printKeyValue("Dashboard", chalk.cyan(dashboardUrl))
     console.log();
-    console.log(chalk.dim("  API Credentials"));
-    console.log(`  ${chalk.dim("URL:")} ${chalk.cyan(apiUrl)}`);
-    console.log(`  ${chalk.dim("Anon Key:")} ${anonKey || chalk.dim("[Keys still initializing]")}`);
-    console.log(`  ${chalk.dim("Secret Key:")} ${chalk.dim('[hidden] run "supa project api-keys --reveal"')}`);
+    printSectionHeader("API Credentials")
+    printKeyValue("URL", chalk.cyan(apiUrl))
+    printKeyValue("Anon Key", anonKey || chalk.dim("[Keys still initializing]"))
+    printKeyValue("Secret Key", chalk.dim('[hidden] run "supa project api-keys --reveal"'))
     console.log();
-    console.log(chalk.dim("  Usage"));
+    printSectionHeader("Usage")
     console.log(`  ${chalk.dim("createClient(")}${chalk.cyan(`"${apiUrl}"`)}${chalk.dim(', "<ANON_KEY>")')}`);
     console.log();
-    console.log(`  ${chalk.dim("Created in")} ${chalk.bold("./supabase/")}`);
+    printKeyValue("Created in", chalk.bold("./supabase/"))
     console.log(`  ${chalk.dim("📄")} config.json`);
+    if (schemaManagement === "declarative") {
+      console.log(`  ${chalk.dim("📁")} schema/public/  ${chalk.dim("← add .sql files here")}`);
+    }
     console.log(`  ${chalk.dim("📁")} migrations/`);
     console.log(`  ${chalk.dim("📁")} functions/`);
     console.log(`  ${chalk.dim("📁")} types/`);
     console.log();
-    console.log(chalk.dim("  Customize your project"));
-    console.log(`  ${chalk.dim("📄")} supabase/config.json ${chalk.dim("API and auth settings")}`);
-    console.log(`  ${chalk.dim("📁")} supabase/schema/ ${chalk.dim("Add .sql files for schema")}`);
-    console.log();
+    printNextSteps([
+      { command: "supa dev", description: "Start development watcher" },
+    ])
     console.log(chalk.dim("  Tip: Use --json for structured output when scripting"));
 
     // Prompt to run supa dev (skip if --yes)

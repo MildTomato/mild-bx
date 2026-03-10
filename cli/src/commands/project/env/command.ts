@@ -6,6 +6,7 @@ import type { Command } from "@/util/commands/types.js";
 import {
   environmentOption,
   branchOption,
+  scopeOption,
   secretOption,
   pruneOption,
   yesOption,
@@ -73,7 +74,7 @@ export const setSubcommand = {
     { name: "VALUE", required: false, description: "Variable value (reads from stdin if omitted)" },
   ],
   options: [
-    environmentOption,
+    scopeOption,
     branchOption,
     secretOption,
     jsonOption,
@@ -81,16 +82,28 @@ export const setSubcommand = {
   ],
   examples: [
     {
-      name: "Set a variable",
-      value: 'supa project env set API_KEY "sk_test_123"',
+      name: "Set for production (default scope)",
+      value: 'supa project env set API_KEY "sk_live_123"',
     },
     {
       name: "Set a secret variable",
       value: 'supa project env set STRIPE_KEY "sk_live_456" --secret',
     },
     {
-      name: "Set branch override",
-      value: 'supa project env set DEBUG "true" --branch feature-x',
+      name: "Set for production explicitly",
+      value: 'supa project env set API_KEY "sk_live_123" --scope production',
+    },
+    {
+      name: "Override for all preview branches",
+      value: 'supa project env set API_KEY "sk_test_123" --scope preview',
+    },
+    {
+      name: "Override for local development",
+      value: 'supa project env set API_KEY "sk_dev_123" --scope development',
+    },
+    {
+      name: "Override for a specific branch",
+      value: 'supa project env set DEBUG "true" --scope branch --branch feat/my-feature',
     },
   ],
 } as const satisfies Command;
@@ -101,15 +114,27 @@ export const unsetSubcommand = {
   aliases: [],
   description: "Delete an environment variable",
   arguments: [{ name: "KEY", required: true, description: "Variable name to delete" }],
-  options: [environmentOption, branchOption, yesOption, jsonOption, profileOption],
+  options: [scopeOption, branchOption, yesOption, jsonOption, profileOption],
   examples: [
     {
-      name: "Delete a variable",
+      name: "Delete a production variable (default scope)",
       value: "supa project env unset OLD_KEY",
     },
     {
-      name: "Delete branch override",
-      value: "supa project env unset DEBUG --branch feature-x",
+      name: "Delete production override",
+      value: "supa project env unset DEBUG --scope production",
+    },
+    {
+      name: "Delete preview override",
+      value: "supa project env unset DEBUG --scope preview",
+    },
+    {
+      name: "Delete development override",
+      value: "supa project env unset DEBUG --scope development",
+    },
+    {
+      name: "Delete branch-specific override",
+      value: "supa project env unset DEBUG --scope branch --branch feat/my-feature",
     },
   ],
 } as const satisfies Command;
@@ -123,12 +148,16 @@ export const listSubcommand = {
   options: [environmentOption, branchOption, jsonOption, profileOption],
   examples: [
     {
-      name: "List development variables",
+      name: "Show all variables with their scopes",
       value: "supa project env list",
     },
     {
-      name: "List production variables",
+      name: "Show resolved variables for production",
       value: "supa project env list --environment production",
+    },
+    {
+      name: "Show resolved variables for a specific branch",
+      value: "supa project env list --environment preview --branch feat/my-feature",
     },
   ],
 } as const satisfies Command;
@@ -200,6 +229,39 @@ export const deleteSubcommand = {
   ],
 } as const satisfies Command;
 
+// Propagate subcommand
+export const propagateSubcommand = {
+  name: "propagate",
+  aliases: [],
+  description: "Propagate environment variables to all healthy preview branches",
+  arguments: [],
+  options: [
+    branchOption,
+    dryRunOption,
+    yesOption,
+    jsonOption,
+    profileOption,
+  ],
+  examples: [
+    {
+      name: "Propagate to all healthy preview branches",
+      value: "supa project env propagate",
+    },
+    {
+      name: "Preview what would be propagated",
+      value: "supa project env propagate --dry-run",
+    },
+    {
+      name: "Propagate to a specific branch",
+      value: "supa project env propagate --branch feat/my-feature",
+    },
+    {
+      name: "Propagate without confirmation prompt",
+      value: "supa project env propagate --yes",
+    },
+  ],
+} as const satisfies Command;
+
 // Seed subcommand
 export const seedSubcommand = {
   name: "seed",
@@ -254,6 +316,7 @@ export const envCommand = {
     createSubcommand,
     deleteSubcommand,
     seedSubcommand,
+    propagateSubcommand,
   ],
   options: [],
   examples: [

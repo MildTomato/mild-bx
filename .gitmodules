@@ -22,3 +22,9 @@
 [submodule "external/vercel"]
 	path = external/vercel
 	url = https://github.com/vercel/vercel.git
+[submodule "external/convex-backend"]
+	path = external/convex-backend
+	url = https://github.com/get-convex/convex-backend.git
+[submodule "external/dx-lab"]
+	path = external/dx-lab
+	url = https://github.com/supabase/dx-lab.git

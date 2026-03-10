@@ -13,6 +13,7 @@ import listEnvironments from "./list-environments/index.js";
 import create from "./create/index.js";
 import deleteEnv from "./delete/index.js";
 import seed from "./seed/index.js";
+import propagate from "./propagate/index.js";
 
 export { envCommand };
 
@@ -50,6 +51,8 @@ export default async function env(argv: string[]): Promise<number> {
       return deleteEnv(rest);
     case "seed":
       return seed(rest);
+    case "propagate":
+      return propagate(rest);
     default:
       console.error(`Unknown subcommand: ${subcommand}`);
       renderHelp(envCommand);

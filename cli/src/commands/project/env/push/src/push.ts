@@ -2,8 +2,16 @@
  * Push local environment variables to remote environment
  */
 
+import * as p from "@clack/prompts";
 import chalk from "chalk";
-import { setupEnvCommand, printNotImplemented } from "../../setup.js";
+import { setupEnvCommand } from "../../setup.js";
+import { createClient } from "@/lib/api.js";
+import { handleCommandError } from "@/lib/command-error.js";
+import { loadLocalEnvVars } from "@/lib/env-file.js";
+import { listRemoteVariables, bulkPushVariables, setRemoteVariable } from "@/lib/env-api-bridge.js";
+import { computeEnvDiff, formatEnvDiff, hasChanges, getDiffSummary } from "@/lib/env-diff.js";
+import { SENTINEL_CONFIG_SOURCE } from "@supabase-dx/env-vars";
+import { createSpinner } from "@/components/output.js";
 
 export interface PushOptions {
   environment?: string;
@@ -34,18 +42,105 @@ export async function pushCommand(options: PushOptions): Promise<void> {
   });
   if (!ctx) return;
 
-  // TODO: Implement full push logic when API is available
-  //
-  // 1. Load local variables from supabase/.env using loadLocalEnvVars()
-  // 2. Load remote variables using client.listEnvVariables(projectRef, environment)
-  // 3. Compute diff using computeEnvDiff(local, remote, { prune })
-  // 4. If no changes, exit early with "No changes detected"
-  // 5. For new variables without # @secret annotation:
-  //    - Prompt "Mark as secret? [Y/n]" (default yes if isSensitiveKey())
-  // 6. Format and display diff using formatEnvDiff()
-  // 7. If --dry-run, stop here
-  // 8. Prompt for confirmation unless --yes
-  // 9. Call client.bulkUpsertEnvVariables(projectRef, environment, { variables, prune })
+  // 1. Load local variables from supabase/.env
+  const localParsed = loadLocalEnvVars(ctx.cwd);
 
-  printNotImplemented();
+  // Filter out # @secret vars - secrets are never pushed from .env per spec
+  const pushableVars = localParsed.variables.filter((v) => !v.secret);
+
+  // 2. Load remote variables
+  const client = createClient(ctx.token);
+  const spinner = createSpinner(options);
+  spinner.start("Comparing local and remote...");
+
+  let remoteVars;
+  try {
+    remoteVars = await listRemoteVariables(client, ctx.projectRef);
+  } catch (error) {
+    spinner.stop(chalk.red("Failed"));
+    await handleCommandError(error, options, client, ctx.projectRef);
+  }
+
+  // 3. Compute diff
+  const diffs = computeEnvDiff(pushableVars, remoteVars, { prune: options.prune });
+
+  if (!hasChanges(diffs)) {
+    spinner.stop("No changes detected");
+    if (options.json) {
+      console.log(JSON.stringify({
+        status: "success",
+        message: "No changes detected",
+        diffs: [],
+      }));
+    }
+    return;
+  }
+
+  spinner.stop("Diff computed");
+
+  const summary = getDiffSummary(diffs);
+
+  // 4. Show diff
+  if (options.json) {
+    console.log(JSON.stringify({
+      status: options.dryRun ? "dry_run" : "pending",
+      diffs,
+      summary,
+    }));
+    if (options.dryRun) return;
+  } else {
+    console.log(formatEnvDiff(diffs));
+    console.log();
+
+    if (options.dryRun) {
+      console.log(chalk.yellow("(dry-run - no changes applied)"));
+      return;
+    }
+  }
+
+  // 5. Confirm
+  if (!options.yes && !options.json && process.stdout.isTTY) {
+    const proceed = await p.confirm({
+      message: `Push ${summary.additions + summary.changes} change(s)${summary.removals > 0 ? ` and remove ${summary.removals} variable(s)` : ""}?`,
+    });
+    if (p.isCancel(proceed) || !proceed) {
+      p.cancel("Cancelled");
+      return;
+    }
+  }
+
+  // 6. Push
+  const pushSpinner = createSpinner(options);
+  pushSpinner.start("Pushing...");
+
+  try {
+    const result = await bulkPushVariables(client, ctx.projectRef, pushableVars, {
+      prune: options.prune,
+    });
+
+    // Write sentinel so the dashboard knows this project is config-in-code
+    const configSource = (ctx.config.config_source as string | undefined) ?? "code";
+    await setRemoteVariable(client, ctx.projectRef, SENTINEL_CONFIG_SOURCE, configSource, false);
+
+    const hasPreviewVars = pushableVars.some((v) => v.key.includes("__preview"));
+    if (hasPreviewVars) {
+      const { propagateToPreviewBranches } = await import("@/lib/env-propagate.js");
+      await propagateToPreviewBranches({ client, projectRef: ctx.projectRef });
+    }
+
+    pushSpinner.stop(
+      `Pushed ${result.pushed} variable(s)${result.deleted > 0 ? `, removed ${result.deleted}` : ""}`
+    );
+
+    if (options.json) {
+      console.log(JSON.stringify({
+        status: "success",
+        pushed: result.pushed,
+        deleted: result.deleted,
+      }));
+    }
+  } catch (error) {
+    pushSpinner.stop(chalk.red("Failed"));
+    await handleCommandError(error, options, client, ctx.projectRef);
+  }
 }

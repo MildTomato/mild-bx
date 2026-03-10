@@ -7,7 +7,8 @@ import chalk from "chalk";
 import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { createClient } from "@/lib/api.js";
-import { resolveProjectContext, requireTTY } from "@/lib/resolve-project.js";
+import { SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
+import { resolveProjectContext } from "@/lib/resolve-project.js";
 import {
   buildPostgrestPayload,
   buildAuthPayload,
@@ -18,8 +19,10 @@ import {
   type ProjectConfig,
 } from "@/lib/sync.js";
 import { pullSchemaWithPgDelta, setVerbose } from "@/lib/pg-delta.js";
-import { printCommandHeader, S_BAR } from "@/components/command-header.js";
+import { printCommandHeader } from "@/components/command-header.js";
 import { C } from "@/lib/colors.js";
+import { checkEnvMatchesBranch } from "@/lib/check-env-branch.js";
+import { createSpinner } from "@/components/output.js";
 
 interface PullOptions {
   profile?: string;
@@ -51,10 +54,27 @@ export async function pullCommand(options: PullOptions) {
   const { cwd, config, branch: currentBranch, profile, projectRef, token } =
     await resolveProjectContext(options);
 
+  // Block pull when config is code-driven — config.json is the source of truth.
+  if (config.config_source === "code") {
+    if (options.json) {
+      console.log(JSON.stringify({
+        status: "error",
+        code: "ConfigSourceIsCode",
+        message: "Pull is not available when config_source is \"code\". Your config.json is the source of truth.",
+      }));
+    } else {
+      console.error(chalk.red("Pull is not available when config_source is \"code\"."));
+      console.error(chalk.dim("  Your supabase/config.json is the source of truth. Edit it directly to change settings."));
+    }
+    process.exit(1);
+  }
+
+  // Warn if .env.local SUPABASE_URL doesn't match the resolved branch
+  checkEnvMatchesBranch({ cwd, gitBranch: currentBranch, resolvedProjectRef: projectRef, config, json: options.json });
+
   const client = createClient(token);
 
   if (!options.json) {
-    requireTTY();
   }
 
   // JSON mode
@@ -66,7 +86,7 @@ export async function pullCommand(options: PullOptions) {
         console.log(JSON.stringify({
           status: "error",
           message: "Project is paused",
-          dashboardUrl: `https://supabase.com/dashboard/project/${projectRef}`,
+          dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${projectRef}`,
         }));
         process.exit(1);
       }
@@ -104,30 +124,27 @@ export async function pullCommand(options: PullOptions) {
         status: "error",
         message: error instanceof Error ? error.message : "Pull failed",
       }));
+      process.exit(1);
     }
     return;
   }
 
   // Interactive mode
+  const headerContext: [string, string][] = [
+    ["Project", projectRef],
+    ["Profile", profile?.name || "default"],
+  ]
+  if (currentBranch) headerContext.push(["Branch", currentBranch])
+  if (typesOnly) headerContext.push(["Mode", "types only"])
+  if (dryRun) headerContext.push(["Mode", `${C.warning}plan (dry-run)${C.reset}`])
+
   printCommandHeader({
     command: "supa project pull",
     description: ["Pull remote state to local."],
+    context: headerContext,
   });
-  console.log(S_BAR);
-  console.log(`${S_BAR}  ${C.secondary}Project:${C.reset}  ${projectRef}`);
-  console.log(`${S_BAR}  ${C.secondary}Profile:${C.reset}  ${profile?.name || "default"}`);
-  if (currentBranch) {
-    console.log(`${S_BAR}  ${C.secondary}Branch:${C.reset}   ${currentBranch}`);
-  }
-  if (typesOnly) {
-    console.log(`${S_BAR}  ${C.secondary}Mode:${C.reset}     types only`);
-  }
-  if (dryRun) {
-    console.log(`${S_BAR}  ${C.warning}Mode:${C.reset}     ${C.warning}plan (dry-run)${C.reset}`);
-  }
-  console.log(S_BAR);
 
-  const spinner = p.spinner();
+  const spinner = createSpinner(options);
   spinner.start("Fetching remote state...");
 
   try {
@@ -136,7 +153,7 @@ export async function pullCommand(options: PullOptions) {
 
     if (project.status === "INACTIVE") {
       spinner.stop(chalk.red("Project is paused"));
-      console.log(chalk.dim(`Restore from: https://supabase.com/dashboard/project/${projectRef}`));
+      console.log(chalk.dim(`Restore from: ${SUPABASE_DASHBOARD_URL}/project/${projectRef}`));
       process.exit(1);
     }
 
@@ -177,7 +194,12 @@ export async function pullCommand(options: PullOptions) {
           remotePostgrest as Record<string, unknown>
         );
       }
-    } catch { /* ignore */ }
+    } catch (error) {
+      // Non-fatal: some projects may not expose postgrest config. Log for debugging.
+      if (options.verbose) {
+        console.error(`[pull] Skipping postgrest config diff: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
 
     try {
       const remoteAuth = await client.getAuthConfig(projectRef);
@@ -188,7 +210,12 @@ export async function pullCommand(options: PullOptions) {
           remoteAuth as Record<string, unknown>
         );
       }
-    } catch { /* ignore */ }
+    } catch (error) {
+      // Non-fatal: some projects may not expose auth config. Log for debugging.
+      if (options.verbose) {
+        console.error(`[pull] Skipping auth config diff: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
 
     const hasConfigChanges =
       postgrestDiffs.some((d) => d.changed) ||
@@ -212,8 +239,8 @@ export async function pullCommand(options: PullOptions) {
       return;
     }
 
-    // Confirm if there are config changes (unless --yes)
-    if (hasConfigChanges && !options.yes) {
+    // Confirm if there are config changes (unless --yes or non-TTY)
+    if (hasConfigChanges && !options.yes && process.stdin.isTTY) {
       const proceed = await p.confirm({
         message: "Pull these changes?",
       });
@@ -225,7 +252,7 @@ export async function pullCommand(options: PullOptions) {
     }
 
     // Apply changes
-    const applySpinner = p.spinner();
+    const applySpinner = createSpinner(options);
     applySpinner.start("Writing files...");
 
     let configUpdated = false;
@@ -251,7 +278,11 @@ export async function pullCommand(options: PullOptions) {
 
         writeFileSync(configPath, JSON.stringify(updatedConfig, null, 2) + "\n");
         configUpdated = true;
-      } catch { /* ignore */ }
+      } catch (error) {
+        // Non-fatal: config update failed (e.g. read/write error or API error).
+        // Surface as a warning so the user knows it was skipped.
+        console.error(chalk.yellow(`Warning: Could not update config.json: ${error instanceof Error ? error.message : String(error)}`));
+      }
     }
 
     // Generate types
@@ -261,13 +292,20 @@ export async function pullCommand(options: PullOptions) {
       mkdirSync(dirname(typesPath), { recursive: true });
 
       let existingTypes = "";
-      try { existingTypes = readFileSync(typesPath, "utf-8"); } catch { /* ignore */ }
+      try {
+        existingTypes = readFileSync(typesPath, "utf-8");
+      } catch {
+        // File does not exist yet — that is expected on first pull.
+      }
 
       if (typesResp.types !== existingTypes) {
         writeFileSync(typesPath, typesResp.types);
         typesUpdated = true;
       }
-    } catch { /* ignore */ }
+    } catch (error) {
+      // Surface types-generation failures so the user knows types were not updated.
+      console.error(chalk.yellow(`Warning: Could not generate TypeScript types: ${error instanceof Error ? error.message : String(error)}`));
+    }
 
     // Pull schema with pg-delta
     const dbPassword = process.env.SUPABASE_DB_PASSWORD;
@@ -298,7 +336,10 @@ export async function pullCommand(options: PullOptions) {
             schemaUpdated = true;
           }
         }
-      } catch { /* ignore */ }
+      } catch (error) {
+        // Surface schema-pull failures so the user knows the schema was not updated.
+        console.error(chalk.yellow(`Warning: Could not pull schema: ${error instanceof Error ? error.message : String(error)}`));
+      }
     }
 
     const anythingUpdated = configUpdated || typesUpdated || schemaUpdated;

@@ -2,12 +2,19 @@
  * List all environments for the project
  */
 
-import { setupEnvCommand, printNotImplemented } from "../../setup.js";
+import * as p from "@clack/prompts";
+import chalk from "chalk";
+import { setupEnvCommand } from "../../setup.js";
 
 export interface ListEnvironmentsOptions {
   json?: boolean;
   profile?: string;
 }
+
+/**
+ * Default environments that always exist
+ */
+const DEFAULT_ENVIRONMENTS = ["development", "preview", "production"];
 
 export async function listEnvironmentsCommand(
   options: ListEnvironmentsOptions
@@ -20,11 +27,54 @@ export async function listEnvironmentsCommand(
   });
   if (!ctx) return;
 
-  // TODO: Implement full list-environments logic when API is available
-  //
-  // 1. Call client.listEnvironments(projectRef)
-  // 2. Format output as table: NAME / DEFAULT / VARIABLES / CREATED
-  // 3. Show default environments (development, preview, production) + custom
+  // Derive environments from config.environments + hardcoded defaults
+  const configEnvs = (ctx.config as Record<string, unknown>).environments as
+    | Record<string, string>
+    | undefined;
 
-  printNotImplemented();
+  const allEnvNames = new Set(DEFAULT_ENVIRONMENTS);
+
+  // Add any custom environment names from the environments mapping
+  if (configEnvs) {
+    for (const envName of Object.values(configEnvs)) {
+      allEnvNames.add(envName);
+    }
+  }
+
+  const environments = Array.from(allEnvNames).map((name) => ({
+    name,
+    isDefault: DEFAULT_ENVIRONMENTS.includes(name),
+    // Find branch patterns that map to this environment
+    patterns: configEnvs
+      ? Object.entries(configEnvs)
+          .filter(([, env]) => env === name)
+          .map(([pattern]) => pattern)
+      : [],
+  }));
+
+  if (options.json) {
+    console.log(JSON.stringify({
+      status: "success",
+      environments,
+    }));
+    return;
+  }
+
+  console.log();
+  for (const env of environments) {
+    const tag = env.isDefault ? chalk.dim(" (default)") : "";
+    const patterns =
+      env.patterns.length > 0
+        ? chalk.dim(` ← ${env.patterns.join(", ")}`)
+        : "";
+    console.log(`  ${chalk.cyan(env.name)}${tag}${patterns}`);
+  }
+  console.log();
+  console.log(chalk.dim(`  ${environments.length} environment(s)`));
+
+  if (configEnvs && Object.keys(configEnvs).length > 0) {
+    console.log(
+      chalk.dim(`  Branch mapping configured in config.json "environments"`)
+    );
+  }
 }

@@ -18,6 +18,9 @@ import {
   type ProviderDefinition,
 } from "@/lib/auth-providers.js";
 import type { ExternalProviderConfig } from "@/lib/config-types.js";
+import { loadLocalEnvVars, writeEnvFile } from "@/lib/env-file.js";
+import type { EnvVariable } from "@/lib/env-types.js";
+import { createSpinner } from "@/components/output.js";
 
 export interface AddOptions {
   "client-id"?: string;
@@ -41,7 +44,17 @@ export async function addAuthProvider(
 
   const { projectRef, token: authToken, cwd } = await resolveProjectContext(options);
 
-  const spinner = isTTY ? p.spinner() : null;
+  // Fetch the project's database host so we can derive the correct project URL
+  let dbHost = "";
+  try {
+    const projectClient = createClient(authToken);
+    const projectData = await projectClient.getProject(projectRef);
+    dbHost = projectData.database.host;
+  } catch {
+    // Non-fatal — callback URL display will be empty if project fetch fails
+  }
+
+  const spinner = createSpinner(options);
 
   if (isTTY) {
     printCommandHeader({
@@ -326,11 +339,14 @@ export async function addAuthProvider(
         },
         local: {
           configFile: "supabase/config.json",
-          envFile: ".env",
-          envVar: envVarName(provider.key),
+          envFile: "supabase/.env",
+          envVars: [
+            `SUPABASE_AUTH_EXTERNAL_${provider.key.toUpperCase()}_CLIENT_ID`,
+            envVarName(provider.key),
+          ],
         },
       },
-      callbackUrl: getCallbackUrl(projectRef),
+      callbackUrl: getCallbackUrl(dbHost, projectRef),
     };
 
     if (options.json) {
@@ -349,11 +365,11 @@ export async function addAuthProvider(
         (providerConfig.url ? `${S_BAR}    • Set URL: ${providerConfig.url}\n` : "") +
         `${S_BAR}\n` +
         `${S_BAR}  Local changes:\n` +
-        `${S_BAR}    • Update: supabase/config.json\n` +
-        `${S_BAR}    • Append: .env (${envVarName(provider.key)})\n` +
+        `${S_BAR}    • Update: supabase/config.json (enabled: true)\n` +
+        `${S_BAR}    • Write: supabase/.env (${`SUPABASE_AUTH_EXTERNAL_${provider.key.toUpperCase()}_CLIENT_ID`}, ${envVarName(provider.key)})\n` +
         `${S_BAR}\n` +
         `${S_BAR}  Callback URL:\n` +
-        `${S_BAR}  ${chalk.cyan(getCallbackUrl(projectRef))}\n` +
+        `${S_BAR}  ${chalk.cyan(getCallbackUrl(dbHost, projectRef))}\n` +
         `${S_BAR}\n` +
         `${S_BAR}  Run without --dry-run to apply these changes.\n` +
         `${S_BAR}`
@@ -363,15 +379,15 @@ export async function addAuthProvider(
   }
 
   // Push to remote
-  spinner?.start("Updating remote config...");
+  spinner.start("Updating remote config...");
 
   try {
     const client = createClient(authToken);
     await client.updateAuthConfig(projectRef, apiPayload);
 
-    spinner?.stop("Remote config updated");
+    spinner.stop("Remote config updated");
   } catch (error) {
-    spinner?.stop("Failed to update remote config");
+    spinner.stop("Failed to update remote config");
 
     const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -392,7 +408,8 @@ export async function addAuthProvider(
     process.exit(EXIT_CODES.NETWORK_ERROR);
   }
 
-  // Update local config.json with env reference (atomic write)
+  // Update local config.json with implicit binding model
+  // Only store enabled + non-sensitive optional fields
   const supabaseDir = path.join(cwd, "supabase");
   const configPath = path.join(supabaseDir, "config.json");
 
@@ -406,16 +423,16 @@ export async function addAuthProvider(
       configContent.auth.external = {};
     }
 
-    // Store config with env reference for secret
-    const envVar = envVarName(provider.key);
-    configContent.auth.external[provider.key] = {
+    // Implicit binding: only store enabled + optional non-sensitive fields
+    // client_id and secret are resolved from canonical env vars
+    const providerEntry: Record<string, unknown> = {
       enabled: true,
-      client_id: providerConfig.client_id,
-      secret: `env(${envVar})`,
-      ...(providerConfig.url && { url: providerConfig.url }),
-      ...(providerConfig.redirect_uri && { redirect_uri: providerConfig.redirect_uri }),
-      ...(providerConfig.skip_nonce_check && { skip_nonce_check: true }),
     };
+    if (providerConfig.url) providerEntry.url = providerConfig.url;
+    if (providerConfig.redirect_uri) providerEntry.redirect_uri = providerConfig.redirect_uri;
+    if (providerConfig.skip_nonce_check) providerEntry.skip_nonce_check = true;
+
+    configContent.auth.external[provider.key] = providerEntry;
 
     // Atomic write to prevent corruption
     writeJsonAtomic(configPath, configContent);
@@ -435,36 +452,41 @@ export async function addAuthProvider(
     process.exit(EXIT_CODES.GENERIC_ERROR);
   }
 
-  // Append to .env file
-  const envPath = path.join(cwd, ".env");
-  const envVar = envVarName(provider.key);
+  // Write canonical env vars to supabase/.env
+  const clientIdEnvVar = `SUPABASE_AUTH_EXTERNAL_${provider.key.toUpperCase()}_CLIENT_ID`;
+  const secretEnvVar = envVarName(provider.key);
 
   try {
-    let envContent = "";
+    const existing = loadLocalEnvVars(cwd);
+    const existingMap = new Map(existing.variables.map((v) => [v.key, v]));
 
-    if (fs.existsSync(envPath)) {
-      envContent = fs.readFileSync(envPath, "utf-8");
-    }
+    // Update or add client_id
+    existingMap.set(clientIdEnvVar, {
+      key: clientIdEnvVar,
+      value: providerConfig.client_id!,
+      secret: false,
+    });
 
-    // Check if the key already exists
-    const envKeyRegex = new RegExp(`^${envVar}=`, "m");
-    if (!envKeyRegex.test(envContent)) {
-      const newLine = envContent.endsWith("\n") || envContent === "" ? "" : "\n";
-      const envEntry = `${newLine}${envVar}=${secretValue}\n`;
-      fs.appendFileSync(envPath, envEntry);
-    }
+    // Update or add secret
+    existingMap.set(secretEnvVar, {
+      key: secretEnvVar,
+      value: secretValue,
+      secret: true,
+    });
+
+    const variables: EnvVariable[] = Array.from(existingMap.values());
+    writeEnvFile(cwd, variables, existing.header);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (options.json) {
       console.error(JSON.stringify({
         error: "FileWriteError",
-        message: "Failed to update .env file",
+        message: "Failed to update supabase/.env file",
         details: errorMessage,
-        file: envPath,
         exitCode: EXIT_CODES.GENERIC_ERROR,
       }, null, 2));
     } else {
-      p.log.error(`Failed to update .env file: ${errorMessage}`);
+      p.log.error(`Failed to update supabase/.env: ${errorMessage}`);
     }
     process.exit(EXIT_CODES.GENERIC_ERROR);
   }
@@ -476,13 +498,13 @@ export async function addAuthProvider(
     console.log(`${chalk.dim("└")}`);
     console.log();
 
-    const callbackUrl = getCallbackUrl(projectRef);
+    const callbackUrl = getCallbackUrl(dbHost, projectRef);
     console.log(chalk.green("✓") + ` ${provider.displayName} configured successfully`);
     console.log();
     console.log(chalk.dim("  Changes made:"));
     console.log(`  ${chalk.dim("•")} Remote: Provider enabled with credentials`);
     console.log(`  ${chalk.dim("•")} Local: Config updated (supabase/config.json)`);
-    console.log(`  ${chalk.dim("•")} Local: Secret stored (.env)`);
+    console.log(`  ${chalk.dim("•")} Local: Env vars stored (supabase/.env)`);
     console.log();
     console.log(chalk.dim("  Next step:"));
     console.log(`  Add this callback URL to your ${provider.displayName} OAuth settings:`);
@@ -496,10 +518,10 @@ export async function addAuthProvider(
           provider: provider.key,
           displayName: provider.displayName,
           enabled: true,
-          callbackUrl: getCallbackUrl(projectRef),
+          callbackUrl: getCallbackUrl(dbHost, projectRef),
           files: {
             config: "supabase/config.json",
-            env: ".env",
+            env: "supabase/.env",
           },
         },
         null,

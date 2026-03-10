@@ -2,20 +2,28 @@
  * Shared setup for all env subcommands.
  *
  * Handles the repeated pattern:
- *   1. JSON mode → resolve context, output stub, return null
- *   2. Interactive → requireTTY, resolve context, print header + context lines
+ *   1. Resolve project context
+ *   2. Print command header with context lines (Project, Profile, Context)
  *
- * Returns ProjectContext for the caller to continue with business logic,
- * or null if JSON mode was fully handled.
+ * Works in all output modes — TTY, non-TTY (agent), and --json.
+ * Only interactive prompts within commands should gate on isTTY.
+ *
+ * Returns ProjectContext for the caller to continue with business logic.
  */
 
-import chalk from "chalk";
 import {
   resolveProjectContext,
-  requireTTY,
   type ProjectContext,
 } from "@/lib/resolve-project.js";
 import { printCommandHeader } from "@/components/command-header.js";
+import chalk from "chalk";
+
+const PRODUCTION_BRANCHES = new Set(["main", "master", "production"]);
+
+function branchContextLabel(branch: string): string {
+  if (PRODUCTION_BRANCHES.has(branch)) return chalk.green("production");
+  return `${chalk.cyan("preview")}  ${chalk.dim("·")}  ${chalk.dim(branch)}`;
+}
 
 export interface EnvCommandSetup {
   command: string;
@@ -26,35 +34,25 @@ export interface EnvCommandSetup {
 }
 
 /**
- * Set up an env subcommand. Handles JSON stub, TTY check, project resolution,
- * and prints the command header with context lines.
+ * Set up an env subcommand. Resolves project context and prints the
+ * command header with context lines.
  *
- * Returns null if JSON mode was handled (caller should return early).
- * Returns ProjectContext if interactive mode is ready for business logic.
+ * Works without a TTY — agents and scripts get the same output.
+ * Use options.json for machine-readable output instead.
  */
 export async function setupEnvCommand(
   options: EnvCommandSetup
 ): Promise<ProjectContext | null> {
-  // JSON mode: resolve context, output stub, signal caller to return
-  if (options.json) {
-    await resolveProjectContext(options);
-    // TODO: Remove this stub when API is available — each command
-    // will handle its own JSON output after calling resolveProjectContext directly.
-    console.log(
-      JSON.stringify({
-        status: "not_implemented",
-        message: "Environment API not yet available",
-      })
-    );
-    return null;
-  }
-
-  requireTTY();
   const ctx = await resolveProjectContext(options);
+
+  if (options.json) {
+    return ctx;
+  }
 
   const context: [string, string][] = [
     ["Project", ctx.projectRef],
     ["Profile", ctx.profile?.name || "default"],
+    ["Context", branchContextLabel(ctx.branch)],
     ...(options.context || []),
   ];
 
@@ -65,9 +63,4 @@ export async function setupEnvCommand(
   });
 
   return ctx;
-}
-
-/** Consistent stub message for unimplemented interactive commands */
-export function printNotImplemented(): void {
-  console.log(chalk.yellow("  Environment API not yet available."));
 }

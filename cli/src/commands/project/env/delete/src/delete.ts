@@ -2,7 +2,8 @@
  * Delete a custom environment
  */
 
-import { setupEnvCommand, printNotImplemented } from "../../setup.js";
+import chalk from "chalk";
+import { setupEnvCommand } from "../../setup.js";
 
 export interface DeleteOptions {
   name: string;
@@ -22,11 +23,9 @@ export async function deleteCommand(options: DeleteOptions): Promise<void> {
   if (!ctx) return;
 
   // TODO: Implement full delete logic when API is available
-  //
-  // 1. Check name is not reserved (development/preview/production)
-  // 2. Fetch environment to verify existence and get variable count
-  // 3. Prompt for confirmation unless --yes
-  // 4. Call client.deleteEnvironment(projectRef, name)
-
-  printNotImplemented();
+  if (options.json) {
+    console.log(JSON.stringify({ status: "not_implemented", message: "Environment API not yet available" }));
+  } else {
+    console.log(chalk.yellow("  Environment API not yet available."));
+  }
 }

@@ -163,12 +163,43 @@ export const disableSubcommand = {
   ],
 } as const satisfies Command;
 
+export const removeSubcommand = {
+  name: "remove",
+  aliases: ["rm"],
+  description: "Remove an OAuth provider and clear its credentials",
+  arguments: [
+    {
+      name: "provider",
+      required: true,
+      description: "Provider to remove (e.g., google, github)",
+    },
+  ],
+  options: [
+    {
+      name: "dry-run",
+      shorthand: null,
+      type: Boolean,
+      deprecated: false,
+      description: "Preview changes without applying them",
+    },
+    { ...yesOption },
+    { ...profileOption },
+    { ...jsonOption },
+  ],
+  examples: [
+    {
+      name: "Remove Google provider",
+      value: "supa project auth-provider remove google",
+    },
+  ],
+} as const satisfies Command;
+
 export const authProviderSubcommand = {
   name: "auth-provider",
   aliases: ["auth"],
   description: "Manage OAuth providers for your project",
   arguments: [],
-  subcommands: [listSubcommand, addSubcommand, enableSubcommand, disableSubcommand],
+  subcommands: [listSubcommand, addSubcommand, enableSubcommand, disableSubcommand, removeSubcommand],
   options: [],
   examples: [
     {

@@ -1,0 +1,134 @@
+---
+title: Codegen configuration
+description: Auto-generate Zod schemas and TanStack DB setup from your database types
+---
+
+The `codegen` section configures automatic code generation from your database
+types. When enabled, the CLI checks whether generated files are stale before
+running any project command (`dev`, `push`, `pull`, and others) and
+regenerates them silently if needed.
+
+## Basic configuration
+
+```json title="supabase/config.json"
+{
+  "codegen": {
+    "validation": "zod",
+    "plugins": ["tanstack"]
+  }
+}
+```
+
+Generated files are derived from `supabase/types/database.ts`. The CLI
+regenerates them automatically whenever `database.ts` is newer than the output
+files — you don't need to run a separate command.
+
+## Zod validation schemas
+
+Setting `validation` to `"zod"` generates `supabase/types/schema.ts` with a
+Zod schema for every table and enum in your database.
+
+```json title="supabase/config.json"
+{
+  "codegen": {
+    "validation": "zod"
+  }
+}
+```
+
+For each table, the CLI generates three schemas — one for reading rows, one
+for inserting, and one for updating — along with matching TypeScript type
+aliases:
+
+```ts title="supabase/types/schema.ts"
+import { z } from "zod"
+
+export const todosRowSchema = z.object({
+  id: z.number(),
+  text: z.string().nullable(),
+  completed: z.boolean().nullable(),
+  created_at: z.string(),
+})
+export type TodosRow = z.infer<typeof todosRowSchema>
+
+export const todosInsertSchema = z.object({
+  id: z.number().optional(),
+  text: z.string().nullable().optional(),
+  completed: z.boolean().nullable().optional(),
+  created_at: z.string().optional(),
+})
+export type TodosInsert = z.infer<typeof todosInsertSchema>
+
+export const todosUpdateSchema = z.object({
+  id: z.number().optional(),
+  text: z.string().nullable().optional(),
+  completed: z.boolean().nullable().optional(),
+  created_at: z.string().optional(),
+})
+export type TodosUpdate = z.infer<typeof todosUpdateSchema>
+```
+
+Database enums are generated as `z.enum` schemas:
+
+```ts
+export const statusSchema = z.enum(["active", "inactive"])
+export type Status = z.infer<typeof statusSchema>
+```
+
+You must install `zod` in your project for the generated file to compile:
+
+```bash
+npm install zod
+```
+
+## TanStack DB
+
+Adding `"tanstack"` to `plugins` generates `supabase/lib/db.ts` with a
+TanStack DB instance wired up to your Supabase client. Each table gets its
+own typed collection.
+
+```json title="supabase/config.json"
+{
+  "codegen": {
+    "plugins": ["tanstack"]
+  }
+}
+```
+
+When `validation` is also set to `"zod"`, the generated file imports row
+types from `supabase/types/schema.ts`. Otherwise it uses the raw database
+types directly.
+
+```ts title="supabase/lib/db.ts"
+import { createClient } from "@supabase/supabase-js"
+import { createDatabase, createCollection } from "@tanstack/db"
+import type { Database } from "../types/database"
+import type { TodosRow } from "../types/schema"
+
+const supabase = createClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+)
+
+export const todosCollection = createCollection<TodosRow>({
+  id: "todos",
+  getKey: (row) => String(row.id),
+})
+
+export const db = createDatabase({
+  collections: { todos: todosCollection },
+})
+```
+
+You must install `@tanstack/db` in your project:
+
+```bash
+npm install @tanstack/db
+```
+
+## Reference
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `validation` | `"zod"` | — | Generates Zod schemas in `supabase/types/schema.ts` |
+| `plugins` | `string[]` | `[]` | Additional generators. Supported value: `"tanstack"` |

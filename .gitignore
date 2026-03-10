@@ -48,3 +48,5 @@ external/cli
 
 # Private specs
 auth-rules-sql/spec.md
+
+.claude/worktrees/

@@ -20,6 +20,7 @@ import {
 import type { ExternalProviderConfig } from "@/lib/config-types.js";
 import { loadLocalEnvVars, writeEnvFile } from "@/lib/env-file.js";
 import type { EnvVariable } from "@/lib/env-types.js";
+import { createSpinner } from "@/components/output.js";
 
 export interface AddOptions {
   "client-id"?: string;
@@ -43,7 +44,17 @@ export async function addAuthProvider(
 
   const { projectRef, token: authToken, cwd } = await resolveProjectContext(options);
 
-  const spinner = isTTY ? p.spinner() : null;
+  // Fetch the project's database host so we can derive the correct project URL
+  let dbHost = "";
+  try {
+    const projectClient = createClient(authToken);
+    const projectData = await projectClient.getProject(projectRef);
+    dbHost = projectData.database.host;
+  } catch {
+    // Non-fatal — callback URL display will be empty if project fetch fails
+  }
+
+  const spinner = createSpinner(options);
 
   if (isTTY) {
     printCommandHeader({
@@ -335,7 +346,7 @@ export async function addAuthProvider(
           ],
         },
       },
-      callbackUrl: getCallbackUrl(projectRef),
+      callbackUrl: getCallbackUrl(dbHost, projectRef),
     };
 
     if (options.json) {
@@ -358,7 +369,7 @@ export async function addAuthProvider(
         `${S_BAR}    • Write: supabase/.env (${`SUPABASE_AUTH_EXTERNAL_${provider.key.toUpperCase()}_CLIENT_ID`}, ${envVarName(provider.key)})\n` +
         `${S_BAR}\n` +
         `${S_BAR}  Callback URL:\n` +
-        `${S_BAR}  ${chalk.cyan(getCallbackUrl(projectRef))}\n` +
+        `${S_BAR}  ${chalk.cyan(getCallbackUrl(dbHost, projectRef))}\n` +
         `${S_BAR}\n` +
         `${S_BAR}  Run without --dry-run to apply these changes.\n` +
         `${S_BAR}`
@@ -368,15 +379,15 @@ export async function addAuthProvider(
   }
 
   // Push to remote
-  spinner?.start("Updating remote config...");
+  spinner.start("Updating remote config...");
 
   try {
     const client = createClient(authToken);
     await client.updateAuthConfig(projectRef, apiPayload);
 
-    spinner?.stop("Remote config updated");
+    spinner.stop("Remote config updated");
   } catch (error) {
-    spinner?.stop("Failed to update remote config");
+    spinner.stop("Failed to update remote config");
 
     const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -487,7 +498,7 @@ export async function addAuthProvider(
     console.log(`${chalk.dim("└")}`);
     console.log();
 
-    const callbackUrl = getCallbackUrl(projectRef);
+    const callbackUrl = getCallbackUrl(dbHost, projectRef);
     console.log(chalk.green("✓") + ` ${provider.displayName} configured successfully`);
     console.log();
     console.log(chalk.dim("  Changes made:"));
@@ -507,7 +518,7 @@ export async function addAuthProvider(
           provider: provider.key,
           displayName: provider.displayName,
           enabled: true,
-          callbackUrl: getCallbackUrl(projectRef),
+          callbackUrl: getCallbackUrl(dbHost, projectRef),
           files: {
             config: "supabase/config.json",
             env: "supabase/.env",

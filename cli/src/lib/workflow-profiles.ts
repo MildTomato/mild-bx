@@ -132,17 +132,47 @@ feature/dash ──► ▓ preview-pay  ▓ ─┤           ▓▓▓▓▓▓�
   },
 ];
 
+/** Default workflow profile for new projects. */
+export const DEFAULT_WORKFLOW_PROFILE: WorkflowProfile = "branching-remote";
+
+/** Set of current branching profile names. */
+export const BRANCHING_PROFILES = new Set<WorkflowProfile>([
+  "branching-remote",
+  "branching-local",
+]);
+
+/** Set of legacy profile names — present in config but no longer selectable for new projects. */
+export const LEGACY_PROFILE_NAMES = new Set<WorkflowProfile>([
+  "solo",
+  "staged",
+  "preview",
+  "preview-git",
+]);
+
 /**
- * Look up a profile definition by name.
- * Used when you have a profile name from config and need the full definition
- * (art, description, etc.) for display.
- *
- * @returns The profile definition, or undefined if not found
+ * Returns true if the given profile uses database branching.
+ */
+export function isBranchingProfile(profile: WorkflowProfile): boolean {
+  return BRANCHING_PROFILES.has(profile);
+}
+
+/**
+ * Returns true if the given profile is a legacy (pre-rename) profile.
+ */
+export function isLegacyProfile(profile: WorkflowProfile): boolean {
+  return LEGACY_PROFILE_NAMES.has(profile);
+}
+
+/**
+ * Look up a profile definition by name (current or legacy).
  */
 export function getProfileDefinition(
   name: WorkflowProfile,
 ): WorkflowProfileDefinition | undefined {
-  return WORKFLOW_PROFILES.find((p) => p.name === name);
+  return (
+    WORKFLOW_PROFILES.find((p) => p.name === name) ??
+    LEGACY_WORKFLOW_PROFILES.find((p) => p.name === name)
+  );
 }
 
 /**

@@ -229,6 +229,39 @@ export const deleteSubcommand = {
   ],
 } as const satisfies Command;
 
+// Propagate subcommand
+export const propagateSubcommand = {
+  name: "propagate",
+  aliases: [],
+  description: "Propagate environment variables to all healthy preview branches",
+  arguments: [],
+  options: [
+    branchOption,
+    dryRunOption,
+    yesOption,
+    jsonOption,
+    profileOption,
+  ],
+  examples: [
+    {
+      name: "Propagate to all healthy preview branches",
+      value: "supa project env propagate",
+    },
+    {
+      name: "Preview what would be propagated",
+      value: "supa project env propagate --dry-run",
+    },
+    {
+      name: "Propagate to a specific branch",
+      value: "supa project env propagate --branch feat/my-feature",
+    },
+    {
+      name: "Propagate without confirmation prompt",
+      value: "supa project env propagate --yes",
+    },
+  ],
+} as const satisfies Command;
+
 // Seed subcommand
 export const seedSubcommand = {
   name: "seed",
@@ -283,6 +316,7 @@ export const envCommand = {
     createSubcommand,
     deleteSubcommand,
     seedSubcommand,
+    propagateSubcommand,
   ],
   options: [],
   examples: [

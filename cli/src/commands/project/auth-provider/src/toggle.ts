@@ -10,6 +10,7 @@ import { findProvider, buildProviderPayload, parseProviderFromRemote, PROVIDER_D
 import { writeJsonAtomic } from "@/lib/fs-atomic.js";
 import { findSimilar } from "@/lib/string-similarity.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
+import { createSpinner } from "@/components/output.js";
 
 export interface ToggleOptions {
   "dry-run"?: boolean;
@@ -25,7 +26,7 @@ export async function toggleAuthProvider(
   const isTTY = process.stdout.isTTY && !options.json;
   const action = enable ? "enable" : "disable";
   const isDryRun = options["dry-run"] || false;
-  const spinner = isTTY ? p.spinner() : null;
+  const spinner = createSpinner(options);
 
   if (isTTY) {
     printCommandHeader({
@@ -70,7 +71,7 @@ export async function toggleAuthProvider(
   const { projectRef, token: authToken, cwd } = await resolveProjectContext(options);
 
   // Check current state
-  spinner?.start("Checking current state...");
+  spinner.start("Checking current state...");
   const client = createClient(authToken);
   let currentState: boolean | null = null;
 
@@ -78,15 +79,15 @@ export async function toggleAuthProvider(
     const remoteConfig = await client.getAuthConfig(projectRef);
     const currentConfig = parseProviderFromRemote(provider, remoteConfig);
     currentState = currentConfig?.enabled ?? false;
-    spinner?.stop("Current state checked");
+    spinner.stop("Current state checked");
   } catch (error) {
-    spinner?.stop("Failed to check current state");
+    spinner.stop("Failed to check current state");
     // Continue anyway - we'll try to set it
   }
 
   // Check if already in desired state
   if (currentState === enable) {
-    spinner?.stop();
+    spinner.stop();
     console.log(S_BAR);
     console.log(`${chalk.dim("└")}`);
     console.log();
@@ -135,14 +136,14 @@ export async function toggleAuthProvider(
   }
 
   // Push to remote
-  spinner?.start(`${enable ? "Enabling" : "Disabling"} ${provider.displayName}...`);
+  spinner.start(`${enable ? "Enabling" : "Disabling"} ${provider.displayName}...`);
 
   try {
     await client.updateAuthConfig(projectRef, apiPayload);
 
-    spinner?.stop(`${provider.displayName} ${enable ? "enabled" : "disabled"}`);
+    spinner.stop(`${provider.displayName} ${enable ? "enabled" : "disabled"}`);
   } catch (error) {
-    spinner?.stop(chalk.red("Failed"));
+    spinner.stop(chalk.red("Failed"));
     await handleCommandError(error, options, client, projectRef);
   }
 

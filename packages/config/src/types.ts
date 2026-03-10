@@ -3,6 +3,9 @@
  * Matches the config.json schema structure
  */
 
+import type { WorkflowProfile } from "./workflow-profiles.js";
+export type { WorkflowProfile } from "./workflow-profiles.js";
+
 export interface ApiConfig {
   enabled?: boolean;
   port?: number;
@@ -76,7 +79,6 @@ export interface AuthConfig {
   mfa?: MfaConfig;
 }
 
-export type WorkflowProfile = "solo" | "staged" | "preview" | "preview-git";
 export type SchemaManagement = "declarative" | "migrations";
 export type ConfigSource = "code" | "remote";
 

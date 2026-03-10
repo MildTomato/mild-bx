@@ -2,19 +2,19 @@
  * Environment variable scoping utilities.
  *
  * Scope is encoded as a suffix on the variable name:
- *   VAR_NAME__production         — production only (default)
- *   VAR_NAME__preview            — all preview branches
- *   VAR_NAME__development        — local development only
- *   VAR_NAME__feat_my_branch     — specific branch (slashes → underscores)
+ *   VAR_NAME__production                  — production only (default)
+ *   VAR_NAME__preview                     — all preview branches
+ *   VAR_NAME__development                 — local development only
+ *   VAR_NAME__preview__feat_my_branch     — specific preview branch (slashes → underscores)
  *
  * Reserved suffixes: production, preview, development.
- * Everything else after __ is treated as a branch name.
+ * Branch-specific overrides are nested under preview: __preview__<branch>.
  *
  * Bare VAR_NAME (no suffix) is treated as a legacy universal fallback
  * during resolution — it is not produced by this CLI.
  *
  * Resolution order (highest to lowest priority):
- *   Branch context:      VAR__<branch> → VAR__preview → VAR__production → VAR
+ *   Branch context:      VAR__preview__<branch> → VAR__preview → VAR__production → VAR
  *   Production context:  VAR__production → VAR
  *   Development context: VAR__development → VAR
  */
@@ -50,7 +50,7 @@ export function scopedVarName(
   if (scope === "development") return `${varName}${SCOPE_SEPARATOR}development`;
   if (scope === "branch") {
     if (!branch) throw new Error("branch is required when scope is 'branch'");
-    return `${varName}${SCOPE_SEPARATOR}${branchToScope(branch)}`;
+    return `${varName}${SCOPE_SEPARATOR}preview${SCOPE_SEPARATOR}${branchToScope(branch)}`;
   }
   return varName;
 }
@@ -73,7 +73,14 @@ export function parseScopedVarName(name: string): {
   if (RESERVED_SUFFIXES.has(suffix)) {
     return { base, scope: suffix as Scope };
   }
-  return { base, scope: "branch", branch: suffix };
+
+  // Branch-specific: __preview__<branch>
+  const branchPrefix = `preview${SCOPE_SEPARATOR}`;
+  if (suffix.startsWith(branchPrefix)) {
+    return { base, scope: "branch", branch: suffix.slice(branchPrefix.length) };
+  }
+
+  return { base, scope: null };
 }
 
 /**

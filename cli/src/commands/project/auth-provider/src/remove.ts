@@ -9,6 +9,7 @@ import { findProvider, buildProviderPayload, PROVIDER_DEFINITIONS } from "@/lib/
 import { writeJsonAtomic } from "@/lib/fs-atomic.js";
 import { findSimilar } from "@/lib/string-similarity.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
+import { createSpinner } from "@/components/output.js";
 
 export interface RemoveOptions {
   yes?: boolean;
@@ -23,7 +24,7 @@ export async function removeAuthProvider(
 ): Promise<void> {
   const isTTY = process.stdout.isTTY && !options.json;
   const isDryRun = options["dry-run"] || false;
-  const spinner = isTTY ? p.spinner() : null;
+  const spinner = createSpinner(options);
 
   if (isTTY) {
     printCommandHeader({
@@ -103,7 +104,7 @@ export async function removeAuthProvider(
   const client = createClient(authToken);
 
   // Clear all credentials + disable
-  spinner?.start(`Removing ${provider.displayName}...`);
+  spinner.start(`Removing ${provider.displayName}...`);
 
   const payload = buildProviderPayload(provider, {
     enabled: false,
@@ -115,9 +116,9 @@ export async function removeAuthProvider(
 
   try {
     await client.updateAuthConfig(projectRef, payload);
-    spinner?.stop(`${provider.displayName} removed`);
+    spinner.stop(`${provider.displayName} removed`);
   } catch (error) {
-    spinner?.stop("Failed");
+    spinner.stop("Failed");
     const msg = error instanceof Error ? error.message : String(error);
     if (options.json) {
       console.error(JSON.stringify({ error: "NetworkError", message: msg, exitCode: EXIT_CODES.NETWORK_ERROR }));

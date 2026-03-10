@@ -7,6 +7,7 @@ import { createClient, type ApiKey } from "@/lib/api.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
 import * as p from "@clack/prompts";
 import { printTable } from "@/components/table.js";
+import { createSpinner } from "@/components/output.js";
 
 interface ApiKeysOptions {
   profile?: string;
@@ -69,7 +70,7 @@ export async function apiKeysCommand(options: ApiKeysOptions): Promise<void> {
 
 
   // Interactive mode
-  const spinner = p.spinner();
+  const spinner = createSpinner(options);
   spinner.start("Loading API keys...");
 
   try {

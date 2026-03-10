@@ -47,7 +47,9 @@ export function compareConfigs(
   // Compare keys that are in the local payload (what we're explicitly setting)
   for (const [key, newValue] of Object.entries(localPayload)) {
     const oldValue = remoteConfig[key];
-    const changed = !areValuesEqual(oldValue, newValue);
+    // Only mark as changed when at least one side is not undefined AND the values differ
+    const changed =
+      (oldValue !== undefined || newValue !== undefined) && !areValuesEqual(oldValue, newValue);
 
     diffs.push({
       key,

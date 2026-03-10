@@ -19,25 +19,6 @@ export interface FeatureRequirement {
   variables: FeatureVariable[];
 }
 
-/**
- * Fields within a provider that are considered secret
- */
-const SECRET_FIELDS = new Set(["secret", "pass"]);
-
-/**
- * Fields within a provider that are required when enabled
- */
-const REQUIRED_PROVIDER_FIELDS = new Set(["client_id", "secret"]);
-
-/**
- * Fields within SMTP that are required when enabled
- */
-const REQUIRED_SMTP_FIELDS = new Set(["host", "port", "user", "pass"]);
-
-/**
- * Fields within SMTP that are secret
- */
-const SECRET_SMTP_FIELDS = new Set(["pass"]);
 
 /**
  * Build feature registry from the config schema.
@@ -78,8 +59,9 @@ export function buildFeatureRegistry(
         if (fieldKey === "enabled" || fieldKey === "skip_nonce_check") continue;
 
         const configPath = `${basePath}.${fieldKey}`;
-        const isSecret = SECRET_FIELDS.has(fieldKey);
-        const isRequired = REQUIRED_PROVIDER_FIELDS.has(fieldKey);
+        const fieldSchema = properties[fieldKey] as Record<string, unknown>;
+        const isSecret = fieldSchema?.secret === true;
+        const isRequired = fieldSchema?.required === true;
 
         variables.push({
           configPath,
@@ -110,8 +92,9 @@ export function buildFeatureRegistry(
       if (fieldKey === "enabled") continue;
 
       const configPath = `auth.email.smtp.${fieldKey}`;
-      const isSecret = SECRET_SMTP_FIELDS.has(fieldKey);
-      const isRequired = REQUIRED_SMTP_FIELDS.has(fieldKey);
+      const fieldSchema = smtpProperties[fieldKey] as Record<string, unknown>;
+      const isSecret = fieldSchema?.secret === true;
+      const isRequired = fieldSchema?.required === true;
 
       variables.push({
         configPath,

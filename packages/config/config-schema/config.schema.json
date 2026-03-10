@@ -12,44 +12,11 @@
       "description": "A string used to distinguish different Supabase projects on the same host. Defaults to the working directory name when running `supabase init`.",
       "tags": [
         "general"
-      ]
-    },
-    "workflow_profile": {
-      "type": "string",
-      "enum": ["solo", "staged", "preview", "preview-git"],
-      "description": "Workflow profile that determines how commands behave. Options: 'solo' (direct to prod), 'staged' (staging -> prod), 'preview' (manual preview envs), 'preview-git' (git-driven preview envs). Defaults to 'solo'.",
-      "default": "solo",
-      "tags": [
-        "general"
-      ]
-    },
-    "schema_management": {
-      "type": "string",
-      "enum": ["declarative", "migrations"],
-      "description": "How database schema changes are managed. 'declarative': describe desired state, system calculates diff. 'migrations': traditional versioned migration files. Defaults to 'declarative'.",
-      "default": "declarative",
-      "tags": [
-        "general"
-      ]
-    },
-    "config_source": {
-      "type": "string",
-      "enum": ["code", "remote"],
-      "description": "Where config is managed. 'code': config.json is source of truth, pushed to remote. 'remote': dashboard is source of truth, pulled to local. Defaults to 'code'.",
-      "default": "code",
-      "tags": [
-        "general"
-      ]
-    },
-    "environments": {
-      "type": "object",
-      "description": "Branch pattern to environment name mapping. Keys are glob patterns matched against git branch names, values are environment names (e.g. 'production', 'preview', 'staging').",
-      "additionalProperties": {
-        "type": "string"
-      },
-      "tags": [
-        "general"
-      ]
+      ],
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
     },
     "analytics": {
       "type": "object",
@@ -67,7 +34,11 @@
               "name": "Self-hosted Logflare Configuration",
               "link": "https://supabase.com/docs/reference/self-hosting-analytics/list-endpoints#getting-started"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "port": {
           "type": "number",
@@ -75,7 +46,11 @@
           "default": 54327,
           "tags": [
             "analytics"
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "vector_port": {
           "type": "number",
@@ -83,7 +58,11 @@
           "default": 54328,
           "tags": [
             "analytics"
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "backend": {
           "type": "string",
@@ -101,9 +80,17 @@
               "name": "Self-hosted Logflare Configuration",
               "link": "https://supabase.com/docs/reference/self-hosting-analytics/list-endpoints#getting-started"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         }
-      }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
     },
     "api": {
       "type": "object",
@@ -121,7 +108,11 @@
               "name": "PostgREST configuration",
               "link": "https://postgrest.org/en/stable/configuration.html"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "port": {
           "type": "number",
@@ -135,7 +126,11 @@
               "name": "PostgREST configuration",
               "link": "https://postgrest.org/en/stable/configuration.html"
             }
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "schemas": {
           "type": "array",
@@ -156,7 +151,11 @@
                 "link": "https://postgrest.org/en/stable/configuration.html"
               }
             ]
-          }
+          },
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "extra_search_path": {
           "type": "array",
@@ -176,7 +175,11 @@
                 "link": "https://postgrest.org/en/stable/configuration.html"
               }
             ]
-          }
+          },
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "max_rows": {
           "type": "number",
@@ -190,7 +193,11 @@
               "name": "PostgREST configuration",
               "link": "https://postgrest.org/en/stable/configuration.html"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "tls": {
           "type": "object",
@@ -202,9 +209,17 @@
               "default": false,
               "tags": [
                 "api"
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             }
-          }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "external_url": {
           "type": "string",
@@ -212,9 +227,17 @@
           "default": "http://127.0.0.1:54321",
           "tags": [
             "api"
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
         }
-      }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
     },
     "auth": {
       "type": "object",
@@ -232,7 +255,11 @@
               "name": "Auth Server configuration",
               "link": "https://supabase.com/docs/reference/auth"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "site_url": {
           "type": "string",
@@ -246,7 +273,11 @@
               "name": "Auth Server configuration",
               "link": "https://supabase.com/docs/reference/auth"
             }
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "additional_redirect_urls": {
           "type": "array",
@@ -269,7 +300,11 @@
             "tags": [
               "auth"
             ]
-          }
+          },
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "jwt_expiry": {
           "type": "number",
@@ -283,7 +318,11 @@
               "name": "Auth Server configuration",
               "link": "https://supabase.com/docs/reference/auth"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "enable_refresh_token_rotation": {
           "type": "boolean",
@@ -297,7 +336,11 @@
               "name": "Auth Server configuration",
               "link": "https://supabase.com/docs/reference/auth"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "refresh_token_reuse_interval": {
           "type": "number",
@@ -311,7 +354,11 @@
               "name": "Auth Server configuration",
               "link": "https://supabase.com/docs/reference/auth"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "enable_manual_linking": {
           "type": "boolean",
@@ -325,7 +372,11 @@
               "name": "Auth Server configuration",
               "link": "https://supabase.com/docs/reference/auth"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "enable_signup": {
           "type": "boolean",
@@ -339,7 +390,11 @@
               "name": "Auth Server configuration",
               "link": "https://supabase.com/docs/reference/auth"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "enable_anonymous_sign_ins": {
           "type": "boolean",
@@ -353,7 +408,11 @@
               "name": "Auth Server configuration",
               "link": "https://supabase.com/docs/reference/auth"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "hook": {
           "type": "object",
@@ -375,7 +434,11 @@
                       "name": "MFA Verification Hook",
                       "link": "https://supabase.com/docs/guides/auth/auth-hooks/mfa-verification-hook"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "uri": {
                   "type": "string",
@@ -388,7 +451,11 @@
                       "name": "MFA Verification Hook",
                       "link": "https://supabase.com/docs/guides/auth/auth-hooks/mfa-verification-hook"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "secrets": {
                   "type": "array",
@@ -408,9 +475,17 @@
                     "tags": [
                       "auth"
                     ]
-                  }
+                  },
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "password_verification_attempt": {
               "type": "object",
@@ -428,7 +503,11 @@
                       "name": "Password Verification Hook",
                       "link": "https://supabase.com/docs/guides/auth/auth-hooks/password-verification-hook"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "uri": {
                   "type": "string",
@@ -441,7 +520,11 @@
                       "name": "Password Verification Hook",
                       "link": "https://supabase.com/docs/guides/auth/auth-hooks/password-verification-hook"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "secrets": {
                   "type": "array",
@@ -461,9 +544,17 @@
                     "tags": [
                       "auth"
                     ]
-                  }
+                  },
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "custom_access_token": {
               "type": "object",
@@ -481,7 +572,11 @@
                       "name": "Custom Access Token Hook",
                       "link": "https://supabase.com/docs/guides/auth/auth-hooks/custom-access-token-hook"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "uri": {
                   "type": "string",
@@ -494,7 +589,11 @@
                       "name": "Custom Access Token Hook",
                       "link": "https://supabase.com/docs/guides/auth/auth-hooks/custom-access-token-hook"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "secrets": {
                   "type": "array",
@@ -514,9 +613,17 @@
                     "tags": [
                       "auth"
                     ]
-                  }
+                  },
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "send_sms": {
               "type": "object",
@@ -534,7 +641,11 @@
                       "name": "Send SMS Hook",
                       "link": "https://supabase.com/docs/guides/auth/auth-hooks/send-sms-hook"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "uri": {
                   "type": "string",
@@ -547,7 +658,11 @@
                       "name": "Send SMS Hook",
                       "link": "https://supabase.com/docs/guides/auth/auth-hooks/send-sms-hook"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "secrets": {
                   "type": "array",
@@ -567,9 +682,17 @@
                     "tags": [
                       "auth"
                     ]
-                  }
+                  },
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "send_email": {
               "type": "object",
@@ -587,7 +710,11 @@
                       "name": "Send Email Hook",
                       "link": "https://supabase.com/docs/guides/auth/auth-hooks/send-email-hook"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "uri": {
                   "type": "string",
@@ -600,7 +727,11 @@
                       "name": "Send Email Hook",
                       "link": "https://supabase.com/docs/guides/auth/auth-hooks/send-email-hook"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "secrets": {
                   "type": "array",
@@ -620,11 +751,23 @@
                     "tags": [
                       "auth"
                     ]
-                  }
+                  },
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             }
-          }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "mfa": {
           "type": "object",
@@ -646,7 +789,11 @@
                       "name": "Multi-Factor Authentication (TOTP)",
                       "link": "https://supabase.com/docs/guides/auth/auth-mfa/totp"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "verify_enabled": {
                   "type": "boolean",
@@ -660,9 +807,17 @@
                       "name": "Multi-Factor Authentication (TOTP)",
                       "link": "https://supabase.com/docs/guides/auth/auth-mfa/totp"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "phone": {
               "type": "object",
@@ -680,7 +835,11 @@
                       "name": "Multi-Factor Authentication (Phone)",
                       "link": "https://supabase.com/docs/guides/auth/auth-mfa/phone"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "verify_enabled": {
                   "type": "boolean",
@@ -694,7 +853,11 @@
                       "name": "Multi-Factor Authentication (Phone)",
                       "link": "https://supabase.com/docs/guides/auth/auth-mfa/phone"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "otp_length": {
                   "type": "number",
@@ -708,7 +871,11 @@
                       "name": "Multi-Factor Authentication (Phone)",
                       "link": "https://supabase.com/docs/guides/auth/auth-mfa/phone"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "template": {
                   "type": "string",
@@ -722,7 +889,11 @@
                       "name": "Multi-Factor Authentication (Phone)",
                       "link": "https://supabase.com/docs/guides/auth/auth-mfa/phone"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "max_frequency": {
                   "type": "string",
@@ -736,9 +907,17 @@
                       "name": "Multi-Factor Authentication (Phone)",
                       "link": "https://supabase.com/docs/guides/auth/auth-mfa/phone"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "max_enrolled_factors": {
               "type": "number",
@@ -752,9 +931,17 @@
                   "name": "Multi-Factor Authentication",
                   "link": "https://supabase.com/docs/guides/auth/auth-mfa"
                 }
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             }
-          }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "sessions": {
           "type": "object",
@@ -771,7 +958,11 @@
                   "name": "User sessions",
                   "link": "https://supabase.com/docs/guides/auth/sessions"
                 }
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             },
             "inactivity_timeout": {
               "type": "string",
@@ -784,9 +975,17 @@
                   "name": "User sessions",
                   "link": "https://supabase.com/docs/guides/auth/sessions"
                 }
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             }
-          }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "email": {
           "type": "object",
@@ -804,7 +1003,11 @@
                   "name": "Auth Server configuration",
                   "link": "https://supabase.com/docs/reference/auth"
                 }
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             },
             "double_confirm_changes": {
               "type": "boolean",
@@ -818,7 +1021,11 @@
                   "name": "Auth Server configuration",
                   "link": "https://supabase.com/docs/reference/auth"
                 }
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             },
             "enable_confirmations": {
               "type": "boolean",
@@ -832,7 +1039,11 @@
                   "name": "Auth Server configuration",
                   "link": "https://supabase.com/docs/reference/auth"
                 }
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             },
             "secure_password_change": {
               "type": "boolean",
@@ -846,7 +1057,11 @@
                   "name": "Auth Server configuration",
                   "link": "https://supabase.com/docs/reference/auth"
                 }
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             },
             "max_frequency": {
               "type": "string",
@@ -860,7 +1075,11 @@
                   "name": "Auth Server configuration",
                   "link": "https://supabase.com/docs/reference/auth"
                 }
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             },
             "smtp": {
               "type": "object",
@@ -869,31 +1088,59 @@
                 "host": {
                   "type": "string",
                   "description": "Hostname or IP address of the SMTP server.",
-                  "default": "inbucket"
+                  "default": "inbucket",
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "port": {
                   "type": "number",
                   "description": "Port number of the SMTP server.",
-                  "default": 2500
+                  "default": 2500,
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "user": {
                   "type": "string",
-                  "description": "Username for authenticating with the SMTP server."
+                  "description": "Username for authenticating with the SMTP server.",
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "pass": {
                   "type": "string",
-                  "description": "Password for authenticating with the SMTP server."
+                  "description": "Password for authenticating with the SMTP server.",
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "admin_email": {
                   "type": "string",
                   "description": "Email used as the sender for emails sent from the application.",
-                  "default": "admin@email.com"
+                  "default": "admin@email.com",
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "sender_name": {
                   "type": "string",
-                  "description": "Display name used as the sender for emails sent from the application."
+                  "description": "Display name used as the sender for emails sent from the application.",
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "template": {
               "type": "object",
@@ -906,13 +1153,25 @@
                     "subject": {
                       "type": "string",
                       "description": "The subject of the invite email.",
-                      "default": "You have been invited"
+                      "default": "You have been invited",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
                     },
                     "content_path": {
                       "type": "string",
-                      "description": "The path to the content of the invite email."
+                      "description": "The path to the content of the invite email.",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
                     }
-                  }
+                  },
+                  "scope": "global",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "confirmation": {
                   "type": "object",
@@ -921,13 +1180,25 @@
                     "subject": {
                       "type": "string",
                       "description": "The subject of the confirmation email.",
-                      "default": "Confirm Your Signup"
+                      "default": "Confirm Your Signup",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
                     },
                     "content_path": {
                       "type": "string",
-                      "description": "The path to the content of the confirmation email."
+                      "description": "The path to the content of the confirmation email.",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
                     }
-                  }
+                  },
+                  "scope": "global",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "recovery": {
                   "type": "object",
@@ -936,13 +1207,25 @@
                     "subject": {
                       "type": "string",
                       "description": "The subject of the recovery email.",
-                      "default": "Reset Your Password"
+                      "default": "Reset Your Password",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
                     },
                     "content_path": {
                       "type": "string",
-                      "description": "The path to the content of the recovery email."
+                      "description": "The path to the content of the recovery email.",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
                     }
-                  }
+                  },
+                  "scope": "global",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "magic_link": {
                   "type": "object",
@@ -951,13 +1234,25 @@
                     "subject": {
                       "type": "string",
                       "description": "The subject of the magic link email.",
-                      "default": "Your Magic Link"
+                      "default": "Your Magic Link",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
                     },
                     "content_path": {
                       "type": "string",
-                      "description": "The path to the content of the magic link email."
+                      "description": "The path to the content of the magic link email.",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
                     }
-                  }
+                  },
+                  "scope": "global",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "email_change": {
                   "type": "object",
@@ -966,17 +1261,37 @@
                     "subject": {
                       "type": "string",
                       "description": "The subject of the email change email.",
-                      "default": "Confirm Email Change"
+                      "default": "Confirm Email Change",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
                     },
                     "content_path": {
                       "type": "string",
-                      "description": "The path to the content of the email change email."
+                      "description": "The path to the content of the email change email.",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
                     }
-                  }
+                  },
+                  "scope": "global",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             }
-          }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "sms": {
           "type": "object",
@@ -994,7 +1309,11 @@
                   "name": "Auth Server configuration",
                   "link": "https://supabase.com/docs/reference/auth"
                 }
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             },
             "enable_confirmations": {
               "type": "boolean",
@@ -1008,7 +1327,11 @@
                   "name": "Auth Server configuration",
                   "link": "https://supabase.com/docs/reference/auth"
                 }
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             },
             "template": {
               "type": "string",
@@ -1022,7 +1345,11 @@
                   "name": "Auth Server configuration",
                   "link": "https://supabase.com/docs/reference/auth"
                 }
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             },
             "max_frequency": {
               "type": "string",
@@ -1030,7 +1357,11 @@
               "default": "60s",
               "tags": [
                 "auth"
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             },
             "twilio": {
               "type": "object",
@@ -1048,7 +1379,11 @@
                       "name": "Enabling Phone Login (Twilio)",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Twilio#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "account_sid": {
                   "type": "string",
@@ -1061,7 +1396,11 @@
                       "name": "Enabling Phone Login (Twilio)",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Twilio#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "message_service_sid": {
                   "type": "string",
@@ -1074,7 +1413,11 @@
                       "name": "Enabling Phone Login (Twilio)",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Twilio#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "auth_token": {
                   "type": "string",
@@ -1087,9 +1430,17 @@
                       "name": "Enabling Phone Login (Twilio)",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Twilio#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "twilio_verify": {
               "type": "object",
@@ -1107,7 +1458,11 @@
                       "name": "Enabling Phone Login (Twilio)",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Twilio#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "account_sid": {
                   "type": "string",
@@ -1120,7 +1475,11 @@
                       "name": "Enabling Phone Login (Twilio)",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Twilio#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "message_service_sid": {
                   "type": "string",
@@ -1133,7 +1492,11 @@
                       "name": "Enabling Phone Login (Twilio)",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Twilio#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "auth_token": {
                   "type": "string",
@@ -1146,9 +1509,17 @@
                       "name": "Enabling Phone Login (Twilio)",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Twilio#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "messagebird": {
               "type": "object",
@@ -1166,7 +1537,11 @@
                       "name": "Enabling Phone Login (MessageBird)",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=MessageBird#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "originator": {
                   "type": "string",
@@ -1179,7 +1554,11 @@
                       "name": "Enabling Phone Login (MessageBird)",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=MessageBird#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "api_key": {
                   "type": "string",
@@ -1192,9 +1571,17 @@
                       "name": "Enabling Phone Login (MessageBird)",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=MessageBird#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "textlocal": {
               "type": "object",
@@ -1212,7 +1599,11 @@
                       "name": "Enabling Phone Login (Textlocal%2520(Community%2520Supported))",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Textlocal%2520(Community%2520Supported)#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "sender": {
                   "type": "string",
@@ -1225,7 +1616,11 @@
                       "name": "Enabling Phone Login (Textlocal%2520(Community%2520Supported))",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Textlocal%2520(Community%2520Supported)#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "api_key": {
                   "type": "string",
@@ -1238,9 +1633,17 @@
                       "name": "Enabling Phone Login (Textlocal%2520(Community%2520Supported))",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Textlocal%2520(Community%2520Supported)#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "vonage": {
               "type": "object",
@@ -1258,7 +1661,11 @@
                       "name": "Enabling Phone Login (Vonage)",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Vonage#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "from": {
                   "type": "string",
@@ -1271,7 +1678,11 @@
                       "name": "Enabling Phone Login (Vonage)",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Vonage#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "api_key": {
                   "type": "string",
@@ -1284,7 +1695,11 @@
                       "name": "Enabling Phone Login (Vonage)",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Vonage#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 },
                 "api_secret": {
                   "type": "string",
@@ -1297,9 +1712,17 @@
                       "name": "Enabling Phone Login (Vonage)",
                       "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Vonage#enabling-phone-login"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "test_otp": {
               "type": "object",
@@ -1314,10 +1737,22 @@
                 }
               ],
               "additionalProperties": {
-                "type": "string"
-              }
+                "type": "string",
+                "scope": "global",
+                "promotable": false,
+                "secret": false,
+                "required": false
+              },
+              "scope": "env",
+              "promotable": false,
+              "secret": false,
+              "required": false
             }
-          }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "external": {
           "type": "object",
@@ -1339,7 +1774,11 @@
                       "name": "Login with Apple",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-apple"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -1352,7 +1791,11 @@
                       "name": "Login with Apple",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-apple"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -1366,7 +1809,11 @@
                       "name": "Login with Apple",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-apple"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -1379,7 +1826,11 @@
                       "name": "Login with Apple",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-apple"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -1392,7 +1843,11 @@
                       "name": "Login with Apple",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-apple"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -1406,9 +1861,17 @@
                       "name": "Login with Apple",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-apple"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "azure": {
               "type": "object",
@@ -1426,7 +1889,11 @@
                       "name": "Login with Azure",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-azure"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -1439,7 +1906,11 @@
                       "name": "Login with Azure",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-azure"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -1453,7 +1924,11 @@
                       "name": "Login with Azure",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-azure"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -1466,7 +1941,11 @@
                       "name": "Login with Azure",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-azure"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -1479,7 +1958,11 @@
                       "name": "Login with Azure",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-azure"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -1493,9 +1976,17 @@
                       "name": "Login with Azure",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-azure"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "bitbucket": {
               "type": "object",
@@ -1513,7 +2004,11 @@
                       "name": "Login with Bitbucket",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-bitbucket"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -1526,7 +2021,11 @@
                       "name": "Login with Bitbucket",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-bitbucket"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -1540,7 +2039,11 @@
                       "name": "Login with Bitbucket",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-bitbucket"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -1553,7 +2056,11 @@
                       "name": "Login with Bitbucket",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-bitbucket"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -1566,7 +2073,11 @@
                       "name": "Login with Bitbucket",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-bitbucket"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -1580,9 +2091,17 @@
                       "name": "Login with Bitbucket",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-bitbucket"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "discord": {
               "type": "object",
@@ -1600,7 +2119,11 @@
                       "name": "Login with Discord",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-discord"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -1613,7 +2136,11 @@
                       "name": "Login with Discord",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-discord"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -1627,7 +2154,11 @@
                       "name": "Login with Discord",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-discord"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -1640,7 +2171,11 @@
                       "name": "Login with Discord",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-discord"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -1653,7 +2188,11 @@
                       "name": "Login with Discord",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-discord"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -1667,9 +2206,17 @@
                       "name": "Login with Discord",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-discord"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "facebook": {
               "type": "object",
@@ -1687,7 +2234,11 @@
                       "name": "Login with Facebook",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-facebook"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -1700,7 +2251,11 @@
                       "name": "Login with Facebook",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-facebook"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -1714,7 +2269,11 @@
                       "name": "Login with Facebook",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-facebook"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -1727,7 +2286,11 @@
                       "name": "Login with Facebook",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-facebook"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -1740,7 +2303,11 @@
                       "name": "Login with Facebook",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-facebook"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -1754,9 +2321,17 @@
                       "name": "Login with Facebook",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-facebook"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "github": {
               "type": "object",
@@ -1774,7 +2349,11 @@
                       "name": "Login with GitHub",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-github"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -1787,7 +2366,11 @@
                       "name": "Login with GitHub",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-github"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -1801,7 +2384,11 @@
                       "name": "Login with GitHub",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-github"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -1814,7 +2401,11 @@
                       "name": "Login with GitHub",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-github"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -1827,7 +2418,11 @@
                       "name": "Login with GitHub",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-github"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -1841,9 +2436,17 @@
                       "name": "Login with GitHub",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-github"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "gitlab": {
               "type": "object",
@@ -1861,7 +2464,11 @@
                       "name": "Login with Gitlab",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-gitlab"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -1874,7 +2481,11 @@
                       "name": "Login with Gitlab",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-gitlab"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -1888,7 +2499,11 @@
                       "name": "Login with Gitlab",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-gitlab"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -1902,7 +2517,11 @@
                       "name": "Login with Gitlab",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-gitlab"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -1915,7 +2534,11 @@
                       "name": "Login with Gitlab",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-gitlab"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -1929,9 +2552,17 @@
                       "name": "Login with Gitlab",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-gitlab"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "google": {
               "type": "object",
@@ -1949,7 +2580,11 @@
                       "name": "Login with Google",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-google"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -1962,7 +2597,11 @@
                       "name": "Login with Google",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-google"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -1976,7 +2615,11 @@
                       "name": "Login with Google",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-google"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -1989,7 +2632,11 @@
                       "name": "Login with Google",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-google"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -2002,7 +2649,11 @@
                       "name": "Login with Google",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-google"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -2016,9 +2667,17 @@
                       "name": "Login with Google",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-google"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "kakao": {
               "type": "object",
@@ -2036,7 +2695,11 @@
                       "name": "Login with Kakao",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-kakao"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -2049,7 +2712,11 @@
                       "name": "Login with Kakao",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-kakao"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -2063,7 +2730,11 @@
                       "name": "Login with Kakao",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-kakao"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -2076,7 +2747,11 @@
                       "name": "Login with Kakao",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-kakao"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -2089,7 +2764,11 @@
                       "name": "Login with Kakao",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-kakao"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -2103,9 +2782,17 @@
                       "name": "Login with Kakao",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-kakao"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "keycloak": {
               "type": "object",
@@ -2123,7 +2810,11 @@
                       "name": "Login with Keycloak",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-keycloak"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -2136,7 +2827,11 @@
                       "name": "Login with Keycloak",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-keycloak"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -2150,7 +2845,11 @@
                       "name": "Login with Keycloak",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-keycloak"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -2166,7 +2865,11 @@
                       "name": "Login with Keycloak",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-keycloak"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -2179,7 +2882,11 @@
                       "name": "Login with Keycloak",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-keycloak"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -2193,9 +2900,17 @@
                       "name": "Login with Keycloak",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-keycloak"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "linkedin": {
               "type": "object",
@@ -2213,7 +2928,11 @@
                       "name": "Login with LinkedIn",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-linkedin"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -2226,7 +2945,11 @@
                       "name": "Login with LinkedIn",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-linkedin"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -2240,7 +2963,11 @@
                       "name": "Login with LinkedIn",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-linkedin"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -2253,7 +2980,11 @@
                       "name": "Login with LinkedIn",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-linkedin"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -2266,7 +2997,11 @@
                       "name": "Login with LinkedIn",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-linkedin"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -2280,9 +3015,17 @@
                       "name": "Login with LinkedIn",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-linkedin"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "notion": {
               "type": "object",
@@ -2300,7 +3043,11 @@
                       "name": "Login with Notion",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-notion"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -2313,7 +3060,11 @@
                       "name": "Login with Notion",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-notion"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -2327,7 +3078,11 @@
                       "name": "Login with Notion",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-notion"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -2340,7 +3095,11 @@
                       "name": "Login with Notion",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-notion"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -2353,7 +3112,11 @@
                       "name": "Login with Notion",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-notion"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -2367,9 +3130,17 @@
                       "name": "Login with Notion",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-notion"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "twitch": {
               "type": "object",
@@ -2387,7 +3158,11 @@
                       "name": "Login with Twitch",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitch"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -2400,7 +3175,11 @@
                       "name": "Login with Twitch",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitch"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -2414,7 +3193,11 @@
                       "name": "Login with Twitch",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitch"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -2427,7 +3210,11 @@
                       "name": "Login with Twitch",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitch"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -2440,7 +3227,11 @@
                       "name": "Login with Twitch",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitch"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -2454,9 +3245,17 @@
                       "name": "Login with Twitch",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitch"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "twitter": {
               "type": "object",
@@ -2474,7 +3273,11 @@
                       "name": "Login with Twitter",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitter"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -2487,7 +3290,11 @@
                       "name": "Login with Twitter",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitter"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -2501,7 +3308,11 @@
                       "name": "Login with Twitter",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitter"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -2514,7 +3325,11 @@
                       "name": "Login with Twitter",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitter"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -2527,7 +3342,11 @@
                       "name": "Login with Twitter",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitter"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -2541,9 +3360,17 @@
                       "name": "Login with Twitter",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitter"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "slack": {
               "type": "object",
@@ -2561,7 +3388,11 @@
                       "name": "Login with Slack",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-slack"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -2574,7 +3405,11 @@
                       "name": "Login with Slack",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-slack"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -2588,7 +3423,11 @@
                       "name": "Login with Slack",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-slack"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -2601,7 +3440,11 @@
                       "name": "Login with Slack",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-slack"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -2614,7 +3457,11 @@
                       "name": "Login with Slack",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-slack"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -2628,9 +3475,17 @@
                       "name": "Login with Slack",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-slack"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "spotify": {
               "type": "object",
@@ -2648,7 +3503,11 @@
                       "name": "Login with Spotify",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-spotify"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -2661,7 +3520,11 @@
                       "name": "Login with Spotify",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-spotify"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -2675,7 +3538,11 @@
                       "name": "Login with Spotify",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-spotify"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -2688,7 +3555,11 @@
                       "name": "Login with Spotify",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-spotify"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -2701,7 +3572,11 @@
                       "name": "Login with Spotify",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-spotify"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -2715,9 +3590,17 @@
                       "name": "Login with Spotify",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-spotify"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "workos": {
               "type": "object",
@@ -2735,7 +3618,11 @@
                       "name": "Login with WorkOS",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-workos"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -2748,7 +3635,11 @@
                       "name": "Login with WorkOS",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-workos"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -2762,7 +3653,11 @@
                       "name": "Login with WorkOS",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-workos"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -2775,7 +3670,11 @@
                       "name": "Login with WorkOS",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-workos"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -2788,7 +3687,11 @@
                       "name": "Login with WorkOS",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-workos"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -2802,9 +3705,17 @@
                       "name": "Login with WorkOS",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-workos"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "zoom": {
               "type": "object",
@@ -2822,7 +3733,11 @@
                       "name": "Login with Zoom",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-zoom"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 },
                 "client_id": {
                   "type": "string",
@@ -2835,7 +3750,11 @@
                       "name": "Login with Zoom",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-zoom"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
                 },
                 "secret": {
                   "type": "string",
@@ -2849,7 +3768,11 @@
                       "name": "Login with Zoom",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-zoom"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
                 },
                 "url": {
                   "type": "string",
@@ -2862,7 +3785,11 @@
                       "name": "Login with Zoom",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-zoom"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "redirect_uri": {
                   "type": "string",
@@ -2875,7 +3802,11 @@
                       "name": "Login with Zoom",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-zoom"
                     }
-                  ]
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
                 },
                 "skip_nonce_check": {
                   "type": "boolean",
@@ -2889,13 +3820,29 @@
                       "name": "Login with Zoom",
                       "link": "https://supabase.com/docs/guides/auth/social-login/auth-zoom"
                     }
-                  ]
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
                 }
-              }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
             }
-          }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
         }
-      }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
     },
     "db": {
       "type": "object",
@@ -2913,7 +3860,11 @@
               "name": "PostgreSQL configuration",
               "link": "https://postgrest.org/en/stable/configuration.html"
             }
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "shadow_port": {
           "type": "number",
@@ -2921,7 +3872,11 @@
           "default": 54320,
           "tags": [
             "database"
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "major_version": {
           "type": "number",
@@ -2935,7 +3890,11 @@
               "name": "PostgreSQL configuration",
               "link": "https://postgrest.org/en/stable/configuration.html"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "pooler": {
           "type": "object",
@@ -2953,7 +3912,11 @@
                   "name": "PgBouncer Configuration",
                   "link": "https://www.pgbouncer.org/config.html"
                 }
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             },
             "port": {
               "type": "number",
@@ -2967,7 +3930,11 @@
                   "name": "PgBouncer Configuration",
                   "link": "https://www.pgbouncer.org/config.html#listen_port"
                 }
-              ]
+              ],
+              "scope": "env",
+              "promotable": false,
+              "secret": false,
+              "required": false
             },
             "pool_mode": {
               "type": "string",
@@ -2985,7 +3952,11 @@
                   "name": "PgBouncer Configuration",
                   "link": "https://www.pgbouncer.org/config.html#pool_mode"
                 }
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             },
             "default_pool_size": {
               "type": "number",
@@ -2999,7 +3970,11 @@
                   "name": "PgBouncer Configuration",
                   "link": "https://www.pgbouncer.org/config.html#default_pool_size"
                 }
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             },
             "max_client_conn": {
               "type": "number",
@@ -3013,9 +3988,17 @@
                   "name": "PgBouncer Configuration",
                   "link": "https://www.pgbouncer.org/config.html#max_client_conn"
                 }
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             }
-          }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "seed": {
           "type": "object",
@@ -3027,7 +4010,11 @@
               "default": true,
               "tags": [
                 "database"
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             },
             "sql_paths": {
               "type": "array",
@@ -3050,11 +4037,23 @@
                 "tags": [
                   "database"
                 ]
-              }
+              },
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             }
-          }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
         }
-      }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
     },
     "edge_runtime": {
       "type": "object",
@@ -3066,7 +4065,11 @@
           "default": true,
           "tags": [
             "edge-functions"
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "policy": {
           "type": "string",
@@ -3078,7 +4081,11 @@
           "default": "oneshot",
           "tags": [
             "edge-functions"
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "inspector_port": {
           "type": "number",
@@ -3086,9 +4093,17 @@
           "default": 8083,
           "tags": [
             "edge-functions"
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
         }
-      }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
     },
     "functions": {
       "type": "object",
@@ -3155,7 +4170,11 @@
         }
       },
       "additionalProperties": false,
-      "properties": {}
+      "properties": {},
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
     },
     "inbucket": {
       "type": "object",
@@ -3173,7 +4192,11 @@
               "name": "Inbucket documentation",
               "link": "https://www.inbucket.org"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "port": {
           "type": "number",
@@ -3187,7 +4210,11 @@
               "name": "Inbucket documentation",
               "link": "https://www.inbucket.org"
             }
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "smtp_port": {
           "type": "number",
@@ -3201,7 +4228,11 @@
               "name": "Inbucket documentation",
               "link": "https://www.inbucket.org"
             }
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "pop3_port": {
           "type": "number",
@@ -3215,9 +4246,17 @@
               "name": "Inbucket documentation",
               "link": "https://www.inbucket.org"
             }
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
         }
-      }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
     },
     "realtime": {
       "type": "object",
@@ -3235,7 +4274,11 @@
               "name": "Supabase Realtime",
               "link": "https://supabase.com/docs/guides/realtime"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "ip_version": {
           "type": "string",
@@ -3253,7 +4296,11 @@
               "name": "Supabase Realtime Configuration",
               "link": "https://supabase.com/docs/guides/realtime/self-hosting"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "max_header_length": {
           "type": "number",
@@ -3261,9 +4308,17 @@
           "default": 4096,
           "tags": [
             "realtime"
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         }
-      }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
     },
     "storage": {
       "type": "object",
@@ -3281,7 +4336,11 @@
               "name": "Storage server configuration",
               "link": "https://supabase.com/docs/guides/self-hosting/storage/config"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "file_size_limit": {
           "type": "string",
@@ -3299,7 +4358,11 @@
               "name": "Storage server configuration",
               "link": "https://supabase.com/docs/guides/self-hosting/storage/config"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "image_transformation": {
           "type": "object",
@@ -3317,9 +4380,17 @@
                   "name": "Storage server configuration",
                   "link": "https://supabase.com/docs/guides/self-hosting/storage/config"
                 }
-              ]
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
             }
-          }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "buckets": {
           "type": "object",
@@ -3334,7 +4405,11 @@
               "public": {
                 "type": "boolean",
                 "description": "Enable public access to the bucket.",
-                "default": false
+                "default": false,
+                "scope": "global",
+                "promotable": true,
+                "secret": false,
+                "required": false
               },
               "file_size_limit": {
                 "type": "string",
@@ -3352,7 +4427,11 @@
                     "name": "Storage server configuration",
                     "link": "https://supabase.com/docs/guides/self-hosting/storage/config"
                   }
-                ]
+                ],
+                "scope": "global",
+                "promotable": true,
+                "secret": false,
+                "required": false
               },
               "allowed_mime_types": {
                 "type": "array",
@@ -3372,19 +4451,39 @@
                   "tags": [
                     "storage"
                   ]
-                }
+                },
+                "scope": "global",
+                "promotable": true,
+                "secret": false,
+                "required": false
               },
               "objects_path": {
                 "type": "string",
                 "description": "The path to the objects in the bucket.",
                 "tags": [
                   "storage"
-                ]
+                ],
+                "scope": "global",
+                "promotable": true,
+                "secret": false,
+                "required": false
               }
-            }
-          }
+            },
+            "scope": "global",
+            "promotable": false,
+            "secret": false,
+            "required": false
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
         }
-      }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
     },
     "studio": {
       "type": "object",
@@ -3402,7 +4501,11 @@
               "name": "Supabase Studio",
               "link": "https://supabase.com/docs/guides/studio"
             }
-          ]
+          ],
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "port": {
           "type": "number",
@@ -3410,7 +4513,11 @@
           "default": 54323,
           "tags": [
             "studio"
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "api_url": {
           "type": "string",
@@ -3424,7 +4531,11 @@
               "name": "Supabase Studio Configuration",
               "link": "https://supabase.com/docs/guides/self-hosting/studio"
             }
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "openai_api_key": {
           "type": "string",
@@ -3438,9 +4549,17 @@
               "name": "Supabase Studio Configuration",
               "link": "https://supabase.com/docs/guides/self-hosting/studio"
             }
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": true,
+          "required": false
         }
-      }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
     },
     "experimental": {
       "type": "object",
@@ -3451,7 +4570,11 @@
           "description": "Postgres storage engine to use OrioleDB (S3)",
           "tags": [
             "experimental"
-          ]
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
         },
         "s3_host": {
           "type": "string",
@@ -3462,7 +4585,11 @@
           "default": "env(S3_HOST)",
           "tags": [
             "experimental"
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "s3_region": {
           "type": "string",
@@ -3473,7 +4600,11 @@
           "default": "env(S3_REGION)",
           "tags": [
             "experimental"
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
         },
         "s3_access_key": {
           "type": "string",
@@ -3481,7 +4612,11 @@
           "default": "env(S3_ACCESS_KEY)",
           "tags": [
             "experimental"
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": true,
+          "required": false
         },
         "s3_secret_key": {
           "type": "string",
@@ -3489,7 +4624,107 @@
           "default": "env(S3_SECRET_KEY)",
           "tags": [
             "experimental"
-          ]
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": true,
+          "required": false
+        }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
+    },
+    "workflow_profile": {
+      "type": "string",
+      "description": "The workflow profile to use for this project.",
+      "enum": [
+        "remote",
+        "local",
+        "branching-remote",
+        "branching-local"
+      ],
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
+    },
+    "schema_management": {
+      "type": "string",
+      "description": "The schema management approach for this project.",
+      "enum": [
+        "declarative",
+        "migrations"
+      ],
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
+    },
+    "config_source": {
+      "type": "string",
+      "description": "The source of truth for project configuration.",
+      "enum": [
+        "code",
+        "remote"
+      ],
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
+    },
+    "production_branch": {
+      "type": "string",
+      "description": "The Git branch to treat as the production branch.",
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
+    },
+    "profiles": {
+      "type": "object",
+      "description": "Profile configuration for different environments",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "The mode for this profile",
+            "enum": [
+              "local",
+              "preview",
+              "remote"
+            ]
+          },
+          "workflow": {
+            "type": "string",
+            "description": "The workflow type for this profile",
+            "enum": [
+              "git",
+              "dashboard"
+            ]
+          },
+          "schema": {
+            "type": "string",
+            "description": "The schema management approach",
+            "enum": [
+              "declarative",
+              "migrations"
+            ]
+          },
+          "branches": {
+            "type": "array",
+            "description": "Git branch patterns that match this profile",
+            "items": {
+              "type": "string"
+            }
+          },
+          "project": {
+            "type": "string",
+            "description": "Override project ID for this profile"
+          }
         }
       }
     }

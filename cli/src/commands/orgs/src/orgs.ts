@@ -7,6 +7,7 @@ import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
 import { requireAuth } from "@/lib/config.js";
 import { searchSelect } from "@/components/search-select.js";
+import { createSpinner } from "@/components/output.js";
 
 interface OrgsOptions {
   json?: boolean;
@@ -45,7 +46,7 @@ export async function orgsCommand(options: OrgsOptions): Promise<void> {
   }
 
   // Interactive mode - fetch and display
-  const spinner = p.spinner();
+  const spinner = createSpinner(options);
   spinner.start("Fetching organizations...");
 
   try {

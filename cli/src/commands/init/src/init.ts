@@ -29,7 +29,7 @@ import { writeProjectEnv } from "@/lib/env-file.js";
 import type { WorkflowProfile, SchemaManagement, ConfigSource } from "@/lib/config-types.js";
 import { runInitWizard, type InitResult } from "@/components/InitWizard.js";
 import { S_BAR } from "@/components/command-header.js";
-import { printKeyValue, printNextSteps, printWarning, printSectionHeader } from "@/components/output.js";
+import { printKeyValue, printNextSteps, printWarning, printSectionHeader, createSpinner } from "@/components/output.js";
 
 interface InitOptions {
   yes?: boolean;
@@ -439,8 +439,8 @@ async function writePlatformProject(
   const { ref: projectRef, name: projectName, schemaManagement = "declarative", configSource = "code", workflowProfile = DEFAULT_WORKFLOW_PROFILE } = project;
 
   // Fetch project config
-  const spinner = !options.json && process.stdin.isTTY ? p.spinner() : null;
-  spinner?.start("Fetching project config...");
+  const spinner = createSpinner(options);
+  spinner.start("Fetching project config...");
 
   const client = createClient(token);
   let anonKey = "";
@@ -474,7 +474,7 @@ async function writePlatformProject(
     }
   }
 
-  spinner?.stop("Project config fetched");
+  spinner.stop("Project config fetched");
 
   // Close the timeline from the wizard
   if (!options.json && process.stdin.isTTY) {

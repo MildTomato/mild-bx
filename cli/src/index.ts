@@ -16,6 +16,7 @@ import type { Command } from "@/util/commands/types.js";
 import { getAccessTokenAsync } from "@/lib/config.js";
 import { SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
 import { C } from "@/lib/colors.js";
+import { printUpdateNotice } from "@/lib/update-notice.js";
 
 const CLI_NAME = "supa";
 const CLI_VERSION = "0.0.1";
@@ -125,13 +126,19 @@ async function main(): Promise<number> {
   let argv = process.argv.slice(2);
   const isVerbose = argv.includes("--verbose");
 
-  // Load .env files at runtime (not module init time)
+  // Load .env files at runtime (not module init time).
+  //
+  // Priority (highest → lowest among files; OS env always wins over all files):
+  //   .env.local > supabase/.env
+  //
+  // .env.local is the single source of truth for credentials written by
+  // `supa dev` / `supa init` (SUPABASE_DB_PASSWORD, SUPABASE_URL, etc.).
+  // supabase/.env holds project-level vars (edge function config, etc.).
   if (isVerbose) {
     console.error(`${C.secondary}[env] cwd: ${process.cwd()}${C.reset}`);
   }
-  loadEnvFile(".env", isVerbose);
-  loadEnvFile("supabase/.env", isVerbose);
-  loadEnvFile(".env.local", isVerbose);
+  loadEnvFile(".env.local", isVerbose);     // credentials — written by supa
+  loadEnvFile("supabase/.env", isVerbose);  // project-level env vars
 
   if (isVerbose) {
     const pwd = process.env.SUPABASE_DB_PASSWORD;
@@ -209,6 +216,7 @@ async function main(): Promise<number> {
   try {
     const exitCode = await command.handler(rest);
     console.log(); // bottom padding
+    printUpdateNotice();
     return exitCode ?? 0;
   } catch (err) {
     if (err instanceof Error) {

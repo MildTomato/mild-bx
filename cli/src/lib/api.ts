@@ -140,6 +140,17 @@ export class SupabaseClient {
     );
   }
 
+  async updateBranch(
+    branchRef: string,
+    params: components["schemas"]["UpdateBranchBody"],
+  ): Promise<Branch> {
+    return this.request<Branch>("PATCH", `/v1/branches/${branchRef}`, params);
+  }
+
+  async mergeBranch(branchRef: string): Promise<void> {
+    await this.request("POST", `/v1/branches/${branchRef}/merge`);
+  }
+
   async deleteBranch(branchRef: string, force = true): Promise<void> {
     const query = force ? "" : "?force=false";
     await this.request("DELETE", `/v1/branches/${branchRef}${query}`);

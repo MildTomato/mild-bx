@@ -18,6 +18,7 @@ import { join, dirname } from "node:path";
 import { parse as parseToml } from "toml";
 import { z } from "zod";
 import { credentialStore } from "./credentials.js";
+import { WORKFLOW_PROFILE_VALUES } from "@supabase-dx/config";
 
 /**
  * Access token format: sbp_[a-f0-9]{40} or sbp_oauth_[a-f0-9]{40}
@@ -321,18 +322,7 @@ const ProfileSchema = z.object({
 });
 
 // Workflow profile types (new DX concept)
-export const WorkflowProfileType = z.enum([
-  // Current profiles (branching × dev environment)
-  "remote",
-  "local",
-  "branching-remote",
-  "branching-local",
-  // Legacy profiles (kept for backwards compatibility)
-  "solo",
-  "staged",
-  "preview",
-  "preview-git",
-]);
+export const WorkflowProfileType = z.enum(WORKFLOW_PROFILE_VALUES);
 export type WorkflowProfile = z.infer<typeof WorkflowProfileType>;
 
 // Our DX config extends the base Supabase config with profiles
@@ -348,6 +338,9 @@ const ProjectConfigSchema = z
         id: z.string().optional(),
       })
       .optional(),
+
+    // The git branch that maps to production (written by supa init, defaults to main/master)
+    production_branch: z.string().optional(),
 
     // Workflow profile (new: determines how commands behave)
     workflow_profile: WorkflowProfileType.optional(),

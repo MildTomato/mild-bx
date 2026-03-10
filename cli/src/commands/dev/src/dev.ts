@@ -6,7 +6,7 @@
  */
 
 import { watch as chokidarWatch } from "chokidar";
-import { writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { watch, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, dirname, relative, basename } from "node:path";
 import { createClient } from "@/lib/api.js";
 import { SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
@@ -31,6 +31,7 @@ import { getSeedConfig } from "@/lib/seed-config.js";
 import { C } from "@/lib/colors.js";
 import { printCommandHeader, S_BAR } from "@/components/command-header.js";
 import * as p from "@clack/prompts";
+import { isTTY } from "@clack/prompts";
 import {
   buildPostgrestPayload,
   buildAuthPayload,
@@ -38,6 +39,35 @@ import {
   type ProjectConfig,
   type ConfigDiff,
 } from "@/lib/sync.js";
+import { resolveBranchAndWriteEnv, writeProjectEnv } from "@/lib/env-file.js";
+import { isBranchingProfile } from "@/lib/workflow-profiles.js";
+import { getWorkflowProfile } from "@/lib/config.js";
+import { checkEnvMatchesBranch } from "@/lib/check-env-branch.js";
+
+function watchGitBranch(cwd: string, onChange: () => void): () => void {
+  const gitHeadPath = join(cwd, ".git", "HEAD");
+  let watcher: ReturnType<typeof watch> | null = null;
+  let fallbackInterval: ReturnType<typeof setInterval> | null = null;
+
+  try {
+    watcher = watch(gitHeadPath, () => onChange());
+    watcher.on("error", () => {
+      // Fall back to polling if watcher fails
+      watcher?.close();
+      watcher = null;
+      fallbackInterval = setInterval(onChange, 5000);
+    });
+  } catch {
+    // .git/HEAD doesn't exist or watch not supported — fall back to polling
+    fallbackInterval = setInterval(onChange, 5000);
+  }
+
+  // Return cleanup function
+  return () => {
+    watcher?.close();
+    if (fallbackInterval) clearInterval(fallbackInterval);
+  };
+}
 
 const SPINNER_FRAMES = ["◒", "◐", "◓", "◑"];
 
@@ -81,9 +111,34 @@ interface DevState {
   seedApplied: boolean;
 }
 
+/**
+ * Fetch the pooler connection string for a project ref, substituting the db password.
+ * Returns undefined if the pooler config is unavailable.
+ */
+async function resolveConnectionString(
+  client: ReturnType<typeof createClient>,
+  projectRef: string,
+  dbPassword: string,
+): Promise<string | undefined> {
+  const poolerConfig = await client.getPoolerConfig(projectRef);
+  const pooler =
+    poolerConfig.find((p) => p.pool_mode === "session" && p.database_type === "PRIMARY") ??
+    poolerConfig.find((p) => p.database_type === "PRIMARY");
+  if (!pooler?.connection_string) return undefined;
+  return pooler.connection_string
+    .replace("[YOUR-PASSWORD]", dbPassword)
+    .replace(":6543/", ":5432/");
+}
+
 export async function devCommand(options: DevOptions): Promise<void> {
   const cwd = process.cwd();
   const schemaDir = join(cwd, "supabase", "schema");
+  // Treat VS Code / Claude Code integrated terminals as non-interactive even
+  // though they report isTTY=true. Their pseudo-TTY doesn't handle \r cursor
+  // rewrites correctly — animation frames pile up on the same line instead of
+  // overwriting, producing the repeated "◒ Syncing◐ Syncing◓..." output.
+  const isInteractive =
+    isTTY(process.stdout) && process.env.TERM_PROGRAM !== "vscode";
 
   // Set verbose mode for pg-delta logging
   setVerbose(options.verbose ?? false);
@@ -274,7 +329,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
               }),
             );
           } else {
-            process.stdout.write("\r\x1b[K");
+            if (isInteractive) process.stdout.write("\r\x1b[K");
             console.error(`\n${C.error}Error:${C.reset} Project is paused`);
             console.error(
               `  Restore from: ${C.value}${SUPABASE_DASHBOARD_URL}/project/${projectRef}${C.reset}\n`,
@@ -288,7 +343,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
           if (lastPhase === "project") {
             lastPhase = "services";
             if (!options.json) {
-              process.stdout.write("\r\x1b[K");
+              if (isInteractive) process.stdout.write("\r\x1b[K");
               console.log(`${C.success}✓${C.reset} Project is active`);
             }
           }
@@ -300,12 +355,16 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
           // Services not ready yet - keep waiting
           if (!options.json) {
-            const elapsed = Math.round((Date.now() - startTime) / 1000);
-            const char = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length];
-            process.stdout.write(
-              `\r${C.icon}${char}${C.reset} Waiting for database... ${C.secondary}(${servicesHealth.status}) ${elapsed}s${C.reset}\x1b[K`,
-            );
-            spinnerFrame++;
+            if (isInteractive) {
+              const elapsed = Math.round((Date.now() - startTime) / 1000);
+              const char = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length];
+              process.stdout.write(
+                `\r${C.icon}${char}${C.reset} Waiting for database... ${C.secondary}(${servicesHealth.status}) ${elapsed}s${C.reset}\x1b[K`,
+              );
+              spinnerFrame++;
+            } else if (pollCount === 1) {
+              console.log(`Waiting for database... (${servicesHealth.status})`);
+            }
           } else {
             console.log(
               JSON.stringify({
@@ -323,22 +382,23 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
         // Project is in a transitional state - wait and retry
         if (!options.json) {
-          const elapsed = Math.round((Date.now() - startTime) / 1000);
-          const char = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length];
           const statusMsg = getStatusMessage(project.status);
-
-          // Show status change on new line if status changed
-          if (statusChanged) {
-            process.stdout.write("\r\x1b[K");
-            console.log(
-              `${C.secondary}→${C.reset} Status: ${C.value}${statusMsg}${C.reset}`,
+          if (isInteractive) {
+            // Animated spinner — only works in a real TTY (uses \r to overwrite the line)
+            const elapsed = Math.round((Date.now() - startTime) / 1000);
+            const char = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length];
+            if (statusChanged) {
+              process.stdout.write("\r\x1b[K");
+              console.log(`${C.secondary}→${C.reset} Status: ${C.value}${statusMsg}${C.reset}`);
+            }
+            process.stdout.write(
+              `\r${C.icon}${char}${C.reset} ${statusMsg}... ${C.secondary}${elapsed}s${C.reset}\x1b[K`,
             );
+            spinnerFrame++;
+          } else if (statusChanged || lastStatus === "") {
+            // Non-TTY: log once per status change so output isn't flooded
+            console.log(`${C.secondary}→${C.reset} ${statusMsg}...`);
           }
-
-          process.stdout.write(
-            `\r${C.icon}${char}${C.reset} ${statusMsg}... ${C.secondary}${elapsed}s${C.reset}\x1b[K`,
-          );
-          spinnerFrame++;
         } else {
           console.log(
             JSON.stringify({
@@ -360,7 +420,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
             }),
           );
         } else {
-          process.stdout.write("\r\x1b[K");
+          if (isInteractive) process.stdout.write("\r\x1b[K");
           console.error(
             `\n${C.error}Error:${C.reset} Failed to check project status`,
           );
@@ -432,7 +492,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
       }
 
       if (!options.json) {
-        process.stdout.write("\r\x1b[K"); // Clear the spinner line
+        if (isInteractive) process.stdout.write("\r\x1b[K"); // Clear the spinner line (TTY only)
         console.log(`${C.success}✓${C.reset} Database is ready\n`);
       }
     } else {
@@ -476,38 +536,53 @@ export async function devCommand(options: DevOptions): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  // Resolve credentials BEFORE building the connection string so we always
+  // connect to the right database from the very start.
+  //
+  // For branching profiles we always call resolveBranchAndWriteEnv — even when
+  // on the production branch. This is the only way to fix stale .env.local
+  // credentials left over from a previous preview-branch session: the old
+  // preview password overwrites SUPABASE_DB_PASSWORD in .env.local, and if
+  // that file is loaded before .env at startup the wrong password reaches the
+  // connection string. resolveBranchAndWriteEnv re-fetches the correct
+  // password from the API for whichever branch we're on and updates both
+  // process.env and .env.local before we connect.
+  //
+  // For non-branching profiles we fall back to writeProjectEnv which just
+  // copies the existing process.env password into .env.local (no API fetch).
+  const workflowProfile = getWorkflowProfile(config);
+
+  if (isBranchingProfile(workflowProfile) && config.project_id) {
+    const branchResult = await resolveBranchAndWriteEnv({
+      cwd,
+      gitBranch: currentBranch,
+      mainProjectRef: config.project_id,
+      token,
+      productionBranch: config.production_branch as string | undefined,
+    });
+    if (branchResult) {
+      projectRef = branchResult.projectRef;
+    }
+  } else if (config.project_id) {
+    // Non-branching profile — write main project credentials (fire-and-forget,
+    // only refreshes .env.local, no need to block the connection string build)
+    writeProjectEnv({ cwd, projectRef: config.project_id, token }).catch(() => {});
+  }
+
   let connectionString: string | undefined;
 
   try {
-    const poolerConfig = await client.getPoolerConfig(projectRef);
-    const sessionPooler = poolerConfig.find(
-      (p) => p.pool_mode === "session" && p.database_type === "PRIMARY",
+    connectionString = await resolveConnectionString(
+      client,
+      projectRef,
+      process.env.SUPABASE_DB_PASSWORD ?? dbPassword,
     );
-    const fallbackPooler = poolerConfig.find(
-      (p) => p.database_type === "PRIMARY",
-    );
-    const pooler = sessionPooler || fallbackPooler;
-
-    if (pooler?.connection_string) {
-      connectionString = pooler.connection_string
-        .replace("[YOUR-PASSWORD]", dbPassword)
-        .replace(":6543/", ":5432/");
-    }
   } catch (error) {
     if (options.json) {
-      console.log(
-        JSON.stringify({
-          status: "error",
-          message: "Failed to get connection string",
-        }),
-      );
+      console.log(JSON.stringify({ status: "error", message: "Failed to get connection string" }));
     } else {
-      console.error(
-        `\n${C.error}Error:${C.reset} Failed to get database connection`,
-      );
-      console.error(
-        `  ${error instanceof Error ? error.message : String(error)}\n`,
-      );
+      console.error(`\n${C.error}Error:${C.reset} Failed to get database connection`);
+      console.error(`  ${error instanceof Error ? error.message : String(error)}\n`);
     }
     process.exitCode = 1;
     return;
@@ -553,6 +628,9 @@ export async function devCommand(options: DevOptions): Promise<void> {
     seedApplied: false,
   };
 
+  // Warn if .env.local SUPABASE_URL doesn't match the resolved branch
+  checkEnvMatchesBranch({ cwd, gitBranch: currentBranch, resolvedProjectRef: projectRef, config, json: options.json });
+
   // JSON mode - output events as NDJSON
   if (options.json) {
     console.log(
@@ -569,9 +647,10 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
     let lastBranch = currentBranch;
     let debounceTimer: NodeJS.Timeout | null = null;
+    let isResolvingBranchJson = false;
 
     // Branch watcher
-    const branchCheck = setInterval(() => {
+    const cleanupBranchWatchJson = watchGitBranch(cwd, () => {
       const newBranch = getCurrentBranch(cwd);
       if (newBranch && newBranch !== lastBranch) {
         lastBranch = newBranch;
@@ -588,8 +667,63 @@ export async function devCommand(options: DevOptions): Promise<void> {
           state.profile = matched;
           state.projectRef = getProjectRef(config, matched);
         }
+
+        const workflowProfile = getWorkflowProfile(config);
+        if (isBranchingProfile(workflowProfile) && config.project_id) {
+          if (!isResolvingBranchJson) {
+            isResolvingBranchJson = true;
+            resolveBranchAndWriteEnv({
+              cwd,
+              gitBranch: newBranch,
+              mainProjectRef: config.project_id,
+              token,
+              productionBranch: config.production_branch as string | undefined,
+            }).then(async (result) => {
+              if (result) {
+                state.projectRef = result.projectRef;
+                // Rebuild connection string for the new project ref
+                try {
+                  const cs = await resolveConnectionString(
+                    client,
+                    result.projectRef,
+                    process.env.SUPABASE_DB_PASSWORD ?? dbPassword,
+                  );
+                  if (cs) state.connectionString = cs;
+                } catch {
+                  // Non-fatal — keep existing connection string
+                }
+                console.log(
+                  JSON.stringify({
+                    event: "env_updated",
+                    branch: newBranch,
+                    projectRef: result.projectRef,
+                    isBranch: result.isBranch,
+                  }),
+                );
+              } else {
+                console.log(
+                  JSON.stringify({
+                    event: "env_update_skipped",
+                    branch: newBranch,
+                    reason: "no_healthy_branch",
+                  }),
+                );
+              }
+            }).catch((err) => {
+              console.log(
+                JSON.stringify({
+                  event: "env_update_error",
+                  branch: newBranch,
+                  error: err instanceof Error ? err.message : String(err),
+                }),
+              );
+            }).finally(() => {
+              isResolvingBranchJson = false;
+            });
+          }
+        }
       }
-    }, 5000);
+    });
 
     // File watcher (schema + config)
     const watcher = chokidarWatch([schemaDir, configPath], {
@@ -617,6 +751,12 @@ export async function devCommand(options: DevOptions): Promise<void> {
       // Debounce
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(async () => {
+        // If we're mid-branch-resolution, the connection string is being rebuilt.
+        // Reschedule so we push to the right database once resolution completes.
+        if (isResolvingBranchJson) {
+          debounceTimer = setTimeout(async () => { applyPendingChanges(); }, 500);
+          return;
+        }
         if (
           state.isApplying ||
           (state.pendingSchemaChanges.size === 0 && !state.pendingConfigChange)
@@ -873,7 +1013,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
     // Cleanup
     process.on("SIGINT", async () => {
-      clearInterval(branchCheck);
+      cleanupBranchWatchJson();
       clearInterval(typesCheck);
       watcher.close();
       await closeSupabasePool();
@@ -891,19 +1031,32 @@ export async function devCommand(options: DevOptions): Promise<void> {
   let lastActivity = Date.now();
   let debounceTimer: NodeJS.Timeout | null = null;
   let isSpinnerActive = false;
+  // Clack checks isCI() at spinner-creation time and uses it to disable \r animation.
+  // In non-TTY environments we want the same static output, so temporarily tell
+  // clack we're in CI mode before creating the spinner, then restore the original value.
+  const _prevCI = process.env.CI;
+  if (!isInteractive) process.env.CI = "true";
   const spinner = p.spinner();
+  if (!isInteractive) {
+    if (_prevCI === undefined) delete process.env.CI;
+    else process.env.CI = _prevCI;
+  }
 
   const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
   const clearLine = () => {
-    if (currentLine) {
-      const len = stripAnsi(currentLine).length;
-      process.stdout.write(`\r${" ".repeat(len)}\r`);
-      currentLine = "";
-    }
+    // \r only overwrites the current line in a real TTY. In non-TTY (pipes,
+    // CI, Claude shell) it prints a literal carriage return, producing a new
+    // line on every animation frame. Skip entirely when not interactive.
+    if (!isInteractive || !currentLine) return;
+    const len = stripAnsi(currentLine).length;
+    process.stdout.write(`\r${" ".repeat(len)}\r`);
+    currentLine = "";
   };
 
   const writeLine = (msg: string) => {
+    // Same reason as clearLine — no-op in non-TTY environments.
+    if (!isInteractive) return;
     clearLine();
     process.stdout.write(`\r${msg}\x1b[K`);
     currentLine = msg;
@@ -940,7 +1093,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
     console.log(`${S_BAR}  ${C.secondary}${msg}${C.reset}`);
   };
 
-  // Start an active step with Clack spinner
+  // Start an active step with Clack spinner.
   const startStep = (msg: string) => {
     lastActivity = Date.now();
     stopHeartbeat();
@@ -974,7 +1127,10 @@ export async function devCommand(options: DevOptions): Promise<void> {
   let heartbeatStarted = false;
 
   const startHeartbeat = () => {
-    if (heartbeatInterval) return;
+    // The heartbeat uses writeLine (\r animation) which only works in a TTY.
+    // Don't start it in non-interactive environments — it would flood the output
+    // with a new "Watching for changes..." line every 350ms.
+    if (!isInteractive || heartbeatInterval) return;
 
     heartbeatInterval = setInterval(() => {
       const idle = Date.now() - lastActivity > 1000;
@@ -1024,9 +1180,10 @@ export async function devCommand(options: DevOptions): Promise<void> {
   let lastBranch = currentBranch;
 
   // Branch watcher
-  let branchCheck: NodeJS.Timeout | undefined;
+  let isResolvingBranch = false;
+  let cleanupBranchWatch: (() => void) | undefined;
   if (!options.noBranchWatch) {
-    branchCheck = setInterval(() => {
+    cleanupBranchWatch = watchGitBranch(cwd, () => {
       const newBranch = getCurrentBranch(cwd);
       if (newBranch && newBranch !== lastBranch) {
         lastBranch = newBranch;
@@ -1039,8 +1196,44 @@ export async function devCommand(options: DevOptions): Promise<void> {
         } else {
           logRail(`→ Branch ${C.fileName}${newBranch}${C.reset}`);
         }
+
+        const workflowProfile = getWorkflowProfile(config);
+        if (isBranchingProfile(workflowProfile) && config.project_id) {
+          if (!isResolvingBranch) {
+            isResolvingBranch = true;
+            resolveBranchAndWriteEnv({
+              cwd,
+              gitBranch: newBranch,
+              mainProjectRef: config.project_id,
+              token,
+              productionBranch: config.production_branch as string | undefined,
+            }).then(async (result) => {
+              if (result) {
+                state.projectRef = result.projectRef;
+                // Rebuild connection string for the new project ref
+                try {
+                  const cs = await resolveConnectionString(
+                    client,
+                    result.projectRef,
+                    process.env.SUPABASE_DB_PASSWORD ?? dbPassword,
+                  );
+                  if (cs) state.connectionString = cs;
+                } catch {
+                  // Non-fatal — keep existing connection string
+                }
+                logRail(`Updated .env.local → ${result.isBranch ? "branch" : "main"} (${result.projectRef})`);
+              } else {
+                logRail(`No healthy Supabase branch for "${newBranch}" — run \`supa project branches create\``);
+              }
+            }).catch((err) => {
+              logRail(`Branch env update failed: ${err instanceof Error ? err.message : String(err)}`);
+            }).finally(() => {
+              isResolvingBranch = false;
+            });
+          }
+        }
       }
-    }, 5000);
+    });
   }
 
   // Apply config changes
@@ -1181,8 +1374,12 @@ export async function devCommand(options: DevOptions): Promise<void> {
               lastTypesContent = typesResp.types;
               lastTypesRefreshTime = Date.now();
               logNested("Types refreshed");
-            } catch {
-              // Types refresh failed, not critical
+            } catch (error) {
+              // Types refresh is non-critical — the schema was already applied successfully.
+              // Log the reason in verbose mode so it is visible when debugging.
+              if (options.verbose) {
+                logNested(`Types refresh skipped: ${error instanceof Error ? error.message : String(error)}`);
+              }
             }
           }
         } else {
@@ -1236,6 +1433,14 @@ export async function devCommand(options: DevOptions): Promise<void> {
       !state.pendingSeedChange
     )
       return;
+
+    // If we're mid-branch-resolution, the connection string is still being rebuilt
+    // for the new branch. Reschedule so we push to the right database once done.
+    if (isResolvingBranch) {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => applyPendingChanges(), 500);
+      return;
+    }
 
     state.isApplying = true;
 
@@ -1327,8 +1532,12 @@ export async function devCommand(options: DevOptions): Promise<void> {
         writeFileSync(typesPath, resp.types);
         logRail(`${C.success}✓${C.reset} Types refreshed`);
       }
-    } catch {
-      // Silent failure for types refresh
+    } catch (error) {
+      // Types refresh runs on a background interval and is non-critical — a transient
+      // network error should not interrupt the watcher. Log in verbose mode for debugging.
+      if (options.verbose) {
+        logRail(`${C.warning}⚠${C.reset} Types refresh failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   }, typesIntervalMs);
 
@@ -1379,8 +1588,12 @@ export async function devCommand(options: DevOptions): Promise<void> {
             lastTypesContent = typesResp.types;
             lastTypesRefreshTime = Date.now();
             logNested("Types refreshed");
-          } catch {
-            // Types refresh failed, not critical
+          } catch (error) {
+            // Types refresh is non-critical — the initial schema sync already succeeded.
+            // Log the reason in verbose mode so it is visible when debugging.
+            if (options.verbose) {
+              logNested(`Types refresh skipped: ${error instanceof Error ? error.message : String(error)}`);
+            }
           }
         }
 
@@ -1408,7 +1621,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
   const cleanup = async () => {
     stopHeartbeat();
     if (isSpinnerActive) spinner.stop();
-    if (branchCheck) clearInterval(branchCheck);
+    if (cleanupBranchWatch) cleanupBranchWatch();
     if (debounceTimer) clearTimeout(debounceTimer);
     clearInterval(typesCheck);
     watcher.close();

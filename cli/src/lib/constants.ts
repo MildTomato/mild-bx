@@ -60,6 +60,33 @@ export const REGIONS: Array<{ key: string; label: string; value: Region }> = [
   { key: "sa-east-1", label: "South America (Sao Paulo)", value: "sa-east-1" },
 ];
 
+// Project status strings from the Supabase API
+export const PROJECT_STATUS = {
+  ACTIVE_HEALTHY: "ACTIVE_HEALTHY",
+  ACTIVE_UNHEALTHY: "ACTIVE_UNHEALTHY",
+  INACTIVE: "INACTIVE",
+  COMING_UP: "COMING_UP",
+  GOING_DOWN: "GOING_DOWN",
+  INIT_FAILED: "INIT_FAILED",
+  REMOVED: "REMOVED",
+  RESTORING: "RESTORING",
+  UPGRADING: "UPGRADING",
+  PAUSING: "PAUSING",
+  RESTORE_FAILED: "RESTORE_FAILED",
+  PAUSE_FAILED: "PAUSE_FAILED",
+  RESTARTING: "RESTARTING",
+  RESIZING: "RESIZING",
+  UNKNOWN: "UNKNOWN",
+} as const;
+
+export type ProjectStatus = (typeof PROJECT_STATUS)[keyof typeof PROJECT_STATUS];
+
+/** Statuses that mean the project is usable. */
+export const PROJECT_ACTIVE_STATUSES = new Set([
+  PROJECT_STATUS.ACTIVE_HEALTHY,
+  PROJECT_STATUS.ACTIVE_UNHEALTHY,
+]);
+
 // Project status display
 export function formatProjectStatus(status: string): string {
   switch (status) {

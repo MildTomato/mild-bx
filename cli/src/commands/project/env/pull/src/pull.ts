@@ -14,6 +14,7 @@ import {
   SENTINEL_KEYS,
   type EnvironmentContext,
 } from "@supabase-dx/env-vars";
+import { createSpinner } from "@/components/output.js";
 
 export interface PullOptions {
   environment?: "production" | "preview" | "development";
@@ -40,14 +41,14 @@ export async function pullCommand(options: PullOptions): Promise<void> {
       : { type: environment };
 
   const client = createClient(ctx.token);
-  const spinner = options.json ? null : p.spinner();
-  spinner?.start("Fetching remote variables...");
+  const spinner = createSpinner(options);
+  spinner.start("Fetching remote variables...");
 
   let raw: Array<{ key: string; value: string; secret: boolean }>;
   try {
     raw = await listRemoteVariables(client, ctx.projectRef);
   } catch (error) {
-    spinner?.stop(chalk.red("Failed"));
+    spinner.stop(chalk.red("Failed"));
     await handleCommandError(error, options, client, ctx.projectRef);
   }
 
@@ -72,7 +73,7 @@ export async function pullCommand(options: PullOptions): Promise<void> {
     toWrite.push({ key, value, secret: false });
   }
 
-  spinner?.stop(`Resolved ${resolved.size} variable(s) for ${environment}`);
+  spinner.stop(`Resolved ${resolved.size} variable(s) for ${environment}`);
 
   if (toWrite.length === 0 && excludedSecrets.length === 0) {
     if (options.json) {

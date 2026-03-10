@@ -17,6 +17,7 @@ import {
 import { generateKeyPair, decryptToken } from "./encryption.js";
 
 import { SUPABASE_API_URL, SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
+import { createSpinner } from "@/components/output.js";
 
 const DASHBOARD_URL = SUPABASE_DASHBOARD_URL;
 const API_URL = SUPABASE_API_URL;
@@ -115,15 +116,15 @@ export async function loginCommand(options: LoginOptions): Promise<void> {
     }
 
     // Verify token by making API call
-    const spinner = options.json ? null : p.spinner();
-    spinner?.start("Verifying token...");
+    const spinner = createSpinner(options);
+    spinner.start("Verifying token...");
 
     try {
       const client = createClient(options.token);
       await client.listOrganizations();
 
       await saveAccessTokenAsync(options.token);
-      spinner?.stop("Token verified");
+      spinner.stop("Token verified");
 
       if (options.json) {
         console.log(JSON.stringify({ status: "success", message: "Logged in successfully" }));
@@ -131,7 +132,7 @@ export async function loginCommand(options: LoginOptions): Promise<void> {
         console.log(chalk.green("You are now logged in. ") + chalk.cyan("Happy coding!"));
       }
     } catch (error) {
-      spinner?.stop("Verification failed");
+      spinner.stop("Verification failed");
       const message = error instanceof Error ? error.message : "Failed to verify token";
 
       if (options.json) {

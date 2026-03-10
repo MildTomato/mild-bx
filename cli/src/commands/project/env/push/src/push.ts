@@ -11,6 +11,7 @@ import { loadLocalEnvVars } from "@/lib/env-file.js";
 import { listRemoteVariables, bulkPushVariables, setRemoteVariable } from "@/lib/env-api-bridge.js";
 import { computeEnvDiff, formatEnvDiff, hasChanges, getDiffSummary } from "@/lib/env-diff.js";
 import { SENTINEL_CONFIG_SOURCE } from "@supabase-dx/env-vars";
+import { createSpinner } from "@/components/output.js";
 
 export interface PushOptions {
   environment?: string;
@@ -49,14 +50,14 @@ export async function pushCommand(options: PushOptions): Promise<void> {
 
   // 2. Load remote variables
   const client = createClient(ctx.token);
-  const spinner = options.json ? null : p.spinner();
-  spinner?.start("Comparing local and remote...");
+  const spinner = createSpinner(options);
+  spinner.start("Comparing local and remote...");
 
   let remoteVars;
   try {
     remoteVars = await listRemoteVariables(client, ctx.projectRef);
   } catch (error) {
-    spinner?.stop(chalk.red("Failed"));
+    spinner.stop(chalk.red("Failed"));
     await handleCommandError(error, options, client, ctx.projectRef);
   }
 
@@ -64,7 +65,7 @@ export async function pushCommand(options: PushOptions): Promise<void> {
   const diffs = computeEnvDiff(pushableVars, remoteVars, { prune: options.prune });
 
   if (!hasChanges(diffs)) {
-    spinner?.stop("No changes detected");
+    spinner.stop("No changes detected");
     if (options.json) {
       console.log(JSON.stringify({
         status: "success",
@@ -75,7 +76,7 @@ export async function pushCommand(options: PushOptions): Promise<void> {
     return;
   }
 
-  spinner?.stop("Diff computed");
+  spinner.stop("Diff computed");
 
   const summary = getDiffSummary(diffs);
 
@@ -109,8 +110,8 @@ export async function pushCommand(options: PushOptions): Promise<void> {
   }
 
   // 6. Push
-  const pushSpinner = options.json ? null : p.spinner();
-  pushSpinner?.start("Pushing...");
+  const pushSpinner = createSpinner(options);
+  pushSpinner.start("Pushing...");
 
   try {
     const result = await bulkPushVariables(client, ctx.projectRef, pushableVars, {
@@ -121,7 +122,13 @@ export async function pushCommand(options: PushOptions): Promise<void> {
     const configSource = (ctx.config.config_source as string | undefined) ?? "code";
     await setRemoteVariable(client, ctx.projectRef, SENTINEL_CONFIG_SOURCE, configSource, false);
 
-    pushSpinner?.stop(
+    const hasPreviewVars = pushableVars.some((v) => v.key.includes("__preview"));
+    if (hasPreviewVars) {
+      const { propagateToPreviewBranches } = await import("@/lib/env-propagate.js");
+      await propagateToPreviewBranches({ client, projectRef: ctx.projectRef });
+    }
+
+    pushSpinner.stop(
       `Pushed ${result.pushed} variable(s)${result.deleted > 0 ? `, removed ${result.deleted}` : ""}`
     );
 
@@ -133,7 +140,7 @@ export async function pushCommand(options: PushOptions): Promise<void> {
       }));
     }
   } catch (error) {
-    pushSpinner?.stop(chalk.red("Failed"));
+    pushSpinner.stop(chalk.red("Failed"));
     await handleCommandError(error, options, client, ctx.projectRef);
   }
 }

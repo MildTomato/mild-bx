@@ -17,6 +17,7 @@ import {
   type EnvironmentContext,
 } from "@supabase-dx/env-vars";
 import { S_BAR } from "@/components/command-header.js";
+import { createSpinner } from "@/components/output.js";
 
 const PRODUCTION_BRANCHES = new Set(["main", "master", "production"]);
 
@@ -91,15 +92,15 @@ export async function listCommand(options: ListOptions): Promise<void> {
   if (!ctx) return;
 
   const client = createClient(ctx.token);
-  const spinner = options.json ? null : p.spinner();
-  spinner?.start("Fetching variables...");
+  const spinner = createSpinner(options);
+  spinner.start("Fetching variables...");
 
   let raw: Array<{ key: string; value: string; secret: boolean }>;
   try {
     raw = await listRemoteVariables(client, ctx.projectRef);
-    spinner?.stop(`Fetched ${raw.length} stored var(s)`);
+    spinner.stop(`Fetched ${raw.length} stored var(s)`);
   } catch (error) {
-    spinner?.stop(chalk.red("Failed"));
+    spinner.stop(chalk.red("Failed"));
     await handleCommandError(error, options, client, ctx.projectRef);
   }
 

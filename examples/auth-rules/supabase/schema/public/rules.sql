@@ -4,7 +4,15 @@
 
 -- Files: SELECT
 SELECT auth_rules.rule('files',
-  auth_rules.select('id', 'folder_id', 'owner_id', 'name', 'content', 'size', 'created_at'),
+  auth_rules.select(
+    'id', 
+    'folder_id', 
+    'owner_id', 
+    'name', 
+    'content', 
+    'size', 
+    'created_at'
+  ),
   auth_rules.eq('id', auth_rules.one_of('accessible_file_ids'))
 );
 

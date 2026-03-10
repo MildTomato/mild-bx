@@ -1,7 +1,7 @@
 {
   "$schema": "../../../cli/config-schema/config.schema.json",
   "project_id": "lbsmrztqwaxjjxomisaf",
-  "workflow_profile": "solo",
+  "workflow_profile": "branching-remote",
   "schema_management": "declarative",
   "config_source": "code",
   "api": {
@@ -22,6 +22,9 @@
     "enable_anonymous_sign_ins": false,
     "external": {
       "google": {
+        "enabled": true
+      },
+      "spotify": {
         "enabled": true
       }
     }

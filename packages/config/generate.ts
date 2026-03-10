@@ -5,6 +5,8 @@
 
 import { s } from "jsonv-ts";
 import { schema as baseSchema } from "../../external/config-schema/src/base.ts";
+import { getFieldMeta } from "./src/config-field-meta.js";
+import { WORKFLOW_PROFILE_VALUES } from "./src/workflow-profiles.js";
 import { writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,6 +37,55 @@ const profileSchema = s
   })
   .partial();
 
+/**
+ * Recursively walk schema properties and annotate each with its scope.
+ * Uses dot-notation paths to look up scope from config-field-meta.
+ * For additionalProperties sections (dynamic keys like functions.*), uses
+ * the wildcard path.
+ */
+function annotateScope(
+  properties: Record<string, any>,
+  prefix = ""
+): Record<string, any> {
+  const result: Record<string, any> = {};
+
+  for (const [key, value] of Object.entries(properties)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    const node = { ...value };
+
+    // Annotate this property with its metadata
+    const meta = getFieldMeta(path);
+    node.scope = meta.scope;
+    node.promotable = meta.promotable;
+    node.secret = meta.secret;
+    node.required = meta.required;
+
+    // Recurse into nested properties
+    if (node.properties) {
+      node.properties = annotateScope(node.properties, path);
+    }
+
+    // Recurse into additionalProperties (dynamic keys like functions.*, buckets.*)
+    if (node.additionalProperties && typeof node.additionalProperties === "object") {
+      const wildcardPath = `${path}.*`;
+      const apNode = { ...node.additionalProperties };
+      const apMeta = getFieldMeta(wildcardPath);
+      apNode.scope = apMeta.scope;
+      apNode.promotable = apMeta.promotable;
+      apNode.secret = apMeta.secret;
+      apNode.required = apMeta.required;
+      if (apNode.properties) {
+        apNode.properties = annotateScope(apNode.properties, wildcardPath);
+      }
+      node.additionalProperties = apNode;
+    }
+
+    result[key] = node;
+  }
+
+  return result;
+}
+
 // Get base schema properties
 const baseSchemaJson = baseSchema.toJSON();
 
@@ -48,7 +99,42 @@ const extendedSchema = {
       type: "string",
       description: "JSON Schema reference for editor support",
     },
-    ...baseSchemaJson.properties,
+    ...annotateScope(baseSchemaJson.properties),
+    workflow_profile: {
+      type: "string",
+      description: "The workflow profile to use for this project.",
+      enum: [...WORKFLOW_PROFILE_VALUES],
+      scope: "global",
+      promotable: false,
+      secret: false,
+      required: false,
+    },
+    schema_management: {
+      type: "string",
+      description: "The schema management approach for this project.",
+      enum: ["declarative", "migrations"],
+      scope: "global",
+      promotable: false,
+      secret: false,
+      required: false,
+    },
+    config_source: {
+      type: "string",
+      description: "The source of truth for project configuration.",
+      enum: ["code", "remote"],
+      scope: "global",
+      promotable: false,
+      secret: false,
+      required: false,
+    },
+    production_branch: {
+      type: "string",
+      description: "The Git branch to treat as the production branch.",
+      scope: "global",
+      promotable: false,
+      secret: false,
+      required: false,
+    },
     profiles: {
       type: "object",
       description: "Profile configuration for different environments",

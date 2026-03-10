@@ -9,6 +9,7 @@ import { createClient } from "@/lib/api.js";
 import { handleCommandError } from "@/lib/command-error.js";
 import { deleteRemoteVariable } from "@/lib/env-api-bridge.js";
 import { scopedVarName, type Scope } from "@supabase-dx/env-vars";
+import { createSpinner } from "@/components/output.js";
 
 export interface UnsetOptions {
   key: string;
@@ -58,12 +59,17 @@ export async function unsetCommand(options: UnsetOptions): Promise<void> {
 
   // Delete from remote
   const client = createClient(ctx.token);
-  const spinner = options.json ? null : p.spinner();
-  spinner?.start(`Deleting ${storedKey}...`);
+  const spinner = createSpinner(options);
+  spinner.start(`Deleting ${storedKey}...`);
 
   try {
     await deleteRemoteVariable(client, ctx.projectRef, storedKey);
-    spinner?.stop(`Deleted ${chalk.cyan(storedKey)} (scope: ${scopeLabel})`);
+    spinner.stop(`Deleted ${chalk.cyan(storedKey)} (scope: ${scopeLabel})`);
+
+    if (scope === "preview") {
+      const { propagateToPreviewBranches } = await import("@/lib/env-propagate.js");
+      await propagateToPreviewBranches({ client, projectRef: ctx.projectRef });
+    }
 
     if (options.json) {
       console.log(JSON.stringify({
@@ -74,7 +80,7 @@ export async function unsetCommand(options: UnsetOptions): Promise<void> {
       }));
     }
   } catch (error) {
-    spinner?.stop(chalk.red("Failed"));
+    spinner.stop(chalk.red("Failed"));
     await handleCommandError(error, options, client, ctx.projectRef);
   }
 }

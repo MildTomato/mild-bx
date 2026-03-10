@@ -1,18 +1,19 @@
 /**
- * Config field scope metadata.
+ * Config field metadata.
  *
- * Defines how each field in config.json behaves across environments:
+ * Three independent attributes per field:
  *
- *   promote   — safe to change on a preview/feature branch and apply to
- *               production when the branch merges (feature flags, policies,
- *               templates, provider toggles, resource limits)
+ *   scope      — "global" | "env"
+ *                global: same value across all environments (feature flags,
+ *                policies, structural settings)
+ *                env: differs per environment (URLs, ports, credentials)
  *
- *   env       — environment-specific; holds a different value per environment
- *               and must never be blindly promoted (URLs, ports, credentials,
- *               API keys, secrets)
+ *   promotable — whether this field is diffed and applied to the target when
+ *                merging a branch. Non-promotable fields (ports, URLs,
+ *                credentials) are left untouched on the target.
  *
- *   metadata  — set once at project initialisation; never changes via a
- *               branch merge (project_id, db major version, workflow profile)
+ *   secret     — whether the value should be treated as a secret by default
+ *                (masked in output, stored encrypted, never logged)
  *
  * Paths use dot notation. A `*` segment matches any single dynamic key
  * (provider name, bucket name, function name, hook name, etc.).
@@ -21,10 +22,13 @@
  * wildcard patterns (longest match wins).
  */
 
-export type FieldScope = "promote" | "env" | "metadata";
+export type FieldScope = "global" | "env";
 
-interface FieldMeta {
+export interface FieldMeta {
   scope: FieldScope;
+  promotable: boolean;
+  secret: boolean;
+  required: boolean;
 }
 
 /**
@@ -34,195 +38,185 @@ interface FieldMeta {
  * keeping it logical aids readability.
  */
 const FIELD_META: Record<string, FieldMeta> = {
-  // ── Top-level metadata ───────────────────────────────────────────────────
-  "project_id":                                     { scope: "metadata" },
-  "workflow_profile":                               { scope: "metadata" },
-  "schema_management":                              { scope: "metadata" },
-  "config_source":                                  { scope: "metadata" },
-  "environments":                                   { scope: "promote"  },
+  // ── Top-level ────────────────────────────────────────────────────────────
+  "project_id":                                     { scope: "global", promotable: false, secret: false, required: false },
+  "workflow_profile":                               { scope: "global", promotable: false, secret: false, required: false },
+  "schema_management":                              { scope: "global", promotable: false, secret: false, required: false },
+  "config_source":                                  { scope: "global", promotable: false, secret: false, required: false },
+  "environments":                                   { scope: "global", promotable: false, secret: false, required: false },
 
   // ── Analytics ────────────────────────────────────────────────────────────
-  "analytics.enabled":                              { scope: "promote"  },
-  "analytics.port":                                 { scope: "env"      },
-  "analytics.vector_port":                          { scope: "env"      },
-  "analytics.backend":                              { scope: "promote"  },
+  "analytics.enabled":                              { scope: "global", promotable: true,  secret: false, required: false },
+  "analytics.port":                                 { scope: "env",    promotable: false, secret: false, required: false },
+  "analytics.vector_port":                          { scope: "env",    promotable: false, secret: false, required: false },
+  "analytics.backend":                              { scope: "global", promotable: true,  secret: false, required: false },
 
   // ── API (PostgREST) ──────────────────────────────────────────────────────
-  "api.enabled":                                    { scope: "promote"  },
-  "api.port":                                       { scope: "env"      },
-  "api.schemas":                                    { scope: "promote"  },
-  "api.extra_search_path":                          { scope: "promote"  },
-  "api.max_rows":                                   { scope: "promote"  },
-  "api.tls.enabled":                                { scope: "promote"  },
-  "api.external_url":                               { scope: "env"      },
+  "api.enabled":                                    { scope: "global", promotable: true,  secret: false, required: false },
+  "api.port":                                       { scope: "env",    promotable: false, secret: false, required: false },
+  "api.schemas":                                    { scope: "global", promotable: true,  secret: false, required: false },
+  "api.extra_search_path":                          { scope: "global", promotable: true,  secret: false, required: false },
+  "api.max_rows":                                   { scope: "global", promotable: true,  secret: false, required: false },
+  "api.tls.enabled":                                { scope: "global", promotable: true,  secret: false, required: false },
+  "api.external_url":                               { scope: "env",    promotable: false, secret: false, required: false },
 
   // ── Auth — core ──────────────────────────────────────────────────────────
-  "auth.enabled":                                   { scope: "promote"  },
-  "auth.site_url":                                  { scope: "env"      },
-  "auth.additional_redirect_urls":                  { scope: "env"      },
-  "auth.jwt_expiry":                                { scope: "promote"  },
-  "auth.enable_refresh_token_rotation":             { scope: "promote"  },
-  "auth.refresh_token_reuse_interval":              { scope: "promote"  },
-  "auth.enable_manual_linking":                     { scope: "promote"  },
-  "auth.enable_signup":                             { scope: "promote"  },
-  "auth.enable_anonymous_sign_ins":                 { scope: "promote"  },
-  "auth.minimum_password_length":                   { scope: "promote"  },
-  "auth.password_requirements":                     { scope: "promote"  },
+  "auth.enabled":                                   { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.site_url":                                  { scope: "env",    promotable: false, secret: false, required: false },
+  "auth.additional_redirect_urls":                  { scope: "env",    promotable: false, secret: false, required: false },
+  "auth.jwt_expiry":                                { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.enable_refresh_token_rotation":             { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.refresh_token_reuse_interval":              { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.enable_manual_linking":                     { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.enable_signup":                             { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.enable_anonymous_sign_ins":                 { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.minimum_password_length":                   { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.password_requirements":                     { scope: "global", promotable: true,  secret: false, required: false },
 
   // ── Auth — email ─────────────────────────────────────────────────────────
-  "auth.email.enable_signup":                       { scope: "promote"  },
-  "auth.email.double_confirm_changes":              { scope: "promote"  },
-  "auth.email.enable_confirmations":                { scope: "promote"  },
-  "auth.email.secure_password_change":              { scope: "promote"  },
-  "auth.email.max_frequency":                       { scope: "promote"  },
-  "auth.email.otp_length":                          { scope: "promote"  },
-  "auth.email.otp_expiry":                          { scope: "promote"  },
-  // SMTP credentials are env-specific
-  "auth.email.smtp.enabled":                        { scope: "promote"  },
-  "auth.email.smtp.host":                           { scope: "env"      },
-  "auth.email.smtp.port":                           { scope: "env"      },
-  "auth.email.smtp.user":                           { scope: "env"      },
-  "auth.email.smtp.pass":                           { scope: "env"      },
-  "auth.email.smtp.admin_email":                    { scope: "env"      },
-  "auth.email.smtp.sender_name":                    { scope: "env"      },
-  // Email templates are promotable (they live in the repo)
-  "auth.email.template.*.subject":                  { scope: "promote"  },
-  "auth.email.template.*.content_path":             { scope: "promote"  },
+  "auth.email.enable_signup":                       { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.email.double_confirm_changes":              { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.email.enable_confirmations":                { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.email.secure_password_change":              { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.email.max_frequency":                       { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.email.otp_length":                          { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.email.otp_expiry":                          { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.email.smtp.enabled":                        { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.email.smtp.host":                           { scope: "env",    promotable: false, secret: false, required: true  },
+  "auth.email.smtp.port":                           { scope: "env",    promotable: false, secret: false, required: true  },
+  "auth.email.smtp.user":                           { scope: "env",    promotable: false, secret: false, required: true  },
+  "auth.email.smtp.pass":                           { scope: "env",    promotable: false, secret: true,  required: true  },
+  "auth.email.smtp.admin_email":                    { scope: "env",    promotable: false, secret: false, required: false },
+  "auth.email.smtp.sender_name":                    { scope: "env",    promotable: false, secret: false, required: false },
+  "auth.email.template.*.subject":                  { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.email.template.*.content_path":             { scope: "global", promotable: true,  secret: false, required: false },
 
   // ── Auth — hooks ─────────────────────────────────────────────────────────
-  // enabled flag is promotable; uri and secrets are env-specific
-  "auth.hook.*.enabled":                            { scope: "promote"  },
-  "auth.hook.*.uri":                                { scope: "env"      },
-  "auth.hook.*.secrets":                            { scope: "env"      },
+  "auth.hook.*.enabled":                            { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.hook.*.uri":                                { scope: "env",    promotable: false, secret: false, required: false },
+  "auth.hook.*.secrets":                            { scope: "env",    promotable: false, secret: true,  required: false },
 
   // ── Auth — MFA ───────────────────────────────────────────────────────────
-  "auth.mfa.totp.enroll_enabled":                   { scope: "promote"  },
-  "auth.mfa.totp.verify_enabled":                   { scope: "promote"  },
-  "auth.mfa.phone.enroll_enabled":                  { scope: "promote"  },
-  "auth.mfa.phone.verify_enabled":                  { scope: "promote"  },
-  "auth.mfa.phone.otp_length":                      { scope: "promote"  },
-  "auth.mfa.phone.template":                        { scope: "promote"  },
-  "auth.mfa.phone.max_frequency":                   { scope: "promote"  },
-  "auth.mfa.max_enrolled_factors":                  { scope: "promote"  },
+  "auth.mfa.totp.enroll_enabled":                   { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.mfa.totp.verify_enabled":                   { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.mfa.phone.enroll_enabled":                  { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.mfa.phone.verify_enabled":                  { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.mfa.phone.otp_length":                      { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.mfa.phone.template":                        { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.mfa.phone.max_frequency":                   { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.mfa.max_enrolled_factors":                  { scope: "global", promotable: true,  secret: false, required: false },
 
   // ── Auth — sessions ──────────────────────────────────────────────────────
-  "auth.sessions.timebox":                          { scope: "promote"  },
-  "auth.sessions.inactivity_timeout":               { scope: "promote"  },
+  "auth.sessions.timebox":                          { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.sessions.inactivity_timeout":               { scope: "global", promotable: true,  secret: false, required: false },
 
   // ── Auth — SMS ───────────────────────────────────────────────────────────
-  "auth.sms.enable_signup":                         { scope: "promote"  },
-  "auth.sms.enable_confirmations":                  { scope: "promote"  },
-  "auth.sms.template":                              { scope: "promote"  },
-  "auth.sms.max_frequency":                         { scope: "promote"  },
-  "auth.sms.test_otp":                              { scope: "promote"  },
-  // Twilio
-  "auth.sms.twilio.enabled":                        { scope: "promote"  },
-  "auth.sms.twilio.account_sid":                    { scope: "env"      },
-  "auth.sms.twilio.message_service_sid":            { scope: "env"      },
-  "auth.sms.twilio.auth_token":                     { scope: "env"      },
-  // Twilio Verify
-  "auth.sms.twilio_verify.enabled":                 { scope: "promote"  },
-  "auth.sms.twilio_verify.account_sid":             { scope: "env"      },
-  "auth.sms.twilio_verify.message_service_sid":     { scope: "env"      },
-  "auth.sms.twilio_verify.auth_token":              { scope: "env"      },
-  // MessageBird
-  "auth.sms.messagebird.enabled":                   { scope: "promote"  },
-  "auth.sms.messagebird.originator":                { scope: "env"      },
-  "auth.sms.messagebird.api_key":                   { scope: "env"      },
-  // Textlocal
-  "auth.sms.textlocal.enabled":                     { scope: "promote"  },
-  "auth.sms.textlocal.sender":                      { scope: "env"      },
-  "auth.sms.textlocal.api_key":                     { scope: "env"      },
-  // Vonage
-  "auth.sms.vonage.enabled":                        { scope: "promote"  },
-  "auth.sms.vonage.from":                           { scope: "env"      },
-  "auth.sms.vonage.api_key":                        { scope: "env"      },
-  "auth.sms.vonage.api_secret":                     { scope: "env"      },
+  "auth.sms.enable_signup":                         { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.sms.enable_confirmations":                  { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.sms.template":                              { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.sms.max_frequency":                         { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.sms.test_otp":                              { scope: "env",    promotable: false, secret: false, required: false },
+  "auth.sms.twilio.enabled":                        { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.sms.twilio.account_sid":                    { scope: "env",    promotable: false, secret: false, required: false },
+  "auth.sms.twilio.message_service_sid":            { scope: "env",    promotable: false, secret: false, required: false },
+  "auth.sms.twilio.auth_token":                     { scope: "env",    promotable: false, secret: true,  required: false },
+  "auth.sms.twilio_verify.enabled":                 { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.sms.twilio_verify.account_sid":             { scope: "env",    promotable: false, secret: false, required: false },
+  "auth.sms.twilio_verify.message_service_sid":     { scope: "env",    promotable: false, secret: false, required: false },
+  "auth.sms.twilio_verify.auth_token":              { scope: "env",    promotable: false, secret: true,  required: false },
+  "auth.sms.messagebird.enabled":                   { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.sms.messagebird.originator":                { scope: "env",    promotable: false, secret: false, required: false },
+  "auth.sms.messagebird.api_key":                   { scope: "env",    promotable: false, secret: true,  required: false },
+  "auth.sms.textlocal.enabled":                     { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.sms.textlocal.sender":                      { scope: "env",    promotable: false, secret: false, required: false },
+  "auth.sms.textlocal.api_key":                     { scope: "env",    promotable: false, secret: true,  required: false },
+  "auth.sms.vonage.enabled":                        { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.sms.vonage.from":                           { scope: "env",    promotable: false, secret: false, required: false },
+  "auth.sms.vonage.api_key":                        { scope: "env",    promotable: false, secret: true,  required: false },
+  "auth.sms.vonage.api_secret":                     { scope: "env",    promotable: false, secret: true,  required: false },
 
   // ── Auth — external OAuth providers ─────────────────────────────────────
-  // enabled and skip_nonce_check are promotable;
-  // credentials and URLs are env-specific
-  "auth.external.*.enabled":                        { scope: "promote"  },
-  "auth.external.*.skip_nonce_check":               { scope: "promote"  },
-  "auth.external.*.client_id":                      { scope: "env"      },
-  "auth.external.*.secret":                         { scope: "env"      },
-  "auth.external.*.url":                            { scope: "env"      },
-  "auth.external.*.redirect_uri":                   { scope: "env"      },
+  "auth.external.*.enabled":                        { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.external.*.skip_nonce_check":               { scope: "global", promotable: true,  secret: false, required: false },
+  "auth.external.*.client_id":                      { scope: "env",    promotable: false, secret: false, required: true  },
+  "auth.external.*.secret":                         { scope: "env",    promotable: false, secret: true,  required: true  },
+  "auth.external.*.url":                            { scope: "env",    promotable: false, secret: false, required: false },
+  "auth.external.*.redirect_uri":                   { scope: "env",    promotable: false, secret: false, required: false },
 
   // ── Database ─────────────────────────────────────────────────────────────
-  "db.port":                                        { scope: "env"      },
-  "db.shadow_port":                                 { scope: "env"      },
-  "db.major_version":                               { scope: "metadata" },
-  "db.pooler.enabled":                              { scope: "promote"  },
-  "db.pooler.port":                                 { scope: "env"      },
-  "db.pooler.pool_mode":                            { scope: "promote"  },
-  "db.pooler.default_pool_size":                    { scope: "promote"  },
-  "db.pooler.max_client_conn":                      { scope: "promote"  },
-  "db.seed.enabled":                                { scope: "promote"  },
-  "db.seed.sql_paths":                              { scope: "promote"  },
+  "db.port":                                        { scope: "env",    promotable: false, secret: false, required: false },
+  "db.shadow_port":                                 { scope: "env",    promotable: false, secret: false, required: false },
+  "db.major_version":                               { scope: "global", promotable: false, secret: false, required: false },
+  "db.pooler.enabled":                              { scope: "global", promotable: true,  secret: false, required: false },
+  "db.pooler.port":                                 { scope: "env",    promotable: false, secret: false, required: false },
+  "db.pooler.pool_mode":                            { scope: "global", promotable: true,  secret: false, required: false },
+  "db.pooler.default_pool_size":                    { scope: "global", promotable: true,  secret: false, required: false },
+  "db.pooler.max_client_conn":                      { scope: "global", promotable: true,  secret: false, required: false },
+  "db.seed.enabled":                                { scope: "global", promotable: true,  secret: false, required: false },
+  "db.seed.sql_paths":                              { scope: "global", promotable: true,  secret: false, required: false },
 
   // ── Edge Runtime ─────────────────────────────────────────────────────────
-  "edge_runtime.enabled":                           { scope: "promote"  },
-  "edge_runtime.policy":                            { scope: "promote"  },
-  "edge_runtime.inspector_port":                    { scope: "env"      },
+  "edge_runtime.enabled":                           { scope: "global", promotable: true,  secret: false, required: false },
+  "edge_runtime.policy":                            { scope: "global", promotable: true,  secret: false, required: false },
+  "edge_runtime.inspector_port":                    { scope: "env",    promotable: false, secret: false, required: false },
 
   // ── Experimental ─────────────────────────────────────────────────────────
-  "experimental.orioledb_version":                  { scope: "promote"  },
-  "experimental.s3_host":                           { scope: "env"      },
-  "experimental.s3_region":                         { scope: "env"      },
-  "experimental.s3_access_key":                     { scope: "env"      },
-  "experimental.s3_secret_key":                     { scope: "env"      },
+  "experimental.orioledb_version":                  { scope: "global", promotable: true,  secret: false, required: false },
+  "experimental.s3_host":                           { scope: "env",    promotable: false, secret: false, required: false },
+  "experimental.s3_region":                         { scope: "env",    promotable: false, secret: false, required: false },
+  "experimental.s3_access_key":                     { scope: "env",    promotable: false, secret: true,  required: false },
+  "experimental.s3_secret_key":                     { scope: "env",    promotable: false, secret: true,  required: false },
 
   // ── Functions ────────────────────────────────────────────────────────────
-  "functions.*.enabled":                            { scope: "promote"  },
-  "functions.*.verify_jwt":                         { scope: "promote"  },
-  "functions.*.import_map":                         { scope: "promote"  },
-  "functions.*.entrypoint":                         { scope: "promote"  },
+  "functions.*.enabled":                            { scope: "global", promotable: true,  secret: false, required: false },
+  "functions.*.verify_jwt":                         { scope: "global", promotable: true,  secret: false, required: false },
+  "functions.*.import_map":                         { scope: "global", promotable: true,  secret: false, required: false },
+  "functions.*.entrypoint":                         { scope: "global", promotable: true,  secret: false, required: false },
 
-  // ── Inbucket (local email testing) ──────────────────────────────────────
-  "inbucket.enabled":                               { scope: "promote"  },
-  "inbucket.port":                                  { scope: "env"      },
-  "inbucket.smtp_port":                             { scope: "env"      },
-  "inbucket.pop3_port":                             { scope: "env"      },
+  // ── Inbucket ─────────────────────────────────────────────────────────────
+  "inbucket.enabled":                               { scope: "global", promotable: true,  secret: false, required: false },
+  "inbucket.port":                                  { scope: "env",    promotable: false, secret: false, required: false },
+  "inbucket.smtp_port":                             { scope: "env",    promotable: false, secret: false, required: false },
+  "inbucket.pop3_port":                             { scope: "env",    promotable: false, secret: false, required: false },
 
   // ── Realtime ─────────────────────────────────────────────────────────────
-  "realtime.enabled":                               { scope: "promote"  },
-  "realtime.ip_version":                            { scope: "promote"  },
-  "realtime.max_header_length":                     { scope: "promote"  },
+  "realtime.enabled":                               { scope: "global", promotable: true,  secret: false, required: false },
+  "realtime.ip_version":                            { scope: "global", promotable: true,  secret: false, required: false },
+  "realtime.max_header_length":                     { scope: "global", promotable: true,  secret: false, required: false },
 
   // ── Storage ──────────────────────────────────────────────────────────────
-  "storage.enabled":                                { scope: "promote"  },
-  "storage.file_size_limit":                        { scope: "promote"  },
-  "storage.image_transformation.enabled":           { scope: "promote"  },
-  "storage.buckets.*.public":                       { scope: "promote"  },
-  "storage.buckets.*.file_size_limit":              { scope: "promote"  },
-  "storage.buckets.*.allowed_mime_types":           { scope: "promote"  },
-  "storage.buckets.*.objects_path":                 { scope: "promote"  },
+  "storage.enabled":                                { scope: "global", promotable: true,  secret: false, required: false },
+  "storage.file_size_limit":                        { scope: "global", promotable: true,  secret: false, required: false },
+  "storage.image_transformation.enabled":           { scope: "global", promotable: true,  secret: false, required: false },
+  "storage.buckets.*.public":                       { scope: "global", promotable: true,  secret: false, required: false },
+  "storage.buckets.*.file_size_limit":              { scope: "global", promotable: true,  secret: false, required: false },
+  "storage.buckets.*.allowed_mime_types":           { scope: "global", promotable: true,  secret: false, required: false },
+  "storage.buckets.*.objects_path":                 { scope: "global", promotable: true,  secret: false, required: false },
 
   // ── Studio ───────────────────────────────────────────────────────────────
-  "studio.enabled":                                 { scope: "promote"  },
-  "studio.port":                                    { scope: "env"      },
-  "studio.api_url":                                 { scope: "env"      },
-  "studio.openai_api_key":                          { scope: "env"      },
+  "studio.enabled":                                 { scope: "global", promotable: false, secret: false, required: false },
+  "studio.port":                                    { scope: "env",    promotable: false, secret: false, required: false },
+  "studio.api_url":                                 { scope: "env",    promotable: false, secret: false, required: false },
+  "studio.openai_api_key":                          { scope: "env",    promotable: false, secret: true,  required: false },
 };
 
 /**
- * Resolve the scope for a concrete config path.
+ * Resolve metadata for a concrete config path.
  *
  * Resolution order:
  *   1. Exact match
  *   2. Wildcard patterns — longest matching pattern wins
- *   3. Falls back to "promote" (unknown fields are assumed safe to promote)
+ *   3. Falls back to { scope: "global", promotable: true, secret: false }
  */
-export function getFieldScope(configPath: string): FieldScope {
+export function getFieldMeta(configPath: string): FieldMeta {
   // 1. Exact match
   if (configPath in FIELD_META) {
-    return FIELD_META[configPath].scope;
+    return FIELD_META[configPath];
   }
 
   // 2. Wildcard match — find all patterns that match, pick the longest
   const parts = configPath.split(".");
-  let bestMatch: { pattern: string; scope: FieldScope } | null = null;
+  let bestMatch: { pattern: string; meta: FieldMeta } | null = null;
 
   for (const [pattern, meta] of Object.entries(FIELD_META)) {
     if (!pattern.includes("*")) continue;
@@ -230,40 +224,44 @@ export function getFieldScope(configPath: string): FieldScope {
     const patternParts = pattern.split(".");
     if (patternParts.length !== parts.length) continue;
 
-    const matches = patternParts.every(
-      (p, i) => p === "*" || p === parts[i]
-    );
+    const matches = patternParts.every((p, i) => p === "*" || p === parts[i]);
 
     if (matches) {
       if (!bestMatch || pattern.length > bestMatch.pattern.length) {
-        bestMatch = { pattern, scope: meta.scope };
+        bestMatch = { pattern, meta };
       }
     }
   }
 
-  if (bestMatch) return bestMatch.scope;
+  if (bestMatch) return bestMatch.meta;
 
-  // 3. Unknown field — assume promotable
-  return "promote";
+  // 3. Unknown field — assume global, not promotable, not secret, not required
+  return { scope: "global", promotable: false, secret: false, required: false };
 }
 
-/**
- * Whether a config field is safe to apply to production on branch merge.
- */
+// Convenience accessors
+export function getFieldScope(configPath: string): FieldScope {
+  return getFieldMeta(configPath).scope;
+}
+
 export function isPromotable(configPath: string): boolean {
-  return getFieldScope(configPath) === "promote";
+  return getFieldMeta(configPath).promotable;
 }
 
-/**
- * Whether a config field is environment-specific (credential, URL, port).
- */
 export function isEnvSpecific(configPath: string): boolean {
-  return getFieldScope(configPath) === "env";
+  return getFieldMeta(configPath).scope === "env";
+}
+
+export function isSecret(configPath: string): boolean {
+  return getFieldMeta(configPath).secret;
+}
+
+export function isRequired(configPath: string): boolean {
+  return getFieldMeta(configPath).required;
 }
 
 /**
  * Filter an object of config diffs, returning only the promotable fields.
- * Used by the platform to determine what to apply when a branch merges.
  */
 export function filterPromotableFields(
   diffs: Record<string, { oldValue: unknown; newValue: unknown }>

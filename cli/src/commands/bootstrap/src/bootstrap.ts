@@ -34,6 +34,7 @@ import {
 import { writeSmartEnv, resolveProjectEnv } from "@/lib/dotenv.js";
 import { waitForProjectReady } from "@/lib/project-health.js";
 import { pushMigrations } from "@/lib/migrations.js";
+import { createSpinner } from "@/components/output.js";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -101,14 +102,14 @@ export async function bootstrapHandler(
   }
 
   // 1. Template selection
-  const spinner = isInteractive ? p.spinner() : null;
+  const spinner = createSpinner(options);
 
-  spinner?.start("Fetching templates...");
+  spinner.start("Fetching templates...");
   let templates: StarterTemplate[];
   try {
     templates = await fetchTemplates();
   } catch (err) {
-    spinner?.stop(chalk.red("Failed to fetch templates"));
+    spinner.stop(chalk.red("Failed to fetch templates"));
     if (options.json) {
       console.log(
         JSON.stringify({
@@ -125,7 +126,7 @@ export async function bootstrapHandler(
     }
     process.exit(1);
   }
-  spinner?.stop(`Found ${templates.length} template${templates.length === 1 ? "" : "s"}`);
+  spinner.stop(`Found ${templates.length} template${templates.length === 1 ? "" : "s"}`);
 
   let selectedTemplate: StarterTemplate;
 
@@ -259,14 +260,14 @@ export async function bootstrapHandler(
 
   // 2. Download template
   if (selectedTemplate.url) {
-    const dlSpinner = isInteractive ? p.spinner() : null;
-    dlSpinner?.start(`Downloading "${selectedTemplate.name}" template...`);
+    const dlSpinner = createSpinner(options);
+    dlSpinner.start(`Downloading "${selectedTemplate.name}" template...`);
 
     try {
       await downloadTemplate(selectedTemplate, workdir);
-      dlSpinner?.stop(`Downloaded "${selectedTemplate.name}" template`);
+      dlSpinner.stop(`Downloaded "${selectedTemplate.name}" template`);
     } catch (err) {
-      dlSpinner?.stop(chalk.red("Download failed"));
+      dlSpinner.stop(chalk.red("Download failed"));
       if (options.json) {
         console.log(
           JSON.stringify({
@@ -359,15 +360,15 @@ export async function bootstrapHandler(
   const client = createClient(token);
 
   // Wait for project to be healthy
-  const waitSpinner = isInteractive ? p.spinner() : null;
-  waitSpinner?.start("Waiting for project to be ready...");
+  const waitSpinner = createSpinner(options);
+  waitSpinner.start("Waiting for project to be ready...");
   try {
     await waitForProjectReady(client, projectRef, {
-      onProgress: (msg) => waitSpinner?.message(msg),
+      onProgress: (msg) => waitSpinner.message(msg),
     });
-    waitSpinner?.stop("Project is ready");
+    waitSpinner.stop("Project is ready");
   } catch (err) {
-    waitSpinner?.stop(chalk.red("Project not ready"));
+    waitSpinner.stop(chalk.red("Project not ready"));
     if (options.json) {
       console.log(JSON.stringify({
         status: "error",
@@ -381,22 +382,22 @@ export async function bootstrapHandler(
 
   // Push migrations
   const migrationsDir = join(workdir, "supabase", "migrations");
-  const migSpinner = isInteractive ? p.spinner() : null;
+  const migSpinner = createSpinner(options);
 
   if (existsSync(migrationsDir)) {
     const sqlFiles = readdirSync(migrationsDir).filter((f) => f.endsWith(".sql"));
 
     if (sqlFiles.length > 0) {
-      migSpinner?.start(`Pushing ${sqlFiles.length} migration(s)...`);
+      migSpinner.start(`Pushing ${sqlFiles.length} migration(s)...`);
 
       const migResult = await pushMigrations(client, projectRef, migrationsDir, {
-        onProgress: (msg) => migSpinner?.message(msg),
+        onProgress: (msg) => migSpinner.message(msg),
       });
 
       if (migResult.applied > 0) {
-        migSpinner?.stop(`Pushed ${migResult.applied} migration(s)`);
+        migSpinner.stop(`Pushed ${migResult.applied} migration(s)`);
       } else {
-        migSpinner?.stop(chalk.yellow("No migrations applied"));
+        migSpinner.stop(chalk.yellow("No migrations applied"));
       }
 
       // Show warnings for failed migrations after spinner stops

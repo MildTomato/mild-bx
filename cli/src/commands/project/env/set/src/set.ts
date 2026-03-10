@@ -10,6 +10,7 @@ import { handleCommandError } from "@/lib/command-error.js";
 import { isSensitiveKey } from "@/lib/env-file.js";
 import { setRemoteVariable, warnIfUnrecognisedPlatformVar } from "@/lib/env-api-bridge.js";
 import { scopedVarName, type Scope } from "@supabase-dx/env-vars";
+import { createSpinner } from "@/components/output.js";
 
 export interface SetOptions {
   key: string;
@@ -105,12 +106,17 @@ export async function setCommand(options: SetOptions): Promise<void> {
 
   // Push to remote with the scoped key
   const client = createClient(ctx.token);
-  const spinner = options.json ? null : p.spinner();
-  spinner?.start(`Setting ${storedKey}...`);
+  const spinner = createSpinner(options);
+  spinner.start(`Setting ${storedKey}...`);
 
   try {
     await setRemoteVariable(client, ctx.projectRef, storedKey, value, isSecret ?? false);
-    spinner?.stop(`Set ${chalk.cyan(storedKey)} (scope: ${scopeLabel})`);
+    spinner.stop(`Set ${chalk.cyan(storedKey)} (scope: ${scopeLabel})`);
+
+    if (scope === "preview") {
+      const { propagateToPreviewBranches } = await import("@/lib/env-propagate.js");
+      await propagateToPreviewBranches({ client, projectRef: ctx.projectRef });
+    }
 
     if (options.json) {
       console.log(JSON.stringify({
@@ -121,7 +127,7 @@ export async function setCommand(options: SetOptions): Promise<void> {
       }));
     }
   } catch (error) {
-    spinner?.stop(chalk.red("Failed"));
+    spinner.stop(chalk.red("Failed"));
     await handleCommandError(error, options, client, ctx.projectRef);
   }
 }

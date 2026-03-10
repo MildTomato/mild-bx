@@ -82,6 +82,14 @@ export interface AuthConfig {
 export type SchemaManagement = "declarative" | "migrations";
 export type ConfigSource = "code" | "remote";
 
+export type ValidationLibrary = "zod";
+export type PluginName = "tanstack";
+
+export interface CodegenConfig {
+  validation?: ValidationLibrary;
+  plugins?: PluginName[];
+}
+
 export interface ProjectConfig {
   project_id?: string;
   workflow_profile?: WorkflowProfile;
@@ -89,6 +97,7 @@ export interface ProjectConfig {
   config_source?: ConfigSource;
   api?: ApiConfig;
   auth?: AuthConfig;
+  codegen?: CodegenConfig;
   environments?: Record<string, string>;
   // Other sections we don't sync yet
   db?: unknown;

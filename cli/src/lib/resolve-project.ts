@@ -19,6 +19,7 @@ import { isBranchingProfile } from "./workflow-profiles.js";
 import { getCurrentBranch } from "./git.js";
 import { EXIT_CODES } from "./exit-codes.js";
 import { createClient } from "./api.js";
+import { runCodegenIfStale } from "./precheck.js";
 
 export interface ProjectContext {
   cwd: string;
@@ -159,6 +160,8 @@ export async function resolveProjectContext(options: {
       }
     }
   }
+
+  runCodegenIfStale(cwd, config);
 
   return { cwd, config, branch, profile, projectRef, token, isBranch: false };
 }

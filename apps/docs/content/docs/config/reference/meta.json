@@ -8,6 +8,7 @@
     "functions",
     "realtime",
     "studio",
-    "analytics"
+    "analytics",
+    "codegen"
   ]
 }

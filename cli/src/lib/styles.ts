@@ -94,3 +94,14 @@ export function label(text: string): string {
 export function value(text: string): string {
   return `${colors.value}${text}${colors.reset}`;
 }
+
+export function generated(filePath: string): string {
+  return `Generated ${colors.fileName}${filePath}${colors.reset}`;
+}
+
+/** Format a verbose log line with a dim HH:MM:SS.mmm timestamp prefix. */
+export function verboseLog(msg: string): string {
+  const d = new Date();
+  const ts = `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}:${d.getSeconds().toString().padStart(2, "0")}.${d.getMilliseconds().toString().padStart(3, "0")}`;
+  return `${colors.secondary}[${ts}]${colors.reset} ${msg}`;
+}

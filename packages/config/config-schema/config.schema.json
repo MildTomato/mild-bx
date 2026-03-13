@@ -4682,6 +4682,45 @@
       "secret": false,
       "required": false
     },
+    "codegen": {
+      "type": "object",
+      "description": "Code generation settings for type-safe database access.",
+      "additionalProperties": false,
+      "properties": {
+        "validation": {
+          "type": "string",
+          "enum": [
+            "zod"
+          ],
+          "description": "Validation library to generate schemas for."
+        },
+        "plugins": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "tanstack"
+            ]
+          },
+          "description": "Additional code generation plugins."
+        },
+        "tanstack": {
+          "type": "object",
+          "description": "Options for the TanStack DB plugin.",
+          "additionalProperties": false,
+          "properties": {
+            "client_path": {
+              "type": "string",
+              "description": "Import path for the Supabase client. Defaults to \"@/lib/supabase/client\"."
+            },
+            "client_function_name": {
+              "type": "string",
+              "description": "Name of the exported client function. Defaults to \"createClient\"."
+            }
+          }
+        }
+      }
+    },
     "profiles": {
       "type": "object",
       "description": "Profile configuration for different environments",

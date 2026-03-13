@@ -6,6 +6,7 @@
   "scripts": {
     "build": "pnpm build:cli && pnpm build:extension",
     "build:cli": "cd cli && pnpm run build",
+    "build:cli:local": "cd cli && pnpm run build:local",
     "build:extension": "cd extension && pnpm run build",
     "dev": "pnpm dev:cli",
     "dev:cli": "cd cli && pnpm run dev",

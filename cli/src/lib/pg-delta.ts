@@ -149,6 +149,7 @@ async function getPGlite(): Promise<PGliteType> {
  * Verbose logging flag - set via setVerbose()
  */
 let verbose = false;
+let logCallback: ((msg: string) => void) | null = null;
 
 /**
  * Set verbose logging mode
@@ -158,11 +159,23 @@ export function setVerbose(value: boolean): void {
 }
 
 /**
+ * Override where verbose log lines are sent.
+ * By default they go to stderr. Pass a callback to redirect to a rail or other output.
+ */
+export function setLogCallback(fn: ((msg: string) => void) | null): void {
+  logCallback = fn;
+}
+
+/**
  * Log message only in verbose mode (dim/secondary color)
  */
 function log(message: string, ...args: unknown[]): void {
-  if (verbose) {
-    console.error(`${C.secondary}${message}${C.reset}`, ...args);
+  if (!verbose) return;
+  const line = args.length ? `${message} ${args.join(" ")}` : message;
+  if (logCallback) {
+    logCallback(line);
+  } else {
+    console.error(`${C.secondary}${line}${C.reset}`);
   }
 }
 
@@ -170,8 +183,12 @@ function log(message: string, ...args: unknown[]): void {
  * Log warning message only in verbose mode (yellow)
  */
 function logWarning(message: string, ...args: unknown[]): void {
-  if (verbose) {
-    console.error(`${C.warning}${message}${C.reset}`, ...args);
+  if (!verbose) return;
+  const line = args.length ? `${message} ${args.join(" ")}` : message;
+  if (logCallback) {
+    logCallback(`⚠ ${line}`);
+  } else {
+    console.error(`${C.warning}${line}${C.reset}`);
   }
 }
 
@@ -179,8 +196,12 @@ function logWarning(message: string, ...args: unknown[]): void {
  * Log error message only in verbose mode (red)
  */
 function logError(message: string, ...args: unknown[]): void {
-  if (verbose) {
-    console.error(`${C.error}${message}${C.reset}`, ...args);
+  if (!verbose) return;
+  const line = args.length ? `${message} ${args.join(" ")}` : message;
+  if (logCallback) {
+    logCallback(`✗ ${line}`);
+  } else {
+    console.error(`${C.error}${line}${C.reset}`);
   }
 }
 

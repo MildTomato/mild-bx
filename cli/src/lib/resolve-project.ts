@@ -6,6 +6,7 @@
  */
 
 import chalk from "chalk";
+import { generated as fmtGenerated } from "./styles.js";
 import {
   getAccessTokenAsync,
   loadProjectConfig,
@@ -19,6 +20,7 @@ import { isBranchingProfile } from "./workflow-profiles.js";
 import { getCurrentBranch } from "./git.js";
 import { EXIT_CODES } from "./exit-codes.js";
 import { createClient } from "./api.js";
+import { runCodegenIfStale } from "./precheck.js";
 
 export interface ProjectContext {
   cwd: string;
@@ -158,6 +160,12 @@ export async function resolveProjectContext(options: {
         );
       }
     }
+  }
+
+  if (!options.json) {
+    runCodegenIfStale(cwd, config, (f) => process.stderr.write(chalk.dim(`  ${fmtGenerated(f)}\n`)));
+  } else {
+    runCodegenIfStale(cwd, config);
   }
 
   return { cwd, config, branch, profile, projectRef, token, isBranch: false };

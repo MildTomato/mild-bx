@@ -24,6 +24,8 @@ import { C } from "@/lib/colors.js";
 import { generated as fmtGenerated, verboseLog } from "@/lib/styles.js";
 import { checkEnvMatchesBranch, refreshTypesAndCodegen } from "@/lib/precheck.js";
 import { createSpinner } from "@/components/output.js";
+import { runHooks } from "@/lib/hooks.js";
+import type { HooksConfig } from "@supabase-dx/config";
 
 interface PullOptions {
   profile?: string;
@@ -56,6 +58,12 @@ export async function pullCommand(options: PullOptions) {
     await resolveProjectContext(options);
   const projectConfig = config as ProjectConfig;
   const mainProjectRef = projectConfig.project_id ?? projectRef;
+
+  // Run pre-pull hooks
+  const hooks = (config as Record<string, unknown>).hooks as HooksConfig | undefined;
+  if (hooks?.pre_pull) {
+    runHooks(hooks.pre_pull, cwd, options.verbose ? (msg) => console.error(verboseLog(msg)) : undefined);
+  }
 
   // Block pull when config is code-driven — config.json is the source of truth.
   if (config.config_source === "code") {

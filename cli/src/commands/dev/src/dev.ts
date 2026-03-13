@@ -5,7 +5,6 @@
  * and automatically applying them.
  */
 
-import { watch as chokidarWatch } from "chokidar";
 import { watch, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, dirname, relative, basename } from "node:path";
 import { createClient } from "@/lib/api.js";
@@ -45,6 +44,9 @@ import { resolveBranchAndWriteEnv, writeProjectEnv } from "@/lib/env-file.js";
 import { isBranchingProfile } from "@/lib/workflow-profiles.js";
 import { getWorkflowProfile } from "@/lib/config.js";
 import { checkEnvMatchesBranch, runCodegenIfStale, refreshTypesAndCodegen } from "@/lib/precheck.js";
+import { runHooks, runHooksAsync, getHookWatchSources } from "@/lib/hooks.js";
+import { createFileWatcher, type WatchSource } from "@/lib/file-watcher.js";
+import type { HooksConfig } from "@supabase-dx/config";
 
 function watchGitBranch(cwd: string, onChange: () => void): () => void {
   const gitHeadPath = join(cwd, ".git", "HEAD");
@@ -700,6 +702,8 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
   // JSON mode - output events as NDJSON
   if (options.json) {
+    const jsonHooksConfig = (config as Record<string, unknown>).hooks as HooksConfig | undefined;
+    const jsonHookWatchSources = getHookWatchSources(jsonHooksConfig?.pre_push, cwd);
     console.log(
       JSON.stringify({
         status: "running",
@@ -709,6 +713,8 @@ export async function devCommand(options: DevOptions): Promise<void> {
         schemaDir: relative(cwd, schemaDir),
         seedEnabled,
         seedPaths: seedEnabled ? seedPaths : undefined,
+        hooksEnabled: !!jsonHooksConfig?.pre_push,
+        hookWatchPaths: jsonHookWatchSources.length > 0 ? jsonHookWatchSources.map((s) => s.raw) : undefined,
       }),
     );
 
@@ -792,30 +798,62 @@ export async function devCommand(options: DevOptions): Promise<void> {
       }
     });
 
-    // File watcher (schema + config)
-    const watcher = chokidarWatch([schemaDir, configPath], {
-      ignoreInitial: true,
-      awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },
-    });
-
-    watcher.on("all", async (event, filePath) => {
-      const isConfig = basename(filePath) === "config.json";
-      const isSchema = filePath.endsWith(".sql");
-
-      if (!isConfig && !isSchema) return;
-
-      if (isConfig) {
-        console.log(JSON.stringify({ event: "config_changed", type: event }));
-        state.pendingConfigChange = true;
-      } else {
-        const relPath = relative(schemaDir, filePath);
-        console.log(
-          JSON.stringify({ event: "file_changed", type: event, path: relPath }),
-        );
-        state.pendingSchemaChanges.add(relPath);
+    // Run pre-push hooks on startup (e.g., ORM codegen)
+    if (jsonHooksConfig?.pre_push) {
+      try {
+        runHooks(jsonHooksConfig.pre_push, cwd);
+        console.log(JSON.stringify({ event: "hook_complete" }));
+      } catch (err) {
+        console.log(JSON.stringify({ event: "hook_error", error: err instanceof Error ? err.message : String(err) }));
       }
+    }
 
-      // Debounce
+    // File watcher (schema + config + hook watch paths)
+    const jsonHookSources = getHookWatchSources(jsonHooksConfig?.pre_push, cwd);
+
+    const jsonWatchSources: WatchSource[] = [
+      {
+        path: schemaDir,
+        filter: (filePath) => filePath.endsWith(".sql"),
+        onChange: async (event, filePath) => {
+          const relPath = relative(schemaDir, filePath);
+          console.log(
+            JSON.stringify({ event: "file_changed", type: event, path: relPath }),
+          );
+          state.pendingSchemaChanges.add(relPath);
+          scheduleDebounce();
+        },
+      },
+      {
+        path: configPath,
+        onChange: async (event, _filePath) => {
+          console.log(JSON.stringify({ event: "config_changed", type: event }));
+          state.pendingConfigChange = true;
+          scheduleDebounce();
+        },
+      },
+      ...jsonHookSources.map((src) => ({
+        path: src.dir,
+        filter: src.filter,
+        onChange: async (event: string, filePath: string) => {
+          // Hook source changed — run hooks directly, schema watcher picks up generated files
+          if (state.isApplying) return;
+          console.log(JSON.stringify({ event: "file_changed", type: event, path: relative(cwd, filePath), source: "hook" }));
+          try {
+            runHooks(jsonHooksConfig!.pre_push!, cwd);
+            console.log(JSON.stringify({ event: "hook_complete" }));
+          } catch (err) {
+            console.log(JSON.stringify({ event: "hook_error", error: err instanceof Error ? err.message : String(err) }));
+          }
+        },
+      })),
+    ];
+
+    const fileWatcher = createFileWatcher(jsonWatchSources);
+    const watcher = fileWatcher.watcher;
+
+    // Inline debounce scheduling (extracted for reuse by WatchSource callbacks)
+    function scheduleDebounce() {
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(async () => {
         // If we're mid-branch-resolution, the connection string is being rebuilt.
@@ -831,6 +869,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
           return;
 
         state.isApplying = true;
+
         const schemaChanges = [...state.pendingSchemaChanges];
         const configChanged = state.pendingConfigChange;
         state.pendingSchemaChanges.clear();
@@ -961,7 +1000,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
         state.isApplying = false;
       }, debounceMs);
-    });
+    }
 
     // Types refresh interval
     let lastTypes = "";
@@ -1084,7 +1123,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
     process.on("SIGINT", async () => {
       cleanupBranchWatchJson();
       clearInterval(typesCheck);
-      watcher.close();
+      await fileWatcher.close();
       await closeSupabasePool();
       console.log(JSON.stringify({ status: "stopped" }));
       process.exit(0);
@@ -1100,16 +1139,16 @@ export async function devCommand(options: DevOptions): Promise<void> {
   let lastActivity = Date.now();
   let debounceTimer: NodeJS.Timeout | null = null;
   let isSpinnerActive = false;
-
+  let isRunningHooks = false;
   const clearLine = () => {
     if (!isInteractive || !currentLine) return;
     process.stdout.write(`\r\x1b[K`);
     currentLine = "";
+    heartbeatHasSpacer = false;
   };
 
   const writeLine = (msg: string) => {
     if (!isInteractive) return;
-    clearLine();
     process.stdout.write(`\r${msg}\x1b[K`);
     currentLine = msg;
   };
@@ -1117,13 +1156,25 @@ export async function devCommand(options: DevOptions): Promise<void> {
   // Clack spinner for async operations
   let activeSpinner: ReturnType<typeof p.spinner> | null = null;
 
+  // Notifications buffered while spinner is active (stdout conflicts with spinner animation)
+  const pendingNotifications: string[] = [];
+
+  const flushNotifications = () => {
+    if (pendingNotifications.length === 0) return;
+    console.log(S_BAR);
+    for (const msg of pendingNotifications) {
+      console.log(`${S_BAR}  ${msg}`);
+    }
+    pendingNotifications.length = 0;
+  };
+
   // Log a line with the rail
   const logRail = (msg: string) => {
-    clearLine();
-    if (!heartbeatStarted) {
-      console.log(S_BAR);
-      heartbeatStarted = true;
+    if (isSpinnerActive) {
+      pendingNotifications.push(msg);
+      return;
     }
+    clearLine();
     console.log(`${S_BAR}  ${msg}`);
     lastActivity = Date.now();
   };
@@ -1172,8 +1223,9 @@ export async function devCommand(options: DevOptions): Promise<void> {
         console.log(`${S_BAR}  ${color}${line}${C.reset}`);
       }
     }
+    flushNotifications();
     lastActivity = Date.now();
-    heartbeatStarted = false;
+    heartbeatStarted = true;
     startHeartbeat();
   };
 
@@ -1183,13 +1235,19 @@ export async function devCommand(options: DevOptions): Promise<void> {
     if (activeSpinner) {
       activeSpinner.stop("");
       activeSpinner = null;
+      // Erase the empty diamond line clack wrote
+      if (isInteractive) {
+        process.stdout.write(`\x1b[A\r\x1b[K`);
+      }
     }
+    flushNotifications();
     heartbeatStarted = true;
     lastActivity = 0;
     startHeartbeat();
   };
 
   let heartbeatStarted = false;
+  let heartbeatHasSpacer = false;
 
   const startHeartbeat = () => {
     // The heartbeat uses writeLine (\r animation) which only works in a TTY.
@@ -1200,10 +1258,11 @@ export async function devCommand(options: DevOptions): Promise<void> {
     heartbeatInterval = setInterval(() => {
       const idle = Date.now() - lastActivity > 1000;
       if (idle && !isSpinnerActive) {
-        if (!heartbeatStarted) {
-          process.stdout.write(`${S_BAR}\n`);
-          heartbeatStarted = true;
+        if (!heartbeatHasSpacer) {
+          process.stdout.write(`\n`);
+          heartbeatHasSpacer = true;
         }
+        heartbeatStarted = true;
         const char = HEARTBEAT_FRAMES[heartbeatFrame % HEARTBEAT_FRAMES.length];
         writeLine(`${C.secondary}${char}  Watching for changes...${C.reset}`);
         heartbeatFrame++;
@@ -1216,6 +1275,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
       clearInterval(heartbeatInterval);
       heartbeatInterval = null;
     }
+    clearLine();
   };
 
   // Types tracking - shared between sync and interval
@@ -1233,6 +1293,18 @@ export async function devCommand(options: DevOptions): Promise<void> {
   if (seedEnabled) {
     const seedDisplay = seedPaths.length === 1 ? seedPaths[0] : `${seedPaths.length} paths`;
     extra.push(["Seed", seedDisplay]);
+  }
+  const startupHooksConfig = (config as Record<string, unknown>).hooks as HooksConfig | undefined;
+  if (startupHooksConfig?.pre_push) {
+    const cmds = Array.isArray(startupHooksConfig.pre_push) ? startupHooksConfig.pre_push : [startupHooksConfig.pre_push];
+    for (const cmd of cmds) {
+      const label = typeof cmd === "string" ? cmd : cmd.command;
+      extra.push(["Pre-push", label]);
+    }
+    const startupWatchSources = getHookWatchSources(startupHooksConfig.pre_push, cwd);
+    if (startupWatchSources.length > 0) {
+      extra.push(["  └ watch", startupWatchSources.map((s) => s.raw).join(", ")]);
+    }
   }
   if (options.dryRun) extra.push(["Mode", `${C.warning}dry-run${C.reset}`]);
   printProjectContextLines({
@@ -1386,19 +1458,21 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
   // Apply config changes (called from file watcher)
   const applyConfigChanges = async () => {
-    startStep("Pushing changes…");
+    startStep("Comparing config with remote");
     try {
       const freshConfig = loadProjectConfig(cwd) as ProjectConfig;
       if (!freshConfig) {
-        completeStep("Config push failed", "could not reload", "error");
+        completeStep("Config push failed", "could not reload config.json", "error");
         return;
       }
       const allChanges = await syncConfig(freshConfig);
       if (allChanges.length === 0) {
         cancelStep();
+      } else if (options.dryRun) {
+        completeStep("Would push to remote", `${allChanges.length} config change${allChanges.length === 1 ? "" : "s"} (dry-run)`);
+        logConfigChanges(allChanges);
       } else {
-        const suffix = options.dryRun ? " (dry-run)" : "";
-        completeStep("Pushed", `${allChanges.length} config change${allChanges.length === 1 ? "" : "s"}${suffix}`);
+        completeStep("Pushed config to remote", `${allChanges.length} change${allChanges.length === 1 ? "" : "s"}`);
         logConfigChanges(allChanges);
       }
     } catch (error) {
@@ -1409,7 +1483,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
   // Apply schema changes
   const applySchemaChanges = async (changedFiles: string[]) => {
-    startStep("Pushing changes…");
+    startStep("Comparing schema with remote");
 
     try {
       if (options.dryRun) {
@@ -1424,7 +1498,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
         if (!diff.hasChanges) {
           cancelStep();
         } else {
-          completeStep("Pushed", `${diff.statements.length} statements (dry-run)`);
+          completeStep("Would push to remote", `${diff.statements.length} schema statement${diff.statements.length === 1 ? "" : "s"} (dry-run)`);
           for (const stmt of diff.statements.slice(0, 5)) {
             logNested(stmt.length > 60 ? stmt.slice(0, 57) + "..." : stmt);
           }
@@ -1445,39 +1519,45 @@ export async function devCommand(options: DevOptions): Promise<void> {
           if (result.output === "No changes to apply") {
             cancelStep();
           } else {
-            completeStep("Pushed", `${result.statements ?? 0} statements`);
+            // Refresh types and run codegen while spinner is active
+            // Collect generated files to show after the spinner stops
+            const generated: string[] = [];
+            const typesResult = await refreshTypesAndCodegen({
+              getTypes: () => client.getTypescriptTypes(state.projectRef!, "public"),
+              cwd,
+              config,
+              onGenerated: (f) => generated.push(f),
+              onLog: options.verbose ? (msg) => logNested(msg) : undefined,
+              onRetry: (n, delay, max) => logNested(`${C.warning}⚠${C.reset} PostgREST schema cache not ready, retrying in ${delay / 1000}s… (${n}/${max})`),
+            });
+            if (typesResult.typesRefreshed) {
+              lastTypesRefreshTime = Date.now();
+            }
 
-            // Show changed files as nested items
+            const parts: string[] = [`${result.statements ?? 0} statement${(result.statements ?? 0) === 1 ? "" : "s"}`];
+            if (typesResult.typesRefreshed) parts.push("types updated");
+            completeStep("Pushed schema to remote", parts.join(", "));
+
             for (const file of changedFiles.slice(0, 5)) {
               logNested(file);
             }
             if (changedFiles.length > 5) {
               logNested(`+${changedFiles.length - 5} more files`);
             }
-
-            // Refresh types after successful schema change
-            const typesResult = await refreshTypesAndCodegen({
-              getTypes: () => client.getTypescriptTypes(state.projectRef!, "public"),
-              cwd,
-              config,
-              onGenerated: (f) => logNested(fmtGenerated(f)),
-              onLog: options.verbose ? (msg) => logNested(msg) : undefined,
-              onRetry: (n, delay, max) => logNested(`${C.warning}⚠${C.reset} PostgREST schema cache not ready, retrying in ${delay / 1000}s… (${n}/${max})`),
-            });
-            if (typesResult.typesRefreshed) {
-              logNested(fmtGenerated(relative(cwd, typesPath)));
-              lastTypesRefreshTime = Date.now();
-            } else if (typesResult.error) {
+            for (const f of generated) {
+              logNested(fmtGenerated(f));
+            }
+            if (typesResult.error) {
               logNested(`${C.warning}⚠${C.reset} Types refresh failed: ${typesResult.error}`);
             }
           }
         } else {
-          completeStep("Push failed", undefined, "error", result.output);
+          completeStep("Schema push failed", undefined, "error", result.output);
         }
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      completeStep("Push failed", undefined, "error", msg);
+      completeStep("Schema push failed", undefined, "error", msg);
     }
   };
 
@@ -1515,7 +1595,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
   // Apply pending changes
   const applyPendingChanges = async () => {
-    if (state.isApplying) return;
+    if (state.isApplying || isRunningHooks) return;
     if (
       state.pendingSchemaChanges.size === 0 &&
       !state.pendingConfigChange &&
@@ -1568,69 +1648,114 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
     state.isApplying = false;
     state.lastPush = Date.now();
+
+    // If changes accumulated during apply (e.g. hook-generated SQL picked up by watcher), re-schedule
+    if (state.pendingSchemaChanges.size > 0 || state.pendingConfigChange || state.pendingSeedChange) {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => { applyPendingChanges(); }, debounceMs);
+    }
   };
 
-  // Build watch paths - schema, config, and optionally seeds
-  const watchPaths = [schemaDir, configPath];
-  if (seedEnabled && existsSync(seedDir)) {
-    watchPaths.push(seedDir);
+  // Run pre-push hooks on startup (e.g., ORM codegen)
+  const hooksConfigInteractive = (config as Record<string, unknown>).hooks as HooksConfig | undefined;
+  if (hooksConfigInteractive?.pre_push) {
+    startStep("Running pre-push hooks");
+    try {
+      await runHooksAsync(hooksConfigInteractive.pre_push, cwd, (msg) => {
+        if (msg.startsWith("$ ")) logNested(msg);
+      });
+      completeStep("Pre-push hooks complete");
+    } catch (err) {
+      completeStep("Hook failed", undefined, "error", err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+      return;
+    }
   }
 
-  // File watcher (schema + config + seeds)
-  const watcher = chokidarWatch(watchPaths, {
-    ignoreInitial: true,
-    awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },
-  });
+  // Build watch sources - schema, config, optionally seeds, and hook watch paths
+  const interactiveHookSources = getHookWatchSources(hooksConfigInteractive?.pre_push, cwd);
+  for (const src of interactiveHookSources) {
+    logVerbose(`watching: ${src.raw} → ${src.dir}`);
+  }
 
-  watcher.on("all", (event, filePath) => {
-    const isConfig = basename(filePath) === "config.json";
-    const isSchema =
-      filePath.startsWith(schemaDir) && filePath.endsWith(".sql");
-    const isSeed =
-      seedEnabled && filePath.startsWith(seedDir) && filePath.endsWith(".sql");
-
-    if (!isConfig && !isSchema && !isSeed) return;
-
-    // Log the change with rail
+  // Shared handler: log change, queue it, debounce
+  const scheduleChange = (label: string, event: string, queue: () => void) => {
     const eventIcon = event === "add" ? "+" : event === "unlink" ? "-" : "~";
-    const eventColor =
-      event === "add" ? C.success : event === "unlink" ? C.error : C.warning;
-
-    if (isConfig) {
-      logRail(`${eventColor}${eventIcon}${C.reset} config.json`);
-      state.pendingConfigChange = true;
-    } else if (isSeed) {
-      const relPath = relative(seedDir, filePath);
-      logRail(`${eventColor}${eventIcon}${C.reset} seeds/${relPath}`);
-      state.pendingSeedChange = true;
-    } else {
-      const relPath = relative(schemaDir, filePath);
-      logRail(`${eventColor}${eventIcon}${C.reset} ${relPath}`);
-      state.pendingSchemaChanges.add(relPath);
-    }
-
-    // Debounce changes
+    const eventColor = event === "add" ? C.success : event === "unlink" ? C.error : C.warning;
+    logRail(`${eventColor}${eventIcon}${C.reset} ${label}`);
+    queue();
     if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      applyPendingChanges();
-    }, debounceMs);
-  });
+    debounceTimer = setTimeout(() => { applyPendingChanges(); }, debounceMs);
+  };
 
-  // Initial check — schema + config together
-  startStep("Checking schema and config…");
+  const interactiveWatchSources: WatchSource[] = [
+    {
+      path: schemaDir,
+      filter: (filePath) => filePath.endsWith(".sql"),
+      onChange: (event, filePath) => {
+        const relPath = relative(schemaDir, filePath);
+        scheduleChange(relPath, event, () => state.pendingSchemaChanges.add(relPath));
+      },
+    },
+    {
+      path: configPath,
+      onChange: (event, _filePath) => {
+        scheduleChange("config.json", event, () => { state.pendingConfigChange = true; });
+      },
+    },
+    ...(seedEnabled && existsSync(seedDir)
+      ? [{
+          path: seedDir,
+          filter: (filePath: string) => filePath.endsWith(".sql"),
+          onChange: (event: string, filePath: string) => {
+            const relPath = relative(seedDir, filePath);
+            scheduleChange(`seeds/${relPath}`, event, () => { state.pendingSeedChange = true; });
+          },
+        }]
+      : []),
+    ...interactiveHookSources.map((src) => ({
+      path: src.dir,
+      filter: src.filter,
+      onChange: async (event: string, filePath: string) => {
+        // Suppress hook-source events during apply or while hooks are already running
+        if (state.isApplying || isRunningHooks) return;
+        const eventIcon = event === "add" ? "+" : event === "unlink" ? "-" : "~";
+        const eventColor = event === "add" ? C.success : event === "unlink" ? C.error : C.warning;
+        logRail(`${eventColor}${eventIcon}${C.reset} ${relative(cwd, filePath)}`);
+        isRunningHooks = true;
+        startStep("Running pre-push hooks");
+        try {
+          await runHooksAsync(hooksConfigInteractive!.pre_push!, cwd, (msg) => {
+            if (msg.startsWith("$ ")) logNested(msg);
+          });
+          completeStep("Pre-push hooks complete");
+        } catch (err) {
+          completeStep("Hook failed", undefined, "error", err instanceof Error ? err.message : String(err));
+        } finally {
+          isRunningHooks = false;
+        }
+        // Hook output (e.g. SQL files) will be picked up by the schema watcher naturally
+      },
+    })),
+  ];
+
+  // Initial check — compare local schema + config against remote and push any differences
+  // File watcher starts AFTER this completes to avoid the startup hook's schema writes
+  // triggering a redundant second push.
+  startStep("Comparing local state with remote");
   try {
     if (options.dryRun) {
       logVerbose(`pg-delta: computing diff…`);
       const diff = await diffSchemaWithPgDelta(connectionString, schemaDir);
       logVerbose(`pg-delta: ${diff.hasChanges ? `${diff.statements.length} statement(s)` : "no changes"}`);
       if (diff.hasChanges) {
-        completeStep("Checked", `${diff.statements.length} statements (dry-run)`);
+        completeStep("Would push to remote", `${diff.statements.length} schema statement${diff.statements.length === 1 ? "" : "s"} (dry-run)`);
         for (const stmt of diff.statements.slice(0, 5)) {
           logNested(stmt.length > 60 ? stmt.slice(0, 57) + "..." : stmt);
         }
         if (diff.statements.length > 5) logNested(`+${diff.statements.length - 5} more`);
       } else {
-        completeStep("Up to date");
+        completeStep("No changes", "schema already matches remote");
       }
       if (seedEnabled) {
         const existingSeedFiles = findSeedFiles(seedPaths, supabaseDir);
@@ -1642,7 +1767,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
       const schemaResult = await applySchemaWithPgDelta(connectionString, schemaDir);
       logVerbose(`pg-delta: ${schemaResult.success ? `${schemaResult.statements ?? 0} statement(s) applied` : `failed — ${schemaResult.output?.slice(0, 80)}`}`);
       if (!schemaResult.success) {
-        completeStep("Check failed", undefined, "error", schemaResult.output);
+        completeStep("Schema push failed", undefined, "error", schemaResult.output);
         process.exitCode = 1;
         return;
       }
@@ -1664,12 +1789,12 @@ export async function devCommand(options: DevOptions): Promise<void> {
       }
 
       if (!schemaChanged && configChanges.length === 0) {
-        completeStep("Up to date");
+        completeStep("No changes", "schema and config already match remote");
       } else {
         const parts: string[] = [];
-        if (schemaChanged) parts.push(`${schemaStatements} statement${schemaStatements === 1 ? "" : "s"}`);
+        if (schemaChanged) parts.push(`${schemaStatements} schema statement${schemaStatements === 1 ? "" : "s"}`);
         if (configChanges.length > 0) parts.push(`${configChanges.length} config change${configChanges.length === 1 ? "" : "s"}`);
-        completeStep("Pushed", parts.join(", "));
+        completeStep("Pushed to remote", parts.join(", "));
 
         if (schemaChanged) {
           const typesResult = await refreshTypesAndCodegen({
@@ -1698,23 +1823,34 @@ export async function devCommand(options: DevOptions): Promise<void> {
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    completeStep("Check failed", undefined, "error", msg);
+    completeStep("Initial sync failed", undefined, "error", msg);
     process.exitCode = 1;
     return;
   }
+
+  // Start file watcher after initial sync to avoid duplicate pushes from startup hook writes
+  const fileWatcher = createFileWatcher(interactiveWatchSources, {
+    onReady: (watched) => {
+      const dirs = Object.keys(watched);
+      logVerbose(`watcher ready: ${dirs.length} dirs`);
+      for (const dir of dirs) {
+        logVerbose(`  ${dir}: ${watched[dir].join(", ")}`);
+      }
+    },
+  });
 
   startHeartbeat();
 
   // Graceful shutdown
   const cleanup = async () => {
     stopHeartbeat();
-    if (isSpinnerActive) stopSpinner();
+    if (isSpinnerActive) cancelStep();
     if (cleanupBranchWatch) cleanupBranchWatch();
     if (debounceTimer) clearTimeout(debounceTimer);
-    watcher.close();
+    await fileWatcher.close();
     await closeSupabasePool();
     clearLine();
-    console.log(`${C.secondary}└${C.reset}`);
+    console.log(`${C.pipe}└${C.reset}`);
     console.log("");
     process.exit(0);
   };

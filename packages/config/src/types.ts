@@ -98,6 +98,23 @@ export interface CodegenConfig {
   tanstack?: TanStackCodegenConfig;
 }
 
+export interface HookEntry {
+  /** Shell command to run. */
+  command: string;
+  /** Glob pattern of files to watch in dev mode. When matched files change, the hook re-runs. */
+  watch?: string;
+}
+
+/** A hook can be a simple string, an object with options, or an array of either. */
+export type HookDef = string | HookEntry | (string | HookEntry)[];
+
+export interface HooksConfig {
+  /** Hook(s) to run before push/dev schema operations (e.g., ORM codegen). */
+  pre_push?: HookDef;
+  /** Hook(s) to run before pull operations. */
+  pre_pull?: HookDef;
+}
+
 export interface ProjectConfig {
   project_id?: string;
   workflow_profile?: WorkflowProfile;
@@ -106,6 +123,7 @@ export interface ProjectConfig {
   api?: ApiConfig;
   auth?: AuthConfig;
   codegen?: CodegenConfig;
+  hooks?: HooksConfig;
   environments?: Record<string, string>;
   // Other sections we don't sync yet
   db?: unknown;

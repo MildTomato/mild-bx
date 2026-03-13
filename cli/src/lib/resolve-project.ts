@@ -21,6 +21,10 @@ import { getCurrentBranch } from "./git.js";
 import { EXIT_CODES } from "./exit-codes.js";
 import { createClient } from "./api.js";
 import { runCodegenIfStale } from "./precheck.js";
+import { runHooks } from "./hooks.js";
+import type { HooksConfig } from "@supabase-dx/config";
+
+
 
 export interface ProjectContext {
   cwd: string;
@@ -160,6 +164,12 @@ export async function resolveProjectContext(options: {
         );
       }
     }
+  }
+
+  // Run pre-push hooks (e.g., ORM codegen like drizzle-kit generate)
+  const hooks = (config as Record<string, unknown>).hooks as HooksConfig | undefined;
+  if (hooks?.pre_push) {
+    runHooks(hooks.pre_push, cwd, !options.json ? (msg) => process.stderr.write(chalk.dim(`  ${msg}\n`)) : undefined);
   }
 
   if (!options.json) {

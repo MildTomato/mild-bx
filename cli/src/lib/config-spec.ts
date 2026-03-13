@@ -359,4 +359,22 @@ export const configSpec: ConfigSectionSpec[] = [
       },
     ],
   },
+  {
+    name: "hooks",
+    description: "Shell commands to run at specific points in the CLI lifecycle",
+    fields: [
+      {
+        name: "pre_push",
+        type: "string | { command, watch? } | array",
+        description: "Command(s) to run before push and dev schema operations (e.g., ORM codegen)",
+        example: '"npx drizzle-kit generate"',
+      },
+      {
+        name: "pre_pull",
+        type: "string | { command, watch? } | array",
+        description: "Command(s) to run before pull operations",
+        example: '"node scripts/backup.js"',
+      },
+    ],
+  },
 ];

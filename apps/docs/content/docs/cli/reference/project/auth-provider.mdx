@@ -95,6 +95,7 @@ The following commands are available:
 - [`add`](#add) - Configure an OAuth provider
 - [`enable`](#enable) - Enable an OAuth provider
 - [`disable`](#disable) - Disable an OAuth provider
+- [`remove`](#remove) - Remove an OAuth provider and clear its credentials
 
 ---
 
@@ -218,6 +219,37 @@ supa project auth-provider disable <provider> [options]
 
 ```bash
 supa project auth-provider disable google
+```
+
+---
+
+### `remove`
+
+Remove an OAuth provider and clear its credentials
+
+```bash
+supa project auth-provider remove <provider> [options]
+```
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `provider` | Yes | Provider to remove (e.g., google, github) |
+
+**Options:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `--dry-run` | boolean | Preview changes without applying them |
+| `-y, --yes` | boolean | Skip confirmation prompts |
+| `-p, --profile <NAME>` | string | Profile to use |
+| `--json` | boolean | Output as JSON |
+
+**Examples:**
+
+```bash
+supa project auth-provider remove google
 ```
 
 ## Examples

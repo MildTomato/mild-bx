@@ -1,0 +1,272 @@
+---
+title: "supa project branches"
+description: "Manage database branches for your project"
+generated: true
+---
+
+Manage [database branches](https://supabase.com/docs/guides/platform/branching) for your Supabase project.
+
+Database branches let you create isolated copies of your database schema for feature development, testing, and preview environments. Each branch gets its own project ref and can be tied to a git branch for automatic lifecycle management.
+
+Use `supa branches create` to spin up a new branch (defaulting to the current git branch name), `supa branches update` to rename or re-associate a branch, and `supa branches delete` (or `rm`) to remove one when it is no longer needed.
+
+## Usage
+
+```bash
+supa project branches
+```
+
+## Commands
+
+The following commands are available:
+
+- [`list`](#list) - List all database branches
+- [`create`](#create) - Create a new database branch
+- [`diff`](#diff) - Show schema diff between the current branch and production
+- [`merge`](#merge) - Merge the current branch into production
+- [`update`](#update) - Update an existing database branch
+- [`delete`](#delete) - Delete a database branch
+
+---
+
+### `list`
+
+List all database branches
+
+```bash
+supa project branches list [options]
+```
+
+**Options:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `-p, --profile <NAME>` | string | Profile to use |
+| `--json` | boolean | Output as JSON |
+
+**Examples:**
+
+```bash
+supa project branches list
+```
+
+```bash
+supa project branches list --json
+```
+
+---
+
+### `create`
+
+Create a new database branch
+
+```bash
+supa project branches create [name] [options]
+```
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | No | Branch name (defaults to current git branch name) |
+
+**Options:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `--persistent` | boolean | Create a persistent branch that survives PR close |
+| `--with-data` | boolean | Seed the branch with data from the parent project |
+| `--git-branch` | string | Associate with a specific git branch (overrides auto-detected) |
+| `--no-push` | boolean | Skip pushing local schema and config after branch is ready |
+| `-p, --profile <NAME>` | string | Profile to use |
+| `--json` | boolean | Output as JSON |
+| `-y, --yes` | boolean | Skip confirmation prompts |
+
+**Examples:**
+
+```bash
+supa branches create
+```
+
+```bash
+supa branches create my-feature
+```
+
+```bash
+supa branches create staging --persistent --with-data
+```
+
+```bash
+supa branches create my-feature --git-branch feat/my-feature
+```
+
+---
+
+### `diff`
+
+Show schema diff between the current branch and production
+
+```bash
+supa project branches diff [options]
+```
+
+**Options:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `--schemas <SCHEMAS>` | string | Comma-separated schemas to include (default: public) |
+| `-p, --profile <NAME>` | string | Profile to use |
+| `--json` | boolean | Output as JSON |
+
+**Examples:**
+
+```bash
+supa project branches diff
+```
+
+```bash
+supa project branches diff --json
+```
+
+---
+
+### `merge`
+
+Merge the current branch into production
+
+```bash
+supa project branches merge [options]
+```
+
+**Options:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `--schemas <SCHEMAS>` | string | Comma-separated schemas to include in diff (default: public) |
+| `--dry-run` | boolean | Show what would be merged without applying |
+| `-y, --yes` | boolean | Skip confirmation prompts |
+| `-p, --profile <NAME>` | string | Profile to use |
+| `--json` | boolean | Output as JSON |
+
+**Examples:**
+
+```bash
+supa project branches merge --dry-run
+```
+
+```bash
+supa project branches merge
+```
+
+```bash
+supa project branches merge --yes
+```
+
+```bash
+supa project branches merge --json --yes
+```
+
+---
+
+### `update`
+
+Update an existing database branch
+
+```bash
+supa project branches update <name-or-id> [options]
+```
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name-or-id` | Yes | Branch name or ID to update |
+
+**Options:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `--name` | string | New name for the branch |
+| `--git-branch` | string | Associate with a different git branch |
+| `--persistent` | boolean | Make the branch persistent |
+| `-p, --profile <NAME>` | string | Profile to use |
+| `--json` | boolean | Output as JSON |
+
+**Examples:**
+
+```bash
+supa branches update my-feature --name my-new-feature
+```
+
+```bash
+supa branches update my-feature --git-branch feat/other
+```
+
+```bash
+supa branches update my-feature --persistent
+```
+
+---
+
+### `delete`
+
+Delete a database branch
+
+```bash
+supa project branches delete <name-or-id> [options]
+```
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name-or-id` | Yes | Branch name or ID to delete |
+
+**Options:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `--force` | boolean | Delete immediately without a grace period |
+| `-y, --yes` | boolean | Skip confirmation prompts |
+| `-p, --profile <NAME>` | string | Profile to use |
+| `--json` | boolean | Output as JSON |
+
+**Examples:**
+
+```bash
+supa branches delete my-feature
+```
+
+```bash
+supa branches delete my-feature --yes
+```
+
+```bash
+supa branches delete my-feature --yes --force
+```
+
+## Examples
+
+### List all branches
+
+```bash
+supa branches list
+```
+
+### Create a branch from the current git branch
+
+```bash
+supa branches create
+```
+
+### Update a branch
+
+```bash
+supa branches update my-feature --name new-name
+```
+
+### Delete a branch
+
+```bash
+supa branches delete my-feature
+```

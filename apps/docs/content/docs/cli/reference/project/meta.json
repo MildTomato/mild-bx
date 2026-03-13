@@ -10,6 +10,7 @@
     "api-keys",
     "profile",
     "auth-provider",
-    "env"
+    "env",
+    "branches"
   ]
 }

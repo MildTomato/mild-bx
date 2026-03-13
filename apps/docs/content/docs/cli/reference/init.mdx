@@ -75,8 +75,13 @@ supa init [options]
 | `--local` | boolean | Initialize locally without connecting to Supabase Platform |
 | `--org <SLUG>` | string | Organization slug |
 | `--project <REF>` | string | Link to existing project by ref |
+| `--new` | boolean | Create a new project (requires --org, --name, --region) |
+| `--link <REF>` | string | Link to an existing project by ref |
 | `--name <NAME>` | string | Name for new project (requires --org and --region) |
 | `--region <REGION>` | string | Region for new project (e.g., us-east-1) |
+| `--workflow-profile <PROFILE>` | string | Workflow profile: remote, local, branching-remote, branching-local (default: branching-remote) |
+| `--schema-management <MODE>` | string | Schema management: declarative, migrations (default: declarative) |
+| `--config-source <SOURCE>` | string | Config source: code, remote (default: code) |
 | `--json` | boolean | Output as JSON |
 | `--dry-run` | boolean | Preview what would be created without making changes |
 
@@ -106,16 +111,16 @@ Get started immediately without a Supabase account. Creates the project structur
 supa init --local
 ```
 
-### Link to existing project
-
-```bash
-supa init --project abc123xyz
-```
-
 ### Create new project non-interactively
 
 For CI/CD pipelines or scripts where you can't use interactive prompts.
 
 ```bash
-supa init --org my-org --name my-project --region us-east-1
+supa init --new --org my-org --name my-project --region us-east-1
+```
+
+### Link to existing project
+
+```bash
+supa init --link abc123xyz
 ```

@@ -6,6 +6,7 @@
  */
 
 import chalk from "chalk";
+import { generated as fmtGenerated } from "./styles.js";
 import {
   getAccessTokenAsync,
   loadProjectConfig,
@@ -161,7 +162,11 @@ export async function resolveProjectContext(options: {
     }
   }
 
-  runCodegenIfStale(cwd, config);
+  if (!options.json) {
+    runCodegenIfStale(cwd, config, (f) => process.stderr.write(chalk.dim(`  ${fmtGenerated(f)}\n`)));
+  } else {
+    runCodegenIfStale(cwd, config);
+  }
 
   return { cwd, config, branch, profile, projectRef, token, isBranch: false };
 }

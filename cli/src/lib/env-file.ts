@@ -374,9 +374,6 @@ export async function writeBranchEnv(options: {
   // 5. Upsert into .env.local
   await upsertEnvLocal(cwd, updates);
 
-  // 6. Notify the user
-  console.log("  Updated .env.local with branch credentials");
-
   return dbPass;
 }
 
@@ -427,7 +424,6 @@ export async function writeProjectEnv(options: {
     );
   }
 
-  console.log("  Updated .env.local");
 }
 
 /**

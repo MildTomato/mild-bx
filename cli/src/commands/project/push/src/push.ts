@@ -27,11 +27,12 @@ import {
   applySchemaWithPgDelta,
   setVerbose,
 } from "@/lib/pg-delta.js";
-import { printCommandHeader, S_BAR } from "@/components/command-header.js";
+import { printCommandHeader, printProjectContextLines, S_BAR } from "@/components/command-header.js";
 import { C } from "@/lib/colors.js";
+import { generated as fmtGenerated, verboseLog } from "@/lib/styles.js";
 import { printWarning, createSpinner } from "@/components/output.js";
 import { injectLocalEnvVars } from "@/lib/env-file.js";
-import { checkEnvMatchesBranch } from "@/lib/check-env-branch.js";
+import { checkEnvMatchesBranch, refreshTypesAndCodegen, runCodegenIfStale } from "@/lib/precheck.js";
 import {
   getEnabledFeatures,
   resolveAllVariables,
@@ -495,17 +496,18 @@ export async function pushCommand(options: PushOptions) {
   }
 
   // Interactive mode
-  const headerContext: [string, string][] = [
-    ["Project", projectRef],
-    ["Profile", profile?.name || "default"],
-  ]
-  if (currentBranch) headerContext.push(["Branch", currentBranch])
-  if (dryRun) headerContext.push(["Mode", `${C.warning}plan (dry-run)${C.reset}`])
-
+  const mainProjectRef = projectConfig.project_id ?? projectRef;
   printCommandHeader({
     command: "supa project push",
     description: ["Push local changes to remote."],
-    context: headerContext,
+  });
+  printProjectContextLines({
+    projectRef,
+    mainProjectRef,
+    gitBranch: currentBranch || undefined,
+    profileName: profile?.name,
+    dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${projectRef}`,
+    extra: dryRun ? [["Mode", `${C.warning}plan (dry-run)${C.reset}`]] : undefined,
   });
 
   const spinner = createSpinner(options);
@@ -552,6 +554,8 @@ export async function pushCommand(options: PushOptions) {
       !hasMigrations && !hasConfigChanges && !hasSchemaChanges && plan.functions.length === 0;
 
     if (isEmpty) {
+      // Still run codegen in case database.ts is newer than generated files
+      runCodegenIfStale(cwd, projectConfig);
       spinner.stop(chalk.green("Nothing to push - everything is up to date"));
       process.exit(0);
     }
@@ -614,6 +618,7 @@ export async function pushCommand(options: PushOptions) {
 
     let appliedCount = 0;
     let typesRefreshed = false;
+    let codegenFiles: string[] = [];
     const applyWarnings: string[] = [];
 
     // Apply config changes
@@ -646,18 +651,20 @@ export async function pushCommand(options: PushOptions) {
 
       appliedCount += result.statements ?? plan.schema.statements.length;
 
-      // Refresh TypeScript types
+      // Refresh TypeScript types and run codegen
       applySpinner.message("Refreshing TypeScript types...");
-      try {
-        const typesResp = await client.getTypescriptTypes(projectRef, "public");
-        const typesPath = join(cwd, "supabase", "types", "database.ts");
-        mkdirSync(dirname(typesPath), { recursive: true });
-        writeFileSync(typesPath, typesResp.types);
+      const typesResult = await refreshTypesAndCodegen({
+        getTypes: () => client.getTypescriptTypes(projectRef, "public"),
+        cwd,
+        config: projectConfig,
+        onLog: options.verbose ? (msg) => console.error(verboseLog(msg)) : undefined,
+        onRetry: (n, delay, max) => applySpinner.message(`PostgREST schema cache not ready, retrying in ${delay / 1000}s… (${n}/${max})`),
+      });
+      if (typesResult.typesRefreshed) {
         typesRefreshed = true;
-      } catch (error) {
-        applyWarnings.push(
-          `Types refresh failed: ${error instanceof Error ? error.message : String(error)}`
-        );
+        codegenFiles = typesResult.generated;
+      } else if (typesResult.error) {
+        applyWarnings.push(`Types refresh failed: ${typesResult.error}`);
       }
     }
 
@@ -678,9 +685,8 @@ export async function pushCommand(options: PushOptions) {
     const typesNote = typesRefreshed ? " (types refreshed)" : "";
     applySpinner.stop(chalk.green(`Pushed ${appliedCount} changes${typesNote}`));
 
-    for (const w of applyWarnings) {
-      printWarning(w)
-    }
+    for (const f of codegenFiles) console.log(chalk.dim(`  ${fmtGenerated(f)}`));
+    for (const w of applyWarnings) printWarning(w);
   } catch (error) {
     spinner.stop(chalk.red("Push failed"));
     console.error(chalk.red(error instanceof Error ? error.message : "Unknown error"));

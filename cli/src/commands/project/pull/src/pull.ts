@@ -19,9 +19,10 @@ import {
   type ProjectConfig,
 } from "@/lib/sync.js";
 import { pullSchemaWithPgDelta, setVerbose } from "@/lib/pg-delta.js";
-import { printCommandHeader } from "@/components/command-header.js";
+import { printCommandHeader, printProjectContextLines } from "@/components/command-header.js";
 import { C } from "@/lib/colors.js";
-import { checkEnvMatchesBranch } from "@/lib/check-env-branch.js";
+import { generated as fmtGenerated, verboseLog } from "@/lib/styles.js";
+import { checkEnvMatchesBranch, refreshTypesAndCodegen } from "@/lib/precheck.js";
 import { createSpinner } from "@/components/output.js";
 
 interface PullOptions {
@@ -53,6 +54,8 @@ export async function pullCommand(options: PullOptions) {
 
   const { cwd, config, branch: currentBranch, profile, projectRef, token } =
     await resolveProjectContext(options);
+  const projectConfig = config as ProjectConfig;
+  const mainProjectRef = projectConfig.project_id ?? projectRef;
 
   // Block pull when config is code-driven — config.json is the source of truth.
   if (config.config_source === "code") {
@@ -99,22 +102,27 @@ export async function pullCommand(options: PullOptions) {
       };
 
       if (typesOnly) {
-        const typesResp = await client.getTypescriptTypes(projectRef, schemas);
         if (!dryRun) {
-          const typesPath = join(cwd, "supabase", "types", "database.ts");
-          mkdirSync(dirname(typesPath), { recursive: true });
-          writeFileSync(typesPath, typesResp.types);
-          result.typesWritten = true;
+          const typesResult = await refreshTypesAndCodegen({
+            getTypes: () => client.getTypescriptTypes(projectRef, schemas),
+            cwd,
+            config: projectConfig,
+          });
+          if (typesResult.typesRefreshed) result.typesWritten = true;
+          if (typesResult.generated.length) result.codegenFiles = typesResult.generated;
+          if (typesResult.error) throw new Error(typesResult.error);
         }
         result.message = "TypeScript types generated";
       } else {
         result.project = project;
         if (!dryRun) {
-          const typesResp = await client.getTypescriptTypes(projectRef, schemas);
-          const typesPath = join(cwd, "supabase", "types", "database.ts");
-          mkdirSync(dirname(typesPath), { recursive: true });
-          writeFileSync(typesPath, typesResp.types);
-          result.typesWritten = true;
+          const typesResult = await refreshTypesAndCodegen({
+            getTypes: () => client.getTypescriptTypes(projectRef, schemas),
+            cwd,
+            config: projectConfig,
+          });
+          if (typesResult.typesRefreshed) result.typesWritten = true;
+          if (typesResult.generated.length) result.codegenFiles = typesResult.generated;
         }
       }
 
@@ -130,18 +138,19 @@ export async function pullCommand(options: PullOptions) {
   }
 
   // Interactive mode
-  const headerContext: [string, string][] = [
-    ["Project", projectRef],
-    ["Profile", profile?.name || "default"],
-  ]
-  if (currentBranch) headerContext.push(["Branch", currentBranch])
-  if (typesOnly) headerContext.push(["Mode", "types only"])
-  if (dryRun) headerContext.push(["Mode", `${C.warning}plan (dry-run)${C.reset}`])
-
   printCommandHeader({
     command: "supa project pull",
     description: ["Pull remote state to local."],
-    context: headerContext,
+  });
+  const extra: [string, string][] = [];
+  if (typesOnly) extra.push(["Mode", "types only"]);
+  if (dryRun) extra.push(["Mode", `${C.warning}plan (dry-run)${C.reset}`]);
+  printProjectContextLines({
+    projectRef,
+    mainProjectRef,
+    gitBranch: currentBranch || undefined,
+    profileName: profile?.name,
+    extra: extra.length ? extra : undefined,
   });
 
   const spinner = createSpinner(options);
@@ -164,18 +173,26 @@ export async function pullCommand(options: PullOptions) {
 
     // Types only mode
     if (typesOnly) {
-      spinner.message("Generating TypeScript types...");
-      const typesResp = await client.getTypescriptTypes(projectRef, schemas);
-
       if (dryRun) {
         spinner.stop("Types preview (dry run)");
         console.log(chalk.dim("\nWould write: supabase/types/database.ts"));
-      } else {
-        const typesPath = join(cwd, "supabase", "types", "database.ts");
-        mkdirSync(dirname(typesPath), { recursive: true });
-        writeFileSync(typesPath, typesResp.types);
+        return;
+      }
+      spinner.message("Generating TypeScript types...");
+      const typesResult = await refreshTypesAndCodegen({
+        getTypes: () => client.getTypescriptTypes(projectRef, schemas),
+        cwd,
+        config: projectConfig,
+        onLog: options.verbose ? (msg) => console.error(verboseLog(msg)) : undefined,
+        onRetry: (n, delay, max) => spinner.message(`PostgREST not ready, retrying in ${delay / 1000}s… (${n}/${max})`),
+      });
+      if (typesResult.typesRefreshed) {
         spinner.stop(chalk.green("Types updated"));
         console.log(chalk.dim("  Wrote supabase/types/database.ts"));
+        for (const f of typesResult.generated) console.log(chalk.dim(`  ${fmtGenerated(f)}`));
+      } else {
+        spinner.stop(chalk.yellow("Types fetch failed"));
+        if (typesResult.error) console.error(chalk.yellow(`  Warning: ${typesResult.error}`));
       }
       return;
     }
@@ -285,26 +302,18 @@ export async function pullCommand(options: PullOptions) {
       }
     }
 
-    // Generate types
-    try {
-      const typesResp = await client.getTypescriptTypes(projectRef, schemas);
-      const typesPath = join(cwd, "supabase", "types", "database.ts");
-      mkdirSync(dirname(typesPath), { recursive: true });
-
-      let existingTypes = "";
-      try {
-        existingTypes = readFileSync(typesPath, "utf-8");
-      } catch {
-        // File does not exist yet — that is expected on first pull.
-      }
-
-      if (typesResp.types !== existingTypes) {
-        writeFileSync(typesPath, typesResp.types);
-        typesUpdated = true;
-      }
-    } catch (error) {
-      // Surface types-generation failures so the user knows types were not updated.
-      console.error(chalk.yellow(`Warning: Could not generate TypeScript types: ${error instanceof Error ? error.message : String(error)}`));
+    // Generate types and run codegen
+    const typesResult = await refreshTypesAndCodegen({
+      getTypes: () => client.getTypescriptTypes(projectRef, schemas),
+      cwd,
+      config: projectConfig,
+      onLog: options.verbose ? (msg) => console.error(msg) : undefined,
+      onRetry: (n, delay, max) => applySpinner.message(`PostgREST not ready, retrying in ${delay / 1000}s… (${n}/${max})`),
+    });
+    if (typesResult.typesRefreshed) {
+      typesUpdated = true;
+    } else if (typesResult.error) {
+      console.error(chalk.yellow(`Warning: Could not generate TypeScript types: ${typesResult.error}`));
     }
 
     // Pull schema with pg-delta
@@ -348,6 +357,7 @@ export async function pullCommand(options: PullOptions) {
     if (configUpdated) console.log(chalk.dim("  Updated supabase/config.json"));
     if (typesUpdated) console.log(chalk.dim("  Updated supabase/types/database.ts"));
     if (schemaUpdated) console.log(chalk.dim("  Updated supabase/schema/public/*.sql"));
+    for (const f of typesResult.generated) console.log(chalk.dim(`  ${fmtGenerated(f)}`));
 
   } catch (error) {
     spinner.stop(chalk.red("Pull failed"));

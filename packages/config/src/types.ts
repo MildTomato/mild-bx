@@ -85,9 +85,17 @@ export type ConfigSource = "code" | "remote";
 export type ValidationLibrary = "zod";
 export type PluginName = "tanstack";
 
+export interface TanStackCodegenConfig {
+  /** Import path for the Supabase client. Defaults to "@/lib/supabase/client". */
+  client_path?: string;
+  /** Name of the exported client function. Defaults to "createClient". */
+  client_function_name?: string;
+}
+
 export interface CodegenConfig {
   validation?: ValidationLibrary;
   plugins?: PluginName[];
+  tanstack?: TanStackCodegenConfig;
 }
 
 export interface ProjectConfig {

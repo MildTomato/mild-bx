@@ -124,8 +124,11 @@ function parseTablesBlock(schemaBlock: string): ParsedTable[] {
   const tableRe = /^\s{1,}(\w+)\s*:\s*\{/gm;
   let m: RegExpExecArray | null;
 
+  const SKIP_NAMES = new Set(["Row", "Insert", "Update", "Relationships", "Views", "Functions", "Enums", "CompositeTypes"]);
+
   while ((m = tableRe.exec(tablesSection)) !== null) {
     const tableName = m[1];
+    if (SKIP_NAMES.has(tableName)) continue;
     const openIndex = tablesSection.indexOf("{", m.index + m[0].length - 1);
     const closeIndex = findMatchingBrace(tablesSection, openIndex);
     const tableBlock = tablesSection.slice(openIndex + 1, closeIndex);

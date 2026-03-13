@@ -25,13 +25,15 @@ import {
   applySeedFiles,
   findSeedFiles,
   setVerbose,
+  setLogCallback,
   closeSupabasePool,
 } from "@/lib/pg-delta.js";
 import { getSeedConfig } from "@/lib/seed-config.js";
 import { C } from "@/lib/colors.js";
-import { printCommandHeader, S_BAR } from "@/components/command-header.js";
+import { generated as fmtGenerated, verboseLog } from "@/lib/styles.js";
+import { printCommandHeader, printProjectContextLines, S_BAR } from "@/components/command-header.js";
 import * as p from "@clack/prompts";
-import { isTTY } from "@clack/prompts";
+import { isTTY, log } from "@clack/prompts";
 import {
   buildPostgrestPayload,
   buildAuthPayload,
@@ -42,7 +44,7 @@ import {
 import { resolveBranchAndWriteEnv, writeProjectEnv } from "@/lib/env-file.js";
 import { isBranchingProfile } from "@/lib/workflow-profiles.js";
 import { getWorkflowProfile } from "@/lib/config.js";
-import { checkEnvMatchesBranch } from "@/lib/check-env-branch.js";
+import { checkEnvMatchesBranch, runCodegenIfStale, refreshTypesAndCodegen } from "@/lib/precheck.js";
 
 function watchGitBranch(cwd: string, onChange: () => void): () => void {
   const gitHeadPath = join(cwd, ".git", "HEAD");
@@ -78,9 +80,9 @@ const HEARTBEAT_FRAMES = ["⠏", "⠇", "⠧", "⠦", "⠴", "⠼", "⠸", "⠹"
 function formatConfigValue(value: unknown): string {
   if (value === undefined || value === null) return "unset";
   if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "string") return value.length > 25 ? value.slice(0, 22) + "..." : value;
-  if (Array.isArray(value)) return `[${value.length} items]`;
-  return String(value).slice(0, 25);
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.join(", ");
+  return String(value);
 }
 
 // Clack-style symbols (S_BAR imported from command-header)
@@ -133,12 +135,8 @@ async function resolveConnectionString(
 export async function devCommand(options: DevOptions): Promise<void> {
   const cwd = process.cwd();
   const schemaDir = join(cwd, "supabase", "schema");
-  // Treat VS Code / Claude Code integrated terminals as non-interactive even
-  // though they report isTTY=true. Their pseudo-TTY doesn't handle \r cursor
-  // rewrites correctly — animation frames pile up on the same line instead of
-  // overwriting, producing the repeated "◒ Syncing◐ Syncing◓..." output.
-  const isInteractive =
-    isTTY(process.stdout) && process.env.TERM_PROGRAM !== "vscode";
+  const typesPath = join(cwd, "supabase", "types", "database.ts");
+  const isInteractive = isTTY(process.stdout);
 
   // Set verbose mode for pg-delta logging
   setVerbose(options.verbose ?? false);
@@ -165,8 +163,8 @@ export async function devCommand(options: DevOptions): Promise<void> {
     }
   }
 
-  // Load config
-  const config = loadProjectConfig(cwd);
+  // Load config (mutable so it stays current after reloads)
+  let config = loadProjectConfig(cwd);
   if (!config) {
     if (options.json) {
       console.log(
@@ -553,13 +551,82 @@ export async function devCommand(options: DevOptions): Promise<void> {
   const workflowProfile = getWorkflowProfile(config);
 
   if (isBranchingProfile(workflowProfile) && config.project_id) {
-    const branchResult = await resolveBranchAndWriteEnv({
+    const productionBranch = config.production_branch as string | undefined ?? "main";
+    const isMainBranch = currentBranch === productionBranch || currentBranch === "master";
+
+    let branchResult = await resolveBranchAndWriteEnv({
       cwd,
       gitBranch: currentBranch,
       mainProjectRef: config.project_id,
       token,
-      productionBranch: config.production_branch as string | undefined,
+      productionBranch,
     });
+
+    if (!branchResult && !isMainBranch) {
+      // No preview branch for this git branch — create one via API directly.
+      if (options.json) {
+        console.error(JSON.stringify({ status: "info", message: `Creating preview branch for "${currentBranch}"` }));
+      } else {
+        log.step(`Creating preview branch for "${currentBranch}"…`);
+      }
+
+      const newBranch = await client.createBranch(config.project_id, {
+        branch_name: currentBranch,
+        git_branch: currentBranch,
+      });
+
+      // Poll until the preview project is healthy (up to 5 min)
+      const BRANCH_POLL_MS = 5000;
+      const BRANCH_MAX_POLLS = 60;
+      const BRANCH_FAILED = new Set(["INIT_FAILED", "REMOVED", "RESTORE_FAILED", "PAUSE_FAILED"]);
+      let branchHealthy = false;
+      let branchPollFrame = 0;
+      for (let i = 0; i < BRANCH_MAX_POLLS; i++) {
+        await new Promise((r) => setTimeout(r, BRANCH_POLL_MS));
+        const branches = await client.listBranches(config.project_id);
+        const b = branches.find((x) => x.id === newBranch.id);
+        if (!b) break;
+        if (isInteractive && !options.json) {
+          const char = SPINNER_FRAMES[branchPollFrame % SPINNER_FRAMES.length];
+          process.stdout.write(`\r${char}  Waiting for preview branch… (${b.preview_project_status ?? "provisioning"})\x1b[K`);
+          branchPollFrame++;
+        }
+        if (b.preview_project_status === "ACTIVE_HEALTHY") { branchHealthy = true; break; }
+        if (b.preview_project_status && BRANCH_FAILED.has(b.preview_project_status)) break;
+      }
+      if (isInteractive && !options.json) process.stdout.write("\r\x1b[K");
+
+      if (!branchHealthy) {
+        if (options.json) {
+          console.error(JSON.stringify({ status: "error", message: "Preview branch not healthy", exitCode: 1 }));
+        } else {
+          log.error(`Preview branch created but not yet healthy. Try again in a moment.`);
+        }
+        process.exitCode = 1;
+        return;
+      }
+
+      // Grace period for the project record to fully propagate
+      await new Promise((r) => setTimeout(r, 5000));
+
+      branchResult = await resolveBranchAndWriteEnv({
+        cwd,
+        gitBranch: currentBranch,
+        mainProjectRef: config.project_id,
+        token,
+        productionBranch,
+      });
+      if (!branchResult) {
+        if (options.json) {
+          console.error(JSON.stringify({ status: "error", message: "Preview branch credentials unavailable", exitCode: 1 }));
+        } else {
+          log.error(`Preview branch created but credentials not available. Try again in a moment.`);
+        }
+        process.exitCode = 1;
+        return;
+      }
+    }
+
     if (branchResult) {
       projectRef = branchResult.projectRef;
     }
@@ -829,11 +896,13 @@ export async function devCommand(options: DevOptions): Promise<void> {
                 }
               }
 
+              const generated = runCodegenIfStale(cwd, freshConfig);
               console.log(
                 JSON.stringify({
                   event: "config_sync_complete",
                   dryRun: options.dryRun ?? false,
                   applied: appliedCount,
+                  ...(generated.length ? { generated } : {}),
                 }),
               );
             }
@@ -904,13 +973,13 @@ export async function devCommand(options: DevOptions): Promise<void> {
         );
         if (resp.types !== lastTypes) {
           lastTypes = resp.types;
-          const typesPath = join(cwd, "supabase", "types", "database.ts");
-          mkdirSync(dirname(typesPath), { recursive: true });
           writeFileSync(typesPath, resp.types);
+          const generated = runCodegenIfStale(cwd, config);
           console.log(
             JSON.stringify({
               event: "types_updated",
               path: relative(cwd, typesPath),
+              ...(generated.length ? { generated } : {}),
             }),
           );
         }
@@ -1031,59 +1100,31 @@ export async function devCommand(options: DevOptions): Promise<void> {
   let lastActivity = Date.now();
   let debounceTimer: NodeJS.Timeout | null = null;
   let isSpinnerActive = false;
-  // Clack checks isCI() at spinner-creation time and uses it to disable \r animation.
-  // In non-TTY environments we want the same static output, so temporarily tell
-  // clack we're in CI mode before creating the spinner, then restore the original value.
-  const _prevCI = process.env.CI;
-  if (!isInteractive) process.env.CI = "true";
-  const spinner = p.spinner();
-  if (!isInteractive) {
-    if (_prevCI === undefined) delete process.env.CI;
-    else process.env.CI = _prevCI;
-  }
-
-  const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
   const clearLine = () => {
-    // \r only overwrites the current line in a real TTY. In non-TTY (pipes,
-    // CI, Claude shell) it prints a literal carriage return, producing a new
-    // line on every animation frame. Skip entirely when not interactive.
     if (!isInteractive || !currentLine) return;
-    const len = stripAnsi(currentLine).length;
-    process.stdout.write(`\r${" ".repeat(len)}\r`);
+    process.stdout.write(`\r\x1b[K`);
     currentLine = "";
   };
 
   const writeLine = (msg: string) => {
-    // Same reason as clearLine — no-op in non-TTY environments.
     if (!isInteractive) return;
     clearLine();
     process.stdout.write(`\r${msg}\x1b[K`);
     currentLine = msg;
   };
 
+  // Clack spinner for async operations
+  let activeSpinner: ReturnType<typeof p.spinner> | null = null;
+
   // Log a line with the rail
   const logRail = (msg: string) => {
     clearLine();
-    console.log(`${S_BAR}  ${msg}`);
-    lastActivity = Date.now();
-  };
-
-  // Log a completed step with inline summary
-  const logStep = (msg: string, summary?: string) => {
-    clearLine();
-    if (summary) {
-      console.log(`${S_STEP_SUBMIT}  ${msg} ${C.secondary}·${C.reset} ${C.secondary}${summary}${C.reset}`);
-    } else {
-      console.log(`${S_STEP_SUBMIT}  ${msg}`);
+    if (!heartbeatStarted) {
+      console.log(S_BAR);
+      heartbeatStarted = true;
     }
-    lastActivity = Date.now();
-  };
-
-  // Log an error step
-  const logError = (msg: string) => {
-    clearLine();
-    console.log(`${S_STEP_ERROR}  ${msg}`);
+    console.log(`${S_BAR}  ${msg}`);
     lastActivity = Date.now();
   };
 
@@ -1091,36 +1132,60 @@ export async function devCommand(options: DevOptions): Promise<void> {
   const logNested = (msg: string) => {
     clearLine();
     console.log(`${S_BAR}  ${C.secondary}${msg}${C.reset}`);
+    lastActivity = Date.now();
   };
 
-  // Start an active step with Clack spinner.
+  // Log a verbose diagnostic line — only when --verbose is set
+  const logVerbose = (msg: string) => {
+    if (options.verbose) logNested(verboseLog(msg));
+  };
+
+  // Route pg-delta's internal verbose logs through the rail
+  if (options.verbose) setLogCallback((msg) => logNested(verboseLog(msg)));
+
+  // Start a clack spinner step
   const startStep = (msg: string) => {
     lastActivity = Date.now();
     stopHeartbeat();
-    heartbeatStarted = false; // Reset so we get space before next idle
+    heartbeatStarted = false;
     isSpinnerActive = true;
-    spinner.start(msg);
+    if (isInteractive) {
+      activeSpinner = p.spinner();
+      activeSpinner.start(msg);
+    }
   };
 
-  // Complete an active step
-  // status: "success" | "warning" | "error"
+  // Complete a step — stops spinner and shows result as a clack step
   const completeStep = (msg: string, summary?: string, status: "success" | "warning" | "error" = "success", detail?: string) => {
     isSpinnerActive = false;
-    if (summary) {
-      spinner.stop(`${msg} ${C.secondary}·${C.reset} ${C.secondary}${summary}${C.reset}`);
-    } else {
-      spinner.stop(msg);
+    const resultMsg = summary
+      ? `${msg} ${C.secondary}·${C.reset} ${C.secondary}${summary}${C.reset}`
+      : msg;
+    if (activeSpinner) {
+      activeSpinner.stop(resultMsg);
+      activeSpinner = null;
     }
-    // Show detail as nested text with appropriate color (handle multiline)
     if (detail) {
-      clearLine();
       const color = status === "error" ? C.error : status === "warning" ? C.warning : C.secondary;
       const lines = detail.split("\n");
       for (const line of lines) {
         console.log(`${S_BAR}  ${color}${line}${C.reset}`);
       }
-      lastActivity = Date.now();
     }
+    lastActivity = Date.now();
+    heartbeatStarted = false;
+    startHeartbeat();
+  };
+
+  // Cancel an active step — stops spinner silently, no output in history
+  const cancelStep = () => {
+    isSpinnerActive = false;
+    if (activeSpinner) {
+      activeSpinner.stop("");
+      activeSpinner = null;
+    }
+    heartbeatStarted = true;
+    lastActivity = 0;
     startHeartbeat();
   };
 
@@ -1135,9 +1200,8 @@ export async function devCommand(options: DevOptions): Promise<void> {
     heartbeatInterval = setInterval(() => {
       const idle = Date.now() - lastActivity > 1000;
       if (idle && !isSpinnerActive) {
-        // Add space before first heartbeat
         if (!heartbeatStarted) {
-          console.log(S_BAR);
+          process.stdout.write(`${S_BAR}\n`);
           heartbeatStarted = true;
         }
         const char = HEARTBEAT_FRAMES[heartbeatFrame % HEARTBEAT_FRAMES.length];
@@ -1155,7 +1219,6 @@ export async function devCommand(options: DevOptions): Promise<void> {
   };
 
   // Types tracking - shared between sync and interval
-  let lastTypesContent = "";
   let lastTypesRefreshTime = 0;
 
   // Print Clack-style header
@@ -1163,19 +1226,31 @@ export async function devCommand(options: DevOptions): Promise<void> {
     command: "supa dev",
     description: ["Watch for schema and config changes."],
   });
-  console.log(S_BAR);
-  console.log(`${S_BAR}  ${C.secondary}Project:${C.reset}  ${projectRef}`);
-  console.log(`${S_BAR}  ${C.secondary}Dashboard:${C.reset} ${SUPABASE_DASHBOARD_URL}/project/${projectRef}`);
-  console.log(`${S_BAR}  ${C.secondary}Profile:${C.reset}  ${profile?.name || "default"}`);
-  console.log(`${S_BAR}  ${C.secondary}Branch:${C.reset}   ${currentBranch}`);
-  console.log(`${S_BAR}  ${C.secondary}Schema:${C.reset}   ${relative(cwd, schemaDir)}`);
+  const mainProjectRef = config.project_id ?? projectRef;
+  const extra: [string, string][] = [
+    ["Schema", relative(cwd, schemaDir)],
+  ];
   if (seedEnabled) {
     const seedDisplay = seedPaths.length === 1 ? seedPaths[0] : `${seedPaths.length} paths`;
-    console.log(`${S_BAR}  ${C.secondary}Seed:${C.reset}     ${seedDisplay}`);
+    extra.push(["Seed", seedDisplay]);
   }
-  if (options.dryRun) {
-    console.log(`${S_BAR}  ${C.warning}Mode:${C.reset}     ${C.warning}dry-run${C.reset}`);
-  }
+  if (options.dryRun) extra.push(["Mode", `${C.warning}dry-run${C.reset}`]);
+  printProjectContextLines({
+    projectRef,
+    mainProjectRef,
+    gitBranch: currentBranch,
+    profileName: profile?.name,
+    dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${projectRef}`,
+    extra,
+  });
+
+  // Run codegen at startup in case database.ts is newer than generated files
+  runCodegenIfStale(
+    cwd,
+    config,
+    (f) => logNested(fmtGenerated(f)),
+    options.verbose ? (msg) => logNested(msg) : undefined,
+  );
 
   let lastBranch = currentBranch;
 
@@ -1201,6 +1276,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
         if (isBranchingProfile(workflowProfile) && config.project_id) {
           if (!isResolvingBranch) {
             isResolvingBranch = true;
+            logVerbose(`branch: resolving project ref for "${newBranch}"…`);
             resolveBranchAndWriteEnv({
               cwd,
               gitBranch: newBranch,
@@ -1210,19 +1286,25 @@ export async function devCommand(options: DevOptions): Promise<void> {
             }).then(async (result) => {
               if (result) {
                 state.projectRef = result.projectRef;
+                logVerbose(`branch: resolved → ${result.projectRef} (${result.isBranch ? "preview" : "main"})`);
                 // Rebuild connection string for the new project ref
                 try {
+                  logVerbose(`pooler: fetching connection string for ${result.projectRef}…`);
                   const cs = await resolveConnectionString(
                     client,
                     result.projectRef,
                     process.env.SUPABASE_DB_PASSWORD ?? dbPassword,
                   );
-                  if (cs) state.connectionString = cs;
+                  if (cs) {
+                    state.connectionString = cs;
+                    logVerbose(`pooler: connected`);
+                  }
                 } catch {
                   // Non-fatal — keep existing connection string
                 }
                 logRail(`Updated .env.local → ${result.isBranch ? "branch" : "main"} (${result.projectRef})`);
               } else {
+                logVerbose(`branch: no healthy branch found for "${newBranch}"`);
                 logRail(`No healthy Supabase branch for "${newBranch}" — run \`supa project branches create\``);
               }
             }).catch((err) => {
@@ -1236,81 +1318,88 @@ export async function devCommand(options: DevOptions): Promise<void> {
     });
   }
 
-  // Apply config changes
-  const applyConfigChanges = async () => {
-    startStep("Pushing config");
+  type ConfigChange = { key: string; oldValue: string; newValue: string };
 
+  // Compare local config against remote and apply any differences.
+  // Returns the list of changes (empty = already in sync). Throws on API error.
+  const syncConfig = async (freshConfig: ProjectConfig): Promise<ConfigChange[]> => {
+    const allChanges: ConfigChange[] = [];
+
+    const postgrestPayload = buildPostgrestPayload(freshConfig);
+    if (postgrestPayload && Object.keys(postgrestPayload).length > 0) {
+      logVerbose(`GET /v1/projects/${state.projectRef}/config/postgrest`);
+      const remoteConfig = await client.getPostgrestConfig(state.projectRef!);
+      const diffs = compareConfigs(
+        postgrestPayload as Record<string, unknown>,
+        remoteConfig as Record<string, unknown>,
+      );
+      const changedDiffs = diffs.filter((d) => d.changed);
+      logVerbose(`config: postgrest — ${changedDiffs.length} change(s)`);
+      for (const diff of changedDiffs) {
+        allChanges.push({
+          key: `api.${diff.key}`,
+          oldValue: formatConfigValue(diff.oldValue),
+          newValue: formatConfigValue(diff.newValue),
+        });
+      }
+      if (!options.dryRun && changedDiffs.length > 0) {
+        logVerbose(`PATCH /v1/projects/${state.projectRef}/config/postgrest`);
+        await client.updatePostgrestConfig(state.projectRef!, postgrestPayload);
+      }
+    }
+
+    const authPayload = buildAuthPayload(freshConfig);
+    if (authPayload && Object.keys(authPayload).length > 0) {
+      logVerbose(`GET /v1/projects/${state.projectRef}/config/auth`);
+      const remoteConfig = await client.getAuthConfig(state.projectRef!);
+      const diffs = compareConfigs(
+        authPayload as Record<string, unknown>,
+        remoteConfig as Record<string, unknown>,
+      );
+      const changedDiffs = diffs.filter((d) => d.changed);
+      logVerbose(`config: auth — ${changedDiffs.length} change(s)`);
+      for (const diff of changedDiffs) {
+        allChanges.push({
+          key: `auth.${diff.key}`,
+          oldValue: formatConfigValue(diff.oldValue),
+          newValue: formatConfigValue(diff.newValue),
+        });
+      }
+      if (!options.dryRun && changedDiffs.length > 0) {
+        logVerbose(`PATCH /v1/projects/${state.projectRef}/config/auth`);
+        await client.updateAuthConfig(state.projectRef!, authPayload);
+      }
+    }
+
+    return allChanges;
+  };
+
+  // Show config change details under the rail
+  const logConfigChanges = (changes: ConfigChange[]) => {
+    for (const change of changes.slice(0, 5)) {
+      clearLine();
+      console.log(`${S_BAR}  ${change.key}: ${C.warning}${change.oldValue}${C.reset} ${C.secondary}→${C.reset} ${C.value}${change.newValue}${C.reset}`);
+      lastActivity = Date.now();
+    }
+    if (changes.length > 5) logNested(`+${changes.length - 5} more`);
+  };
+
+  // Apply config changes (called from file watcher)
+  const applyConfigChanges = async () => {
+    startStep("Pushing changes…");
     try {
-      // Reload config from disk
       const freshConfig = loadProjectConfig(cwd) as ProjectConfig;
       if (!freshConfig) {
         completeStep("Config push failed", "could not reload", "error");
         return;
       }
-
-      const allChanges: { key: string; oldValue: string; newValue: string }[] = [];
-
-      // Build and apply postgrest config
-      const postgrestPayload = buildPostgrestPayload(freshConfig);
-      if (postgrestPayload && Object.keys(postgrestPayload).length > 0) {
-        const remoteConfig = await client.getPostgrestConfig(state.projectRef!);
-        const diffs = compareConfigs(
-          postgrestPayload as Record<string, unknown>,
-          remoteConfig as Record<string, unknown>,
-        );
-        const changedDiffs = diffs.filter((d) => d.changed);
-
-        for (const diff of changedDiffs) {
-          allChanges.push({
-            key: `api.${diff.key}`,
-            oldValue: formatConfigValue(diff.oldValue),
-            newValue: formatConfigValue(diff.newValue),
-          });
-        }
-
-        if (!options.dryRun && changedDiffs.length > 0) {
-          await client.updatePostgrestConfig(state.projectRef!, postgrestPayload);
-        }
-      }
-
-      // Build and apply auth config
-      const authPayload = buildAuthPayload(freshConfig);
-      if (authPayload && Object.keys(authPayload).length > 0) {
-        const remoteConfig = await client.getAuthConfig(state.projectRef!);
-        const diffs = compareConfigs(
-          authPayload as Record<string, unknown>,
-          remoteConfig as Record<string, unknown>,
-        );
-        const changedDiffs = diffs.filter((d) => d.changed);
-
-        for (const diff of changedDiffs) {
-          allChanges.push({
-            key: `auth.${diff.key}`,
-            oldValue: formatConfigValue(diff.oldValue),
-            newValue: formatConfigValue(diff.newValue),
-          });
-        }
-
-        if (!options.dryRun && changedDiffs.length > 0) {
-          await client.updateAuthConfig(state.projectRef!, authPayload);
-        }
-      }
-
+      const allChanges = await syncConfig(freshConfig);
       if (allChanges.length === 0) {
-        completeStep("Pushed", "no config changes");
+        cancelStep();
       } else {
         const suffix = options.dryRun ? " (dry-run)" : "";
         completeStep("Pushed", `${allChanges.length} config change${allChanges.length === 1 ? "" : "s"}${suffix}`);
-
-        // Show nested changes with old → new (orange old, white new)
-        for (const change of allChanges.slice(0, 5)) {
-          clearLine();
-          console.log(`${S_BAR}  ${change.key}: ${C.warning}${change.oldValue}${C.reset} ${C.secondary}→${C.reset} ${C.value}${change.newValue}${C.reset}`);
-          lastActivity = Date.now();
-        }
-        if (allChanges.length > 5) {
-          logNested(`+${allChanges.length - 5} more`);
-        }
+        logConfigChanges(allChanges);
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -1320,18 +1409,20 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
   // Apply schema changes
   const applySchemaChanges = async (changedFiles: string[]) => {
-    startStep("Pushing schema");
+    startStep("Pushing changes…");
 
     try {
       if (options.dryRun) {
         // Dry run - just show the diff
+        logVerbose(`pg-delta: computing diff…`);
         const diff = await diffSchemaWithPgDelta(
           state.connectionString!,
           schemaDir,
         );
+        logVerbose(`pg-delta: ${diff.hasChanges ? `${diff.statements.length} statement(s)` : "no changes"}`);
 
         if (!diff.hasChanges) {
-          completeStep("Pushed", "no schema changes");
+          cancelStep();
         } else {
           completeStep("Pushed", `${diff.statements.length} statements (dry-run)`);
           for (const stmt of diff.statements.slice(0, 5)) {
@@ -1343,14 +1434,16 @@ export async function devCommand(options: DevOptions): Promise<void> {
         }
       } else {
         // Actually apply
+        logVerbose(`pg-delta: applying schema…`);
         const result = await applySchemaWithPgDelta(
           state.connectionString!,
           schemaDir,
         );
+        logVerbose(`pg-delta: ${result.success ? `${result.statements ?? 0} statement(s) applied` : `failed — ${result.output?.slice(0, 80)}`}`);
 
         if (result.success) {
           if (result.output === "No changes to apply") {
-            completeStep("Pushed", "no schema changes");
+            cancelStep();
           } else {
             completeStep("Pushed", `${result.statements ?? 0} statements`);
 
@@ -1363,23 +1456,19 @@ export async function devCommand(options: DevOptions): Promise<void> {
             }
 
             // Refresh types after successful schema change
-            try {
-              const typesResp = await client.getTypescriptTypes(
-                state.projectRef!,
-                "public",
-              );
-              const typesPath = join(cwd, "supabase", "types", "database.ts");
-              mkdirSync(dirname(typesPath), { recursive: true });
-              writeFileSync(typesPath, typesResp.types);
-              lastTypesContent = typesResp.types;
+            const typesResult = await refreshTypesAndCodegen({
+              getTypes: () => client.getTypescriptTypes(state.projectRef!, "public"),
+              cwd,
+              config,
+              onGenerated: (f) => logNested(fmtGenerated(f)),
+              onLog: options.verbose ? (msg) => logNested(msg) : undefined,
+              onRetry: (n, delay, max) => logNested(`${C.warning}⚠${C.reset} PostgREST schema cache not ready, retrying in ${delay / 1000}s… (${n}/${max})`),
+            });
+            if (typesResult.typesRefreshed) {
+              logNested(fmtGenerated(relative(cwd, typesPath)));
               lastTypesRefreshTime = Date.now();
-              logNested("Types refreshed");
-            } catch (error) {
-              // Types refresh is non-critical — the schema was already applied successfully.
-              // Log the reason in verbose mode so it is visible when debugging.
-              if (options.verbose) {
-                logNested(`Types refresh skipped: ${error instanceof Error ? error.message : String(error)}`);
-              }
+            } else if (typesResult.error) {
+              logNested(`${C.warning}⚠${C.reset} Types refresh failed: ${typesResult.error}`);
             }
           }
         } else {
@@ -1454,6 +1543,17 @@ export async function devCommand(options: DevOptions): Promise<void> {
     // Apply config first
     if (configChanged) {
       await applyConfigChanges();
+      // Re-run codegen in case codegen settings (e.g. client_path) changed
+      const freshConfig = loadProjectConfig(cwd);
+      if (freshConfig) {
+        config = freshConfig;
+        runCodegenIfStale(
+          cwd,
+          config as ProjectConfig,
+          (f) => logNested(fmtGenerated(f)),
+          options.verbose ? (msg) => logNested(msg) : undefined,
+        );
+      }
     }
 
     // Then schema
@@ -1494,7 +1594,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
     // Log the change with rail
     const eventIcon = event === "add" ? "+" : event === "unlink" ? "-" : "~";
     const eventColor =
-      event === "add" ? C.success : event === "unlink" ? C.error : C.secondary;
+      event === "add" ? C.success : event === "unlink" ? C.error : C.warning;
 
     if (isConfig) {
       logRail(`${eventColor}${eventIcon}${C.reset} config.json`);
@@ -1516,114 +1616,101 @@ export async function devCommand(options: DevOptions): Promise<void> {
     }, debounceMs);
   });
 
-  // Types refresh interval
-  const typesCheck = setInterval(async () => {
-    // Don't refresh during apply or if we just refreshed recently (within 10s)
-    if (state.isApplying) return;
-    if (Date.now() - lastTypesRefreshTime < 10000) return;
-
-    try {
-      const resp = await client.getTypescriptTypes(state.projectRef!, "public");
-      if (resp.types !== lastTypesContent) {
-        lastTypesContent = resp.types;
-        lastTypesRefreshTime = Date.now();
-        const typesPath = join(cwd, "supabase", "types", "database.ts");
-        mkdirSync(dirname(typesPath), { recursive: true });
-        writeFileSync(typesPath, resp.types);
-        logRail(`${C.success}✓${C.reset} Types refreshed`);
-      }
-    } catch (error) {
-      // Types refresh runs on a background interval and is non-critical — a transient
-      // network error should not interrupt the watcher. Log in verbose mode for debugging.
-      if (options.verbose) {
-        logRail(`${C.warning}⚠${C.reset} Types refresh failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-  }, typesIntervalMs);
-
-  // Visual separator between summary and first step
-  console.log(S_BAR);
-
-  // Initial sync - apply any pending schema changes
-  startStep("Syncing schema");
+  // Initial check — schema + config together
+  startStep("Checking schema and config…");
   try {
     if (options.dryRun) {
-      // In dry-run mode, just show what would be applied
+      logVerbose(`pg-delta: computing diff…`);
       const diff = await diffSchemaWithPgDelta(connectionString, schemaDir);
+      logVerbose(`pg-delta: ${diff.hasChanges ? `${diff.statements.length} statement(s)` : "no changes"}`);
       if (diff.hasChanges) {
-        completeStep("Synced", `${diff.statements.length} statements (dry-run)`);
+        completeStep("Checked", `${diff.statements.length} statements (dry-run)`);
         for (const stmt of diff.statements.slice(0, 5)) {
           logNested(stmt.length > 60 ? stmt.slice(0, 57) + "..." : stmt);
         }
-        if (diff.statements.length > 5) {
-          logNested(`+${diff.statements.length - 5} more`);
-        }
+        if (diff.statements.length > 5) logNested(`+${diff.statements.length - 5} more`);
       } else {
-        completeStep("Synced", "schema up to date");
+        completeStep("Up to date");
       }
-      // Show seed info in dry-run mode
       if (seedEnabled) {
         const existingSeedFiles = findSeedFiles(seedPaths, supabaseDir);
-        if (existingSeedFiles.length > 0) {
-          logNested(`Would seed ${existingSeedFiles.length} file(s)`);
-        }
+        if (existingSeedFiles.length > 0) logNested(`Would seed ${existingSeedFiles.length} file(s)`);
       }
     } else {
-      // Apply pending changes
-      const result = await applySchemaWithPgDelta(connectionString, schemaDir);
-      if (result.success) {
-        if (result.output === "No changes to apply") {
-          completeStep("Synced", "schema up to date");
-        } else {
-          completeStep("Synced", `${result.statements ?? 0} statements`);
-          // Refresh types after initial sync
-          try {
-            const typesResp = await client.getTypescriptTypes(
-              state.projectRef!,
-              "public",
-            );
-            const typesPath = join(cwd, "supabase", "types", "database.ts");
-            mkdirSync(dirname(typesPath), { recursive: true });
-            writeFileSync(typesPath, typesResp.types);
-            lastTypesContent = typesResp.types;
+      // Schema
+      logVerbose(`pg-delta: applying schema…`);
+      const schemaResult = await applySchemaWithPgDelta(connectionString, schemaDir);
+      logVerbose(`pg-delta: ${schemaResult.success ? `${schemaResult.statements ?? 0} statement(s) applied` : `failed — ${schemaResult.output?.slice(0, 80)}`}`);
+      if (!schemaResult.success) {
+        completeStep("Check failed", undefined, "error", schemaResult.output);
+        process.exitCode = 1;
+        return;
+      }
+      const schemaChanged = schemaResult.output !== "No changes to apply";
+      const schemaStatements = schemaResult.statements ?? 0;
+
+      // Config
+      logVerbose(`config: syncing…`);
+      let configChanges: ConfigChange[] = [];
+      const freshConfig = loadProjectConfig(cwd) as ProjectConfig;
+      if (freshConfig) {
+        try {
+          configChanges = await syncConfig(freshConfig);
+          logVerbose(`config: ${configChanges.length} change(s)`);
+          config = freshConfig;
+        } catch (error) {
+          logNested(`${C.warning}⚠${C.reset} Config sync failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+
+      if (!schemaChanged && configChanges.length === 0) {
+        completeStep("Up to date");
+      } else {
+        const parts: string[] = [];
+        if (schemaChanged) parts.push(`${schemaStatements} statement${schemaStatements === 1 ? "" : "s"}`);
+        if (configChanges.length > 0) parts.push(`${configChanges.length} config change${configChanges.length === 1 ? "" : "s"}`);
+        completeStep("Pushed", parts.join(", "));
+
+        if (schemaChanged) {
+          const typesResult = await refreshTypesAndCodegen({
+            getTypes: () => client.getTypescriptTypes(state.projectRef!, "public"),
+            cwd,
+            config,
+            onGenerated: (f) => logNested(fmtGenerated(f)),
+            onLog: options.verbose ? (msg) => logNested(msg) : undefined,
+            onRetry: (n, delay, max) => logNested(`${C.warning}⚠${C.reset} PostgREST schema cache not ready, retrying in ${delay / 1000}s… (${n}/${max})`),
+          });
+          if (typesResult.typesRefreshed) {
+            logNested(fmtGenerated(relative(cwd, typesPath)));
             lastTypesRefreshTime = Date.now();
-            logNested("Types refreshed");
-          } catch (error) {
-            // Types refresh is non-critical — the initial schema sync already succeeded.
-            // Log the reason in verbose mode so it is visible when debugging.
-            if (options.verbose) {
-              logNested(`Types refresh skipped: ${error instanceof Error ? error.message : String(error)}`);
-            }
+          } else if (typesResult.error) {
+            logNested(`${C.warning}⚠${C.reset} Types refresh failed: ${typesResult.error}`);
           }
         }
 
-        // Apply initial seed if enabled and not already applied
-        if (seedEnabled && !state.seedApplied) {
-          await applySeed("initial");
-        }
-      } else {
-        completeStep("Sync failed", undefined, "error", result.output);
-        process.exitCode = 1;
-        return;
+        if (configChanges.length > 0) logConfigChanges(configChanges);
+      }
+
+      // Initial seed
+      if (seedEnabled && !state.seedApplied) {
+        await applySeed("initial");
       }
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    completeStep("Sync failed", undefined, "error", msg);
+    completeStep("Check failed", undefined, "error", msg);
     process.exitCode = 1;
     return;
   }
 
-  // Start heartbeat
   startHeartbeat();
 
   // Graceful shutdown
   const cleanup = async () => {
     stopHeartbeat();
-    if (isSpinnerActive) spinner.stop();
+    if (isSpinnerActive) stopSpinner();
     if (cleanupBranchWatch) cleanupBranchWatch();
     if (debounceTimer) clearTimeout(debounceTimer);
-    clearInterval(typesCheck);
     watcher.close();
     await closeSupabasePool();
     clearLine();

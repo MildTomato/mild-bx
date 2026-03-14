@@ -1,5 +1,14 @@
 /**
- * Lifecycle hooks — run user-defined shell commands at specific points.
+ * Lifecycle hooks — run user-defined shell commands at specific points
+ * in the supa workflow (e.g. pre_push, pre_pull).
+ *
+ * In `supa dev`, hooks participate in a chain-reaction model:
+ *   1. A hook source file changes (e.g. a Drizzle schema file).
+ *   2. The hook runs (e.g. `drizzle-kit generate` writes SQL to supabase/schema/).
+ *   3. The schema file watcher picks up the generated SQL and triggers a push.
+ *
+ * This means hooks must complete before the schema watcher fires, which is
+ * achieved by suppressing schema events while hooks are running.
  */
 
 import { execSync, exec } from "node:child_process";
@@ -12,7 +21,11 @@ interface NormalizedHook {
   watch?: string;
 }
 
-/** Normalize a HookDef (string | object | array) into a flat list. */
+/**
+ * Normalize a HookDef into a flat list of hook objects.
+ * The config allows hooks to be a bare string, a single object, or an array
+ * of either — this collapses all three forms into one consistent shape.
+ */
 function normalize(def: HookDef): NormalizedHook[] {
   const items = Array.isArray(def) ? def : [def];
   return items
@@ -50,8 +63,11 @@ export function runHooks(
 }
 
 /**
- * Run one or more hooks sequentially (async — doesn't block the event loop).
- * Throws on the first non-zero exit code.
+ * Async variant of runHooks — uses child_process.exec instead of execSync.
+ *
+ * execSync blocks the Node event loop, which prevents the clack spinner from
+ * animating while a hook is running. This async version keeps the event loop
+ * alive so the spinner renders correctly during long-running hook commands.
  */
 export async function runHooksAsync(
   def: HookDef | undefined,
@@ -87,6 +103,11 @@ export interface HookWatchSource {
 /**
  * Split a glob pattern into a concrete base directory and the glob remainder.
  * e.g. "./supabase/drizzle/**\/*.ts" → dir="./supabase/drizzle", glob="**\/*.ts"
+ *
+ * Chokidar v5 dropped built-in glob support, so we must give it a plain
+ * directory path and handle glob matching ourselves (via picomatch in
+ * parseWatchGlob). This function extracts the static directory prefix that
+ * chokidar can watch.
  */
 function splitGlob(pattern: string): { base: string; glob: string | null } {
   const parts = pattern.split("/");
@@ -103,9 +124,12 @@ function splitGlob(pattern: string): { base: string; glob: string | null } {
 }
 
 /**
- * Parse a glob pattern into a base directory and a file filter.
- * Chokidar v5 doesn't support globs, so we watch the base directory
- * and use picomatch to filter file events.
+ * Parse a glob pattern into a watch source for chokidar.
+ *
+ * Because chokidar v5 doesn't accept globs, we watch the static base directory
+ * and attach a picomatch filter. The filter receives every file event from that
+ * directory and returns true only for paths that match the original glob's
+ * remainder — effectively reimplementing glob filtering at the event level.
  */
 function parseWatchGlob(pattern: string, cwd: string): HookWatchSource {
   const { base, glob } = splitGlob(pattern);

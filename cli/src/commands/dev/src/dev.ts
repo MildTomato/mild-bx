@@ -836,7 +836,8 @@ export async function devCommand(options: DevOptions): Promise<void> {
         path: src.dir,
         filter: src.filter,
         onChange: async (event: string, filePath: string) => {
-          // Hook source changed — run hooks directly, schema watcher picks up generated files
+          // Chain-reaction: hook source changed → run hooks → schema watcher picks up generated SQL.
+          // Skip during apply to avoid overlapping with an in-progress push.
           if (state.isApplying) return;
           console.log(JSON.stringify({ event: "file_changed", type: event, path: relative(cwd, filePath), source: "hook" }));
           try {
@@ -1139,6 +1140,9 @@ export async function devCommand(options: DevOptions): Promise<void> {
   let lastActivity = Date.now();
   let debounceTimer: NodeJS.Timeout | null = null;
   let isSpinnerActive = false;
+  // Prevents the schema watcher from triggering a push while hooks are mid-run.
+  // Without this guard, files written by a hook (e.g. generated SQL) could kick
+  // off a push before the hook has finished writing all its output.
   let isRunningHooks = false;
   const clearLine = () => {
     if (!isInteractive || !currentLine) return;
@@ -1156,7 +1160,9 @@ export async function devCommand(options: DevOptions): Promise<void> {
   // Clack spinner for async operations
   let activeSpinner: ReturnType<typeof p.spinner> | null = null;
 
-  // Notifications buffered while spinner is active (stdout conflicts with spinner animation)
+  // Notifications buffered while a clack spinner is active. Writing directly
+  // to stdout while the spinner is running corrupts its animation — messages
+  // are held here and flushed once the spinner stops.
   const pendingNotifications: string[] = [];
 
   const flushNotifications = () => {
@@ -1717,7 +1723,13 @@ export async function devCommand(options: DevOptions): Promise<void> {
       path: src.dir,
       filter: src.filter,
       onChange: async (event: string, filePath: string) => {
-        // Suppress hook-source events during apply or while hooks are already running
+        // Chain-reaction model: a hook source file changed (e.g. a Drizzle schema)
+        // → run pre-push hooks (e.g. drizzle-kit generate writes SQL to supabase/schema/)
+        // → the schema watcher picks up those SQL files and triggers the push.
+        //
+        // Suppress this handler during apply (isApplying) or while hooks are
+        // already running (isRunningHooks) to avoid overlapping runs or a push
+        // racing with half-written hook output.
         if (state.isApplying || isRunningHooks) return;
         const eventIcon = event === "add" ? "+" : event === "unlink" ? "-" : "~";
         const eventColor = event === "add" ? C.success : event === "unlink" ? C.error : C.warning;
@@ -1734,7 +1746,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
         } finally {
           isRunningHooks = false;
         }
-        // Hook output (e.g. SQL files) will be picked up by the schema watcher naturally
+        // Generated files (e.g. SQL) will be picked up by the schema watcher naturally
       },
     })),
   ];

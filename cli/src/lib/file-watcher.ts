@@ -1,8 +1,10 @@
 /**
- * Composable file watcher built on chokidar.
+ * Composable file watcher abstraction over chokidar, used by `supa dev`.
  *
- * Register watch sources with a path, optional filter, and a callback.
- * All sources share a single chokidar instance. Changes are debounced.
+ * Rather than creating separate chokidar instances per concern (schema files,
+ * config files, hook source files), callers register WatchSource entries and
+ * this module merges them into a single chokidar watcher. Each source retains
+ * its own path, filter, and callback — decoupling watch setup from watch logic.
  */
 
 import { watch as chokidarWatch, type FSWatcher } from "chokidar";

@@ -166,7 +166,9 @@ export async function resolveProjectContext(options: {
     }
   }
 
-  // Run pre-push hooks (e.g., ORM codegen like drizzle-kit generate)
+  // Run pre-push hooks here so they fire before every command that uses
+  // resolveProjectContext — `supa push`, `supa project pull`, etc. — without
+  // each command needing to call them explicitly.
   const hooks = (config as Record<string, unknown>).hooks as HooksConfig | undefined;
   if (hooks?.pre_push) {
     runHooks(hooks.pre_push, cwd, !options.json ? (msg) => process.stderr.write(chalk.dim(`  ${msg}\n`)) : undefined);

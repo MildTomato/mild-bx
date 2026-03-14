@@ -36,43 +36,22 @@ Zod schema for every table and enum in your database.
 }
 ```
 
-For each table, the CLI generates three schemas — one for reading rows, one
-for inserting, and one for updating — along with matching TypeScript type
-aliases:
+For each table, the CLI generates one schema using the row shape. Fields that
+are optional on insert (columns with defaults or that are nullable) are marked
+`.optional()`:
 
 ```ts title="supabase/types/schema.ts"
-import { z } from "zod"
+import { z } from 'zod'
 
-export const todosRowSchema = z.object({
+// Todos schema
+export const todosSchema = z.object({
   id: z.number(),
-  text: z.string().nullable(),
-  completed: z.boolean().nullable(),
-  created_at: z.string(),
-})
-export type TodosRow = z.infer<typeof todosRowSchema>
-
-export const todosInsertSchema = z.object({
-  id: z.number().optional(),
   text: z.string().nullable().optional(),
   completed: z.boolean().nullable().optional(),
   created_at: z.string().optional(),
 })
-export type TodosInsert = z.infer<typeof todosInsertSchema>
 
-export const todosUpdateSchema = z.object({
-  id: z.number().optional(),
-  text: z.string().nullable().optional(),
-  completed: z.boolean().nullable().optional(),
-  created_at: z.string().optional(),
-})
-export type TodosUpdate = z.infer<typeof todosUpdateSchema>
-```
-
-Database enums are generated as `z.enum` schemas:
-
-```ts
-export const statusSchema = z.enum(["active", "inactive"])
-export type Status = z.infer<typeof statusSchema>
+export type Todos = z.infer<typeof todosSchema>
 ```
 
 You must install `zod` in your project for the generated file to compile:
@@ -95,40 +74,48 @@ own typed collection.
 }
 ```
 
-When `validation` is also set to `"zod"`, the generated file imports row
-types from `supabase/types/schema.ts`. Otherwise it uses the raw database
-types directly.
+The `"tanstack"` plugin requires `"zod"` validation to also be enabled, since
+the generated collections reference the Zod row schemas.
 
 ```ts title="supabase/lib/db.ts"
-import { createClient } from "@supabase/supabase-js"
-import { createDatabase, createCollection } from "@tanstack/db"
-import type { Database } from "../types/database"
-import type { TodosRow } from "../types/schema"
+import { supabaseCollectionOptions } from 'supa-tdb-collection'
+import { createClient } from '@/lib/supabase/client'
+import { todosSchema } from '../types/schema'
+import { createCollection } from '@tanstack/db'
 
-const supabase = createClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-)
-
-export const todosCollection = createCollection<TodosRow>({
-  id: "todos",
-  getKey: (row) => String(row.id),
-})
-
-export const db = createDatabase({
-  collections: { todos: todosCollection },
-})
+export const todosCollection = createCollection(supabaseCollectionOptions({
+  tableName: "todos",
+  getKey: (item) => item.id!,
+  where: (query, item) => query.eq("id", item.id),
+  schema: todosSchema,
+  realtime: true,
+  supabase: createClient,
+}))
 ```
 
-You must install `@tanstack/db` in your project:
+You must install both packages:
 
 ```bash
-npm install @tanstack/db
+npm install @tanstack/db supa-tdb-collection
 ```
+
+For a full walkthrough including React usage, see the
+[TanStack DB guide](/docs/config/tanstack-db).
 
 ## Reference
 
+All properties live under the `codegen` key in your config file:
+
 | Property | Type | Default | Description |
-|----------|------|---------|-------------|
+|---|---|---|---|
 | `validation` | `"zod"` | — | Generates Zod schemas in `supabase/types/schema.ts` |
 | `plugins` | `string[]` | `[]` | Additional generators. Supported value: `"tanstack"` |
+| `tanstack.client_path` | `string` | `"@/lib/supabase/client"` | Import path for your Supabase client |
+| `tanstack.client_function_name` | `string` | `"createClient"` | Name of the exported client function |
+
+## Related
+
+- [TanStack DB guide](/docs/config/tanstack-db) — full walkthrough
+  with React usage and realtime
+- [Hooks guide](/docs/config/hooks) — run shell commands before push
+  and pull operations

@@ -59,7 +59,9 @@ export async function pullCommand(options: PullOptions) {
   const projectConfig = config as ProjectConfig;
   const mainProjectRef = projectConfig.project_id ?? projectRef;
 
-  // Run pre-pull hooks
+  // Run pre-pull hooks before pulling remote state. This allows users to
+  // prepare local files (e.g. reset generated outputs) before the pull
+  // overwrites them with fresh remote data.
   const hooks = (config as Record<string, unknown>).hooks as HooksConfig | undefined;
   if (hooks?.pre_pull) {
     runHooks(hooks.pre_pull, cwd, options.verbose ? (msg) => console.error(verboseLog(msg)) : undefined);

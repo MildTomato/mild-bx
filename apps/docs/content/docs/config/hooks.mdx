@@ -125,6 +125,25 @@ loops — the two watchers have non-overlapping scopes.
 > `supa push`, hooks always run regardless of whether watched files
 > have changed.
 
+## Limitations
+
+### Dual schema representation
+
+When you use a pre-push hook to generate SQL from an ORM (for example,
+Drizzle or Prisma), your project ends up with two representations of
+the same schema: the ORM source files and the derived SQL files in
+`supabase/schema/`. The ORM schema is your source of truth, but the CLI
+operates on the generated SQL.
+
+This means the SQL files are build artifacts — you don't edit them
+directly, and they can drift if the hook isn't run. The `watch` field
+in `supa dev` mitigates this by re-running the hook on every save, but
+for `supa push` you're responsible for ensuring the SQL is up to date
+(the hook runs automatically before each push).
+
+A future improvement would be to let pg-delta read ORM schemas
+directly, removing the intermediate SQL step entirely.
+
 ## Reference
 
 These properties are available under `[hooks]` in your config file:

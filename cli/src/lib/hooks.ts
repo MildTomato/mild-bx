@@ -1,14 +1,19 @@
 /**
  * Lifecycle hooks — run user-defined shell commands at specific points
- * in the supa workflow (e.g. pre_push, pre_pull).
+ * in the supa workflow (pre_push, pre_pull).
  *
  * In `supa dev`, hooks participate in a chain-reaction model:
- *   1. A hook source file changes (e.g. a Drizzle schema file).
- *   2. The hook runs (e.g. `drizzle-kit generate` writes SQL to supabase/schema/).
+ *   1. A hook source file changes (for example, a Drizzle schema file).
+ *   2. The hook runs (for example, `drizzle-kit export` writes SQL to supabase/schema/).
  *   3. The schema file watcher picks up the generated SQL and triggers a push.
  *
- * This means hooks must complete before the schema watcher fires, which is
- * achieved by suppressing schema events while hooks are running.
+ * Hook source events are suppressed while hooks are running to prevent
+ * re-triggering during the same cycle.
+ *
+ * NOTE: This approach means the project carries two schema representations —
+ * the ORM source files (source of truth) and derived SQL files that pg-delta
+ * reads. The SQL files are effectively build artifacts. A future improvement
+ * would be to let pg-delta consume ORM schemas directly.
  */
 
 import { execSync, exec } from "node:child_process";

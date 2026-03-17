@@ -4682,6 +4682,117 @@
       "secret": false,
       "required": false
     },
+    "hooks": {
+      "type": "object",
+      "description": "Shell commands to run at specific points in the CLI lifecycle.",
+      "additionalProperties": false,
+      "properties": {
+        "pre_push": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "description": "Shell command to run."
+                },
+                "watch": {
+                  "type": "string",
+                  "description": "Glob pattern of files to watch in dev mode."
+                }
+              }
+            },
+            {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "command"
+                    ],
+                    "properties": {
+                      "command": {
+                        "type": "string",
+                        "description": "Shell command to run."
+                      },
+                      "watch": {
+                        "type": "string",
+                        "description": "Glob pattern of files to watch in dev mode."
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "description": "Hook(s) to run before push and dev schema operations (e.g., ORM codegen)."
+        },
+        "pre_pull": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "description": "Shell command to run."
+                },
+                "watch": {
+                  "type": "string",
+                  "description": "Glob pattern of files to watch in dev mode."
+                }
+              }
+            },
+            {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "command"
+                    ],
+                    "properties": {
+                      "command": {
+                        "type": "string",
+                        "description": "Shell command to run."
+                      },
+                      "watch": {
+                        "type": "string",
+                        "description": "Glob pattern of files to watch in dev mode."
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "description": "Hook(s) to run before pull operations."
+        }
+      }
+    },
     "codegen": {
       "type": "object",
       "description": "Code generation settings for type-safe database access.",

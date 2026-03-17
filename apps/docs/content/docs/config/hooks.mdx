@@ -1,0 +1,171 @@
+---
+title: Hooks
+description: Run shell commands before push and pull operations
+---
+
+Hooks let you run shell commands automatically before the CLI pushes or
+pulls schema changes. Use them to generate SQL from an ORM, run
+validation, or trigger any build step that needs to happen before a
+sync.
+
+## Lifecycle points
+
+Two hook points are available:
+
+| Hook | When it runs |
+|------|-------------|
+| `pre_push` | Before schema changes are pushed to the remote database |
+| `pre_pull` | Before pulling the remote schema to local files |
+
+## Configuration
+
+Each hook accepts a string, an object with an optional `watch` field,
+or an array of commands. All forms are declared under `[hooks]` in your
+config file.
+
+### String shorthand
+
+Use a plain string when you don't need file watching:
+
+```toml title="supabase/config.toml"
+[hooks]
+pre_push = "npx drizzle-kit export --sql > supabase/schema/public/todos.sql"
+```
+
+### Object with watch
+
+Add a `watch` field to tell `supa dev` which files to monitor. When a
+watched file changes, the CLI re-runs the hook automatically:
+
+```toml title="supabase/config.toml"
+[hooks.pre_push]
+command = "npx drizzle-kit export --sql > supabase/schema/public/todos.sql"
+watch = "./supabase/drizzle/**/*.ts"
+```
+
+The `watch` field accepts a glob pattern or an array of patterns. Paths
+are resolved relative to the project root.
+
+### Array of commands
+
+Provide an array to run multiple commands in sequence. Each entry can be
+a string or an object:
+
+```toml title="supabase/config.toml"
+[[hooks.pre_push]]
+command = "npx drizzle-kit export --sql > supabase/schema/public/todos.sql"
+watch = "./supabase/drizzle/**/*.ts"
+
+[[hooks.pre_push]]
+command = "node scripts/generate-rls.js"
+```
+
+### Supported glob patterns
+
+The `watch` field supports standard glob syntax:
+
+| Pattern | Matches |
+|---------|---------|
+| `**/*.ts` | All `.ts` files at any depth |
+| `*.{ts,tsx}` | `.ts` and `.tsx` files in the directory |
+| `./src/*.ts` | `.ts` files in `src/` only (not nested) |
+
+## Examples
+
+These examples show common ORM integrations.
+
+### Drizzle
+
+Generate SQL from Drizzle schema files before every push:
+
+```toml title="supabase/config.toml"
+[hooks.pre_push]
+command = "npx drizzle-kit export --sql > supabase/schema/public/todos.sql"
+watch = "./supabase/drizzle/**/*.ts"
+```
+
+### Prisma
+
+Generate a diff from your Prisma schema before pushing:
+
+```toml title="supabase/config.toml"
+[hooks.pre_push]
+command = "npx prisma migrate diff --from-empty --to-schema-datamodel=prisma/schema.prisma --script > supabase/schema/public/tables.sql"
+watch = "./prisma/schema.prisma"
+```
+
+### Combined hooks
+
+Run validation before pushing and regenerate artifacts after pulling:
+
+```toml title="supabase/config.toml"
+[hooks]
+pre_push = "npm run db:validate"
+pre_pull = "npm run generate"
+```
+
+## How hooks work in `supa dev`
+
+During `supa dev`, hooks with a `watch` field participate in a
+chain-reaction model. Two independent file watchers handle different
+concerns:
+
+1. The **hook source watcher** monitors the files matched by `watch`
+   (for example, your Drizzle schema files). When a file changes, it
+   runs the hook command.
+2. The hook command writes output to the schema directory (for example,
+   `supabase/schema/public/todos.sql`).
+3. The **schema watcher** detects the new SQL file and triggers a
+   normal push cycle.
+
+The push cycle does not re-run hooks. This separation prevents infinite
+loops — the two watchers have non-overlapping scopes.
+
+> **Note:** The `watch` field only affects `supa dev`. During
+> `supa push`, hooks always run regardless of whether watched files
+> have changed.
+
+## Limitations
+
+### Dual schema representation
+
+When you use a pre-push hook to generate SQL from an ORM (for example,
+Drizzle or Prisma), your project ends up with two representations of
+the same schema: the ORM source files and the derived SQL files in
+`supabase/schema/`. The ORM schema is your source of truth, but the CLI
+operates on the generated SQL.
+
+This means the SQL files are build artifacts — you don't edit them
+directly, and they can drift if the hook isn't run. The `watch` field
+in `supa dev` mitigates this by re-running the hook on every save, but
+for `supa push` you're responsible for ensuring the SQL is up to date
+(the hook runs automatically before each push).
+
+A future improvement would be to let pg-delta read ORM schemas
+directly, removing the intermediate SQL step entirely.
+
+## Reference
+
+These properties are available under `[hooks]` in your config file:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `pre_push` | `Hook` | Command(s) to run before pushing schema changes |
+| `pre_pull` | `Hook` | Command(s) to run before pulling the remote schema |
+
+A `Hook` value can take any of these forms:
+
+| Form | Example |
+|------|---------|
+| String | `"npm run generate"` |
+| Object | `{ command = "npm run generate", watch = "src/**/*.ts" }` |
+| Array | An array of strings or objects (run sequentially) |
+
+## Related
+
+- [Codegen reference](/docs/config/reference/codegen) — auto-generate
+  Zod schemas and TanStack DB collections from config
+- [TanStack DB guide](/docs/config/tanstack-db) — set up typed
+  collections with realtime
+- [Schema sync](/docs/cli/schema-sync) — how the CLI keeps local and
+  remote schemas in sync

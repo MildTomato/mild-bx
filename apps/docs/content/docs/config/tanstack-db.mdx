@@ -1,0 +1,227 @@
+---
+title: TanStack DB
+description: Auto-generate typed TanStack DB collections from your Supabase schema
+---
+
+[TanStack DB](https://tanstack.com/db) is a client-side database that keeps
+collections of records in sync with a server. The CLI can generate typed
+collections for every table in your database so you get realtime-enabled,
+schema-validated data access without any manual wiring.
+
+## How it works
+
+When the `"tanstack"` plugin is enabled, the CLI generates
+`supabase/lib/db.ts` whenever `supabase/types/database.ts` changes. This
+happens automatically during `supa dev`, `supa push`, `supa pull`, and any
+other project command — you don't need to run a separate step.
+
+The file exports a typed collection for each table using
+`supa-tdb-collection`, a thin wrapper around `@tanstack/db` that wires up
+Supabase realtime and row-level mutations.
+
+## Prerequisites
+
+You need Zod, TanStack DB, and the Supabase collection adapter:
+
+```bash
+npm install zod @tanstack/db supa-tdb-collection
+```
+
+Both `"zod"` validation and the `"tanstack"` plugin must be enabled together
+because the generated collections reference the Zod row schemas.
+
+## Configuration
+
+```json title="supabase/config.json"
+{
+  "codegen": {
+    "validation": "zod",
+    "plugins": ["tanstack"]
+  }
+}
+```
+
+Run any project command to trigger the initial generation (for example, `supa dev`,
+`supa push`, or `supa pull`).
+
+Two files are created (or updated):
+
+```
+supabase/
+├── types/
+│   ├── database.ts    # Raw TypeScript types (always generated)
+│   └── schema.ts      # Zod schemas (from validation: "zod")
+└── lib/
+    └── db.ts          # TanStack DB collections (from plugins: ["tanstack"])
+```
+
+## Generated files
+
+### supabase/types/schema.ts
+
+One Zod schema per table, using the row shape. Optional fields are those that
+are optional on insert (for example, columns with defaults or that are nullable):
+
+```ts title="supabase/types/schema.ts"
+// AUTO-GENERATED — DO NOT EDIT
+import { z } from 'zod'
+
+// Todos schema
+export const todosSchema = z.object({
+  id: z.number(),
+  text: z.string().nullable().optional(),
+  completed: z.boolean().nullable().optional(),
+  created_at: z.string().optional(),
+})
+
+export type Todos = z.infer<typeof todosSchema>
+```
+
+### supabase/lib/db.ts
+
+One collection export per table, pre-configured with Supabase realtime and
+the Zod schema for validation:
+
+```ts title="supabase/lib/db.ts"
+// AUTO-GENERATED — DO NOT EDIT
+import { supabaseCollectionOptions } from 'supa-tdb-collection'
+import { createClient } from '@/lib/supabase/client'
+import { todosSchema } from '../types/schema'
+import { createCollection } from '@tanstack/db'
+
+export const todosCollection = createCollection(supabaseCollectionOptions({
+  tableName: "todos",
+  getKey: (item) => item.id!,
+  where: (query, item) => query.eq("id", item.id),
+  schema: todosSchema,
+  realtime: true,
+  supabase: createClient,
+}))
+```
+
+For tables with composite primary keys, `getKey` returns a hyphen-joined
+string and `where` chains multiple `.eq()` calls.
+
+## Using collections in your app
+
+Import collections from `supabase/lib/db.ts` and use them with TanStack DB's
+hooks. The examples below assume a React app.
+
+### Reading data
+
+```tsx
+import { useQuery } from '@tanstack/db-react'
+import { todosCollection } from '@/supabase/lib/db'
+
+function TodoList() {
+  const todos = useQuery((q) => q.from(todosCollection).select())
+
+  return (
+    <ul>
+      {todos.map((todo) => (
+        <li key={todo.id}>{todo.text}</li>
+      ))}
+    </ul>
+  )
+}
+```
+
+### Filtering
+
+Use the `where` method to filter collections:
+
+```tsx
+const incomplete = useQuery((q) =>
+  q.from(todosCollection)
+    .where((todo) => !todo.completed)
+    .select()
+)
+```
+
+### Mutations
+
+TanStack DB routes mutations through the collection's configured Supabase
+client, so changes are persisted and then broadcast via realtime:
+
+```tsx
+import { useInsert, useUpdate, useDelete } from '@tanstack/db-react'
+import { todosCollection } from '@/supabase/lib/db'
+
+function AddTodo() {
+  const insert = useInsert(todosCollection)
+
+  return (
+    <button onClick={() => insert({ text: 'New todo', completed: false })}>
+      Add
+    </button>
+  )
+}
+
+function TodoItem({ id, text, completed }: { id: number; text: string; completed: boolean }) {
+  const update = useUpdate(todosCollection)
+  const remove = useDelete(todosCollection)
+
+  return (
+    <div>
+      <input
+        type="checkbox"
+        checked={completed}
+        onChange={() => update({ id }, { completed: !completed })}
+      />
+      <span>{text}</span>
+      <button onClick={() => remove({ id })}>Delete</button>
+    </div>
+  )
+}
+```
+
+## Realtime
+
+Each collection has `realtime: true` by default. `supa-tdb-collection` sets
+up a Supabase realtime channel for the table and keeps the collection in sync
+as rows are inserted, updated, or deleted by other clients.
+
+No extra setup is needed. As long as realtime is enabled for the table in your
+Supabase dashboard, changes from any client appear in the collection
+automatically.
+
+## Customizing the Supabase client import
+
+By default the generated file imports `createClient` from
+`@/lib/supabase/client`. If your project puts the client elsewhere, override
+both the path and the export name:
+
+```json title="supabase/config.json"
+{
+  "codegen": {
+    "validation": "zod",
+    "plugins": ["tanstack"],
+    "tanstack": {
+      "client_path": "@/utils/supabase/client",
+      "client_function_name": "createBrowserClient"
+    }
+  }
+}
+```
+
+The generated import becomes:
+
+```ts
+import { createBrowserClient } from '@/utils/supabase/client'
+```
+
+## Reference
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `codegen.validation` | `"zod"` | — | Required alongside `"tanstack"`. Generates Zod schemas in `supabase/types/schema.ts` |
+| `codegen.plugins` | `string[]` | `[]` | Include `"tanstack"` to generate `supabase/lib/db.ts` |
+| `codegen.tanstack.client_path` | `string` | `"@/lib/supabase/client"` | Import path for your Supabase client |
+| `codegen.tanstack.client_function_name` | `string` | `"createClient"` | Name of the exported client function |
+
+## Related
+
+- [Codegen reference](/docs/config/reference/codegen) — full config key reference
+- [Hooks guide](/docs/config/hooks) — run shell commands before push
+  and pull operations
+- [Schema sync](/docs/cli/schema-sync) — how the CLI keeps your types up to date

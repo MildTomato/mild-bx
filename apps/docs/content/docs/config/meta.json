@@ -7,6 +7,8 @@
     "general",
     "api",
     "auth",
+    "hooks",
+    "tanstack-db",
     "---Reference---",
     "...reference"
   ]

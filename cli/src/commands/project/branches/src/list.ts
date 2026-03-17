@@ -2,7 +2,7 @@ import * as p from "@clack/prompts";
 import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
-import { printCommandHeader, S_BAR } from "@/components/command-header.js";
+import { printHeader, S_BAR } from "@/components/command-header.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
 import { createSpinner } from "@/components/output.js";
 
@@ -15,18 +15,12 @@ export async function listBranches(options: ListBranchesOptions = {}): Promise<v
   const isTTY = process.stdout.isTTY && !options.json;
   const spinner = createSpinner(options);
 
-  if (isTTY) {
-    printCommandHeader({
-      command: "supa project branches list",
-      description: ["List all database branches for this project."],
-    });
-    console.log(S_BAR);
-  }
+  const ctx = await resolveProjectContext({ ...options, skipBranchResolution: true });
+  const { projectRef, token: authToken } = ctx;
 
-  const { projectRef, token: authToken } = await resolveProjectContext({
-    ...options,
-    skipBranchResolution: true,
-  });
+  if (isTTY) {
+    printHeader("supa project branches list", "List all database branches for this project.", ctx);
+  }
   const client = createClient(authToken);
 
   spinner.start("Fetching branches…");

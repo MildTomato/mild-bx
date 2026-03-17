@@ -2,7 +2,7 @@ import * as p from "@clack/prompts";
 import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
-import { printCommandHeader, S_BAR } from "@/components/command-header.js";
+import { printHeader, S_BAR } from "@/components/command-header.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
 import { searchSelect, cancelSymbol } from "@/components/search-select.js";
 import { createSpinner } from "@/components/output.js";
@@ -22,15 +22,12 @@ export async function deleteBranch(
   const spinner = createSpinner(options);
   const force = options.force ?? true;
 
-  if (isTTY) {
-    printCommandHeader({
-      command: "supa branches delete",
-      description: ["Delete a database branch."],
-    });
-    console.log(S_BAR);
-  }
+  const ctx = await resolveProjectContext({ ...options, skipBranchResolution: true });
+  const { projectRef, token: authToken } = ctx;
 
-  const { projectRef, token: authToken } = await resolveProjectContext({ ...options, skipBranchResolution: true });
+  if (isTTY) {
+    printHeader("supa project branches delete", "Delete a database branch.", ctx);
+  }
   const client = createClient(authToken);
 
   // Resolve name → branch ID

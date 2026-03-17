@@ -150,8 +150,7 @@ async function main(): Promise<number> {
     }
   }
 
-  // Strip --verbose from argv (already consumed above)
-  argv = argv.filter(arg => arg !== "--verbose" && arg !== "-v");
+  // --verbose is left in argv so individual commands can parse and use it
 
   // Handle --version early (can appear anywhere)
   if (argv.includes("--version") || argv.includes("-V")) {

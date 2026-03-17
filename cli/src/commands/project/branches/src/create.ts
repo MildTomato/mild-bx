@@ -2,12 +2,13 @@ import * as p from "@clack/prompts";
 import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
-import { printCommandHeader, S_BAR } from "@/components/command-header.js";
+import { printHeader, S_BAR } from "@/components/command-header.js";
 import { getCurrentBranch } from "@/lib/git.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
 import { writeBranchEnv } from "@/lib/env-file.js";
 import type { CreateBranchBody } from "@/lib/api.js";
 import { createSpinner } from "@/components/output.js";
+import { pollBranchUntilHealthy } from "./poll-branch.js";
 
 export interface CreateBranchOptions {
   persistent?: boolean;
@@ -19,56 +20,6 @@ export interface CreateBranchOptions {
   profile?: string;
 }
 
-// Poll until the branch's preview_project_status is healthy (or a terminal failure state).
-// Returns true if healthy, false if failed/timed out.
-async function pollBranchUntilHealthy(
-  branchId: string,
-  projectRef: string,
-  authToken: string,
-  spinner: ReturnType<typeof p.spinner>
-): Promise<boolean> {
-  const client = createClient(authToken);
-  const MAX_POLLS = 60; // 5 minutes at 5s intervals
-  const INTERVAL_MS = 5000;
-
-  const HEALTHY_STATUSES = new Set(["ACTIVE_HEALTHY"]);
-  const FAILED_STATUSES = new Set([
-    "ACTIVE_UNHEALTHY",
-    "INIT_FAILED",
-    "REMOVED",
-    "RESTORE_FAILED",
-    "PAUSE_FAILED",
-  ]);
-  const BRANCH_FAILED = new Set(["MIGRATIONS_FAILED", "FUNCTIONS_FAILED"]);
-
-  for (let i = 0; i < MAX_POLLS; i++) {
-    await new Promise((r) => setTimeout(r, INTERVAL_MS));
-
-    try {
-      const branches = await client.listBranches(projectRef);
-      const branch = branches.find((b) => b.id === branchId);
-
-      if (!branch) return false;
-
-      const branchStatus = branch.status;
-      const projectStatus = branch.preview_project_status;
-
-      spinner.message(`Waiting for branch to become healthy… (${branchStatus})`);
-
-      if (BRANCH_FAILED.has(branchStatus)) return false;
-
-      if (projectStatus) {
-        if (HEALTHY_STATUSES.has(projectStatus)) return true;
-        if (FAILED_STATUSES.has(projectStatus)) return false;
-      }
-    } catch {
-      // Network hiccup — keep polling
-    }
-  }
-
-  return false; // timed out
-}
-
 export async function createBranch(
   nameArg: string | undefined,
   options: CreateBranchOptions = {}
@@ -76,18 +27,12 @@ export async function createBranch(
   const isTTY = process.stdout.isTTY && !options.json;
   const spinner = createSpinner(options);
 
-  if (isTTY) {
-    printCommandHeader({
-      command: "supa project branches create",
-      description: ["Create a new database branch."],
-    });
-    console.log(S_BAR);
-  }
+  const ctx = await resolveProjectContext({ ...options, skipBranchResolution: true });
+  const { projectRef, token: authToken } = ctx;
 
-  const { projectRef, token: authToken } = await resolveProjectContext({
-    ...options,
-    skipBranchResolution: true,
-  });
+  if (isTTY) {
+    printHeader("supa project branches create", "Create a new database branch.", ctx);
+  }
   const client = createClient(authToken);
 
   // Check for an existing branch matching the current git branch before prompting
@@ -258,7 +203,7 @@ export async function createBranch(
 
     spinner.message(`Branch ${chalk.cyan(branch.name)} created — waiting for it to become healthy…`);
 
-    const healthy = await pollBranchUntilHealthy(branch.id, projectRef, authToken, spinner);
+    const healthy = await pollBranchUntilHealthy(branch.project_ref, projectRef, authToken, spinner);
 
     if (healthy) {
       // Brief grace period to allow the branch project record to fully propagate

@@ -19,7 +19,7 @@ import {
   type ProjectConfig,
 } from "@/lib/sync.js";
 import { pullSchemaWithPgDelta, setVerbose } from "@/lib/pg-delta.js";
-import { printCommandHeader, printProjectContextLines } from "@/components/command-header.js";
+import { printHeader } from "@/components/command-header.js";
 import { C } from "@/lib/colors.js";
 import { generated as fmtGenerated, verboseLog } from "@/lib/styles.js";
 import { checkEnvMatchesBranch, refreshTypesAndCodegen } from "@/lib/precheck.js";
@@ -54,10 +54,9 @@ export async function pullCommand(options: PullOptions) {
 
   setVerbose(options.verbose ?? false);
 
-  const { cwd, config, branch: currentBranch, profile, projectRef, token } =
-    await resolveProjectContext(options);
+  const ctx = await resolveProjectContext(options);
+  const { cwd, config, branch: currentBranch, profile, projectRef, token } = ctx;
   const projectConfig = config as ProjectConfig;
-  const mainProjectRef = projectConfig.project_id ?? projectRef;
 
   // Run pre-pull hooks before pulling remote state. This allows users to
   // prepare local files (e.g. reset generated outputs) before the pull
@@ -148,20 +147,15 @@ export async function pullCommand(options: PullOptions) {
   }
 
   // Interactive mode
-  printCommandHeader({
-    command: "supa project pull",
-    description: ["Pull remote state to local."],
-  });
   const extra: [string, string][] = [];
   if (typesOnly) extra.push(["Mode", "types only"]);
   if (dryRun) extra.push(["Mode", `${C.warning}plan (dry-run)${C.reset}`]);
-  printProjectContextLines({
-    projectRef,
-    mainProjectRef,
-    gitBranch: currentBranch || undefined,
-    profileName: profile?.name,
-    extra: extra.length ? extra : undefined,
-  });
+  printHeader(
+    "supa project pull",
+    "Pull remote state to local.",
+    ctx,
+    extra.length ? extra : undefined
+  );
 
   const spinner = createSpinner(options);
   spinner.start("Fetching remote state...");

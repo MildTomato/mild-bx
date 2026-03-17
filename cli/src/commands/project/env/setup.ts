@@ -15,15 +15,7 @@ import {
   resolveProjectContext,
   type ProjectContext,
 } from "@/lib/resolve-project.js";
-import { printCommandHeader } from "@/components/command-header.js";
-import chalk from "chalk";
-
-const PRODUCTION_BRANCHES = new Set(["main", "master", "production"]);
-
-function branchContextLabel(branch: string): string {
-  if (PRODUCTION_BRANCHES.has(branch)) return chalk.green("production");
-  return `${chalk.cyan("preview")}  ${chalk.dim("·")}  ${chalk.dim(branch)}`;
-}
+import { printHeader } from "@/components/command-header.js";
 
 export interface EnvCommandSetup {
   command: string;
@@ -49,18 +41,7 @@ export async function setupEnvCommand(
     return ctx;
   }
 
-  const context: [string, string][] = [
-    ["Project", ctx.projectRef],
-    ["Profile", ctx.profile?.name || "default"],
-    ["Context", branchContextLabel(ctx.branch)],
-    ...(options.context || []),
-  ];
-
-  printCommandHeader({
-    command: options.command,
-    description: [options.description],
-    context,
-  });
+  printHeader(options.command, options.description, ctx, options.context);
 
   return ctx;
 }

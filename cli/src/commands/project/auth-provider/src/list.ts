@@ -3,7 +3,7 @@ import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
 import { handleCommandError } from "@/lib/command-error.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
-import { printCommandHeader, S_BAR } from "@/components/command-header.js";
+import { printHeader, S_BAR } from "@/components/command-header.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
 import {
   PROVIDER_DEFINITIONS,
@@ -18,14 +18,11 @@ export interface ListOptions {
 }
 
 export async function listAuthProviders(options: ListOptions = {}): Promise<void> {
-  const { projectRef, token: authToken } = await resolveProjectContext(options);
+  const ctx = await resolveProjectContext(options);
+  const { projectRef, token: authToken } = ctx;
 
   if (!options.json) {
-    printCommandHeader({
-      command: "supa project auth-provider list",
-      description: ["List configured OAuth providers."],
-    });
-    console.log(S_BAR);
+    printHeader("supa project auth-provider list", "List configured OAuth providers.", ctx);
   }
 
   // Fetch remote auth config

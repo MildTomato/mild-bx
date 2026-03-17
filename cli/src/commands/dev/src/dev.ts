@@ -30,7 +30,7 @@ import {
 import { getSeedConfig } from "@/lib/seed-config.js";
 import { C } from "@/lib/colors.js";
 import { generated as fmtGenerated, verboseLog } from "@/lib/styles.js";
-import { printCommandHeader, printProjectContextLines, S_BAR } from "@/components/command-header.js";
+import { printHeader, S_BAR } from "@/components/command-header.js";
 import * as p from "@clack/prompts";
 import { isTTY, log } from "@clack/prompts";
 import {
@@ -1288,10 +1288,6 @@ export async function devCommand(options: DevOptions): Promise<void> {
   let lastTypesRefreshTime = 0;
 
   // Print Clack-style header
-  printCommandHeader({
-    command: "supa dev",
-    description: ["Watch for schema and config changes."],
-  });
   const mainProjectRef = config.project_id ?? projectRef;
   const extra: [string, string][] = [
     ["Schema", relative(cwd, schemaDir)],
@@ -1313,14 +1309,12 @@ export async function devCommand(options: DevOptions): Promise<void> {
     }
   }
   if (options.dryRun) extra.push(["Mode", `${C.warning}dry-run${C.reset}`]);
-  printProjectContextLines({
+  printHeader("supa dev", "Watch for schema and config changes.", {
     projectRef,
-    mainProjectRef,
-    gitBranch: currentBranch,
-    profileName: profile?.name,
-    dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${projectRef}`,
-    extra,
-  });
+    parentProjectRef: mainProjectRef !== projectRef ? mainProjectRef : undefined,
+    branch: currentBranch,
+    profile,
+  }, extra);
 
   // Run codegen at startup in case database.ts is newer than generated files
   runCodegenIfStale(

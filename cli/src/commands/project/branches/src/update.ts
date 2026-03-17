@@ -2,7 +2,7 @@ import * as p from "@clack/prompts";
 import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
-import { printCommandHeader, S_BAR } from "@/components/command-header.js";
+import { printHeader, S_BAR } from "@/components/command-header.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
 import { createSpinner } from "@/components/output.js";
 
@@ -20,14 +20,6 @@ export async function updateBranch(
 ): Promise<void> {
   const isTTY = process.stdout.isTTY && !options.json;
   const spinner = createSpinner(options);
-
-  if (isTTY) {
-    printCommandHeader({
-      command: "supa branches update",
-      description: ["Update an existing database branch."],
-    });
-    console.log(S_BAR);
-  }
 
   // Validate that at least one update field is specified
   if (!options.name && !options["git-branch"] && options.persistent === undefined) {
@@ -48,7 +40,12 @@ export async function updateBranch(
     process.exit(EXIT_CODES.VALIDATION_ERROR);
   }
 
-  const { projectRef, token: authToken } = await resolveProjectContext({ ...options, skipBranchResolution: true });
+  const ctx = await resolveProjectContext({ ...options, skipBranchResolution: true });
+  const { projectRef, token: authToken } = ctx;
+
+  if (isTTY) {
+    printHeader("supa project branches update", "Update an existing database branch.", ctx);
+  }
   const client = createClient(authToken);
 
   // Resolve name → branch ID by listing branches and matching

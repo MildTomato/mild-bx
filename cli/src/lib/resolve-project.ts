@@ -115,8 +115,11 @@ export async function resolveProjectContext(options: {
         try {
           const dbPass = await writeBranchEnv({ cwd, projectRef: match.project_ref, branchId: match.id, token });
           process.env.SUPABASE_DB_PASSWORD = dbPass;
-        } catch {
-          // Non-fatal
+        } catch (envErr) {
+          // Non-fatal — but log so the user can diagnose stale .env.local warnings
+          if (process.env.SUPA_VERBOSE || (options as { verbose?: boolean }).verbose) {
+            console.error(`[resolve-project] writeBranchEnv failed: ${envErr instanceof Error ? envErr.message : String(envErr)}`);
+          }
         }
         return { cwd, config, branch, profile, projectRef: match.project_ref, parentProjectRef: projectRef, token, isBranch: true };
       } else {
@@ -145,8 +148,11 @@ export async function resolveProjectContext(options: {
           try {
             const dbPass = await writeBranchEnv({ cwd, projectRef: created.project_ref, branchId: created.id, token });
             process.env.SUPABASE_DB_PASSWORD = dbPass;
-          } catch {
-            // Non-fatal
+          } catch (envErr) {
+            // Non-fatal — but log so the user can diagnose stale .env.local warnings
+            if (process.env.SUPA_VERBOSE || (options as { verbose?: boolean }).verbose) {
+              console.error(`[resolve-project] writeBranchEnv failed: ${envErr instanceof Error ? envErr.message : String(envErr)}`);
+            }
           }
           return { cwd, config, branch, profile, projectRef: created.project_ref, parentProjectRef: projectRef, token, isBranch: true };
         }

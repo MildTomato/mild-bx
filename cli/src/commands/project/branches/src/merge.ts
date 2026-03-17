@@ -2,6 +2,7 @@ import * as p from "@clack/prompts";
 import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
+import { printHeader } from "@/components/command-header.js";
 import { diffRemoteAuthConfig, diffRemotePostgrestConfig, buildAuthApiUpdatePayload, buildPostgrestApiUpdatePayload } from "@supabase-dx/config";
 import { createSpinner } from "@/components/output.js";
 
@@ -14,10 +15,14 @@ export interface MergeOptions {
 }
 
 export async function mergeBranch(options: MergeOptions = {}): Promise<void> {
-  const { projectRef, parentProjectRef, token, isBranch } = await resolveProjectContext({
-    ...options,
-    skipBranchResolution: false,
-  });
+  const ctx = await resolveProjectContext({ ...options, skipBranchResolution: false });
+  const { projectRef, parentProjectRef, token, isBranch } = ctx;
+
+  if (!options.json) {
+    printHeader("supa project branches merge", "Merge this branch's changes to production.", ctx,
+      options.dryRun ? [["Mode", "dry-run"]] : undefined
+    );
+  }
 
   if (!isBranch || !parentProjectRef) {
     if (options.json) {

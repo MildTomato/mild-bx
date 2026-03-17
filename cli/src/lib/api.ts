@@ -151,6 +151,10 @@ export class SupabaseClient {
     await this.request("POST", `/v1/branches/${branchRef}/merge`);
   }
 
+  async resetBranch(branchRef: string): Promise<{ workflow_run_id: string; message: string }> {
+    return this.request("POST", `/v1/branches/${branchRef}/reset`, {});
+  }
+
   async deleteBranch(branchRef: string, force = true): Promise<void> {
     const query = force ? "" : "?force=false";
     await this.request("DELETE", `/v1/branches/${branchRef}${query}`);

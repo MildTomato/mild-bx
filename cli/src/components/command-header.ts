@@ -4,6 +4,8 @@
  */
 
 import { C } from "@/lib/colors.js";
+import { SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
+import type { ProjectContext } from "@/lib/resolve-project.js";
 
 const pipe = (s: string) => `${C.pipe}${s}${C.reset}`;
 const secondary = (s: string) => `${C.secondary}${s}${C.reset}`;
@@ -54,6 +56,27 @@ export function printCommandHeader(options: CommandHeaderOptions): void {
     }
     console.log(bar);
   }
+}
+
+/**
+ * Print the full command header + project context in one call.
+ */
+export function printHeader(
+  command: string,
+  description: string,
+  ctx: Pick<ProjectContext, "projectRef" | "parentProjectRef" | "branch" | "profile">,
+  extra?: [label: string, value: string][]
+): void {
+  const mainProjectRef = ctx.parentProjectRef ?? ctx.projectRef;
+  printCommandHeader({ command, description: [description] });
+  printProjectContextLines({
+    projectRef: ctx.projectRef,
+    mainProjectRef,
+    gitBranch: ctx.branch || undefined,
+    profileName: ctx.profile?.name,
+    dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${mainProjectRef}`,
+    extra,
+  });
 }
 
 /** The bar character for continuing the rail */

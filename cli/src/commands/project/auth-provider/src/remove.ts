@@ -4,7 +4,7 @@ import * as path from "node:path";
 import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
-import { printCommandHeader, S_BAR } from "@/components/command-header.js";
+import { printHeader, S_BAR } from "@/components/command-header.js";
 import { findProvider, buildProviderPayload, PROVIDER_DEFINITIONS } from "@/lib/auth-providers.js";
 import { writeJsonAtomic } from "@/lib/fs-atomic.js";
 import { findSimilar } from "@/lib/string-similarity.js";
@@ -25,18 +25,6 @@ export async function removeAuthProvider(
   const isTTY = process.stdout.isTTY && !options.json;
   const isDryRun = options["dry-run"] || false;
   const spinner = createSpinner(options);
-
-  if (isTTY) {
-    printCommandHeader({
-      command: "supa project auth-provider remove",
-      description: ["Remove an OAuth provider and clear its credentials."],
-    });
-    console.log(S_BAR);
-    if (isDryRun) {
-      console.log(`${S_BAR}  ${chalk.yellow("Mode:")} ${chalk.yellow("dry-run")}`);
-      console.log(S_BAR);
-    }
-  }
 
   const provider = findProvider(providerArg);
   if (!provider) {
@@ -100,7 +88,17 @@ export async function removeAuthProvider(
     }
   }
 
-  const { projectRef, token: authToken, cwd } = await resolveProjectContext(options);
+  const ctx = await resolveProjectContext(options);
+  const { projectRef, token: authToken, cwd } = ctx;
+
+  if (isTTY) {
+    printHeader(
+      "supa project auth-provider remove",
+      "Remove an OAuth provider and clear its credentials.",
+      ctx,
+      isDryRun ? [["Mode", chalk.yellow("dry-run")]] : undefined
+    );
+  }
   const client = createClient(authToken);
 
   // Clear all credentials + disable

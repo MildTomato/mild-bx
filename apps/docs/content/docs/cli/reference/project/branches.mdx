@@ -24,6 +24,7 @@ The following commands are available:
 - [`create`](#create) - Create a new database branch
 - [`diff`](#diff) - Show schema diff between the current branch and production
 - [`merge`](#merge) - Merge the current branch into production
+- [`reset`](#reset) - Wipe a preview branch and re-apply schema + seed
 - [`update`](#update) - Update an existing database branch
 - [`delete`](#delete) - Delete a database branch
 
@@ -164,6 +165,38 @@ supa project branches merge --yes
 
 ```bash
 supa project branches merge --json --yes
+```
+
+---
+
+### `reset`
+
+Wipe a preview branch and re-apply schema + seed
+
+```bash
+supa project branches reset [options]
+```
+
+**Options:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `-y, --yes` | boolean | Skip confirmation prompts |
+| `-p, --profile <NAME>` | string | Profile to use |
+| `--json` | boolean | Output as JSON |
+
+**Examples:**
+
+```bash
+supa project branches reset
+```
+
+```bash
+supa project branches reset --yes
+```
+
+```bash
+supa project branches reset --json --yes
 ```
 
 ---

@@ -4,7 +4,7 @@ import * as path from "node:path";
 import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
-import { printCommandHeader, S_BAR } from "@/components/command-header.js";
+import { printHeader, S_BAR } from "@/components/command-header.js";
 import { searchSelect, cancelSymbol } from "@/components/search-select.js";
 import { writeJsonAtomic } from "@/lib/fs-atomic.js";
 import { findSimilar } from "@/lib/string-similarity.js";
@@ -42,7 +42,8 @@ export async function addAuthProvider(
   const isTTY = process.stdout.isTTY && !options.json;
   const isDryRun = options["dry-run"] || false;
 
-  const { projectRef, token: authToken, cwd } = await resolveProjectContext(options);
+  const ctx = await resolveProjectContext(options);
+  const { projectRef, token: authToken, cwd } = ctx;
 
   // Fetch the project's database host so we can derive the correct project URL
   let dbHost = "";
@@ -57,15 +58,12 @@ export async function addAuthProvider(
   const spinner = createSpinner(options);
 
   if (isTTY) {
-    printCommandHeader({
-      command: "supa project auth-provider add",
-      description: ["Configure an OAuth provider for your project."],
-    });
-    console.log(S_BAR);
-    if (isDryRun) {
-      console.log(`${S_BAR}  ${chalk.yellow("Mode:")} ${chalk.yellow("dry-run")}`);
-      console.log(S_BAR);
-    }
+    printHeader(
+      "supa project auth-provider add",
+      "Configure an OAuth provider for your project.",
+      ctx,
+      isDryRun ? [["Mode", chalk.yellow("dry-run")]] : undefined
+    );
   }
 
   // Select provider

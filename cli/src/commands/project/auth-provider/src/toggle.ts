@@ -5,7 +5,7 @@ import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
 import { handleCommandError } from "@/lib/command-error.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
-import { printCommandHeader, S_BAR } from "@/components/command-header.js";
+import { printHeader, S_BAR } from "@/components/command-header.js";
 import { findProvider, buildProviderPayload, parseProviderFromRemote, PROVIDER_DEFINITIONS } from "@/lib/auth-providers.js";
 import { writeJsonAtomic } from "@/lib/fs-atomic.js";
 import { findSimilar } from "@/lib/string-similarity.js";
@@ -27,18 +27,6 @@ export async function toggleAuthProvider(
   const action = enable ? "enable" : "disable";
   const isDryRun = options["dry-run"] || false;
   const spinner = createSpinner(options);
-
-  if (isTTY) {
-    printCommandHeader({
-      command: `supa project auth-provider ${action}`,
-      description: [`${enable ? "Enable" : "Disable"} an OAuth provider.`],
-    });
-    console.log(S_BAR);
-    if (isDryRun) {
-      console.log(`${S_BAR}  ${chalk.yellow("Mode:")} ${chalk.yellow("dry-run")}`);
-      console.log(S_BAR);
-    }
-  }
 
   // Find provider (with typo suggestions)
   const provider = findProvider(providerArg);
@@ -68,7 +56,17 @@ export async function toggleAuthProvider(
   }
 
   // Resolve project context (config + auth)
-  const { projectRef, token: authToken, cwd } = await resolveProjectContext(options);
+  const ctx = await resolveProjectContext(options);
+  const { projectRef, token: authToken, cwd } = ctx;
+
+  if (isTTY) {
+    printHeader(
+      `supa project auth-provider ${action}`,
+      `${enable ? "Enable" : "Disable"} an OAuth provider.`,
+      ctx,
+      isDryRun ? [["Mode", chalk.yellow("dry-run")]] : undefined
+    );
+  }
 
   // Check current state
   spinner.start("Checking current state...");

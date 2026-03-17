@@ -9,6 +9,7 @@ import {
   createSubcommand,
   diffSubcommand,
   mergeSubcommand,
+  resetSubcommand,
   updateSubcommand,
   deleteSubcommand,
 } from "./command.js";
@@ -20,6 +21,7 @@ import { listBranches } from "./src/list.js";
 import { createBranch } from "./src/create.js";
 import { diffBranch } from "./src/diff.js";
 import { mergeBranch } from "./src/merge.js";
+import { resetBranch } from "./src/reset.js";
 import { updateBranch } from "./src/update.js";
 import { deleteBranch } from "./src/delete.js";
 
@@ -116,6 +118,20 @@ export async function branchesCommand(argv: string[]): Promise<number> {
       }
       if (args["--help"]) { renderHelp(mergeSubcommand, { parent: branchesSubcommand }); return 0; }
       await mergeBranch({ yes: args["--yes"], dryRun: args["--dry-run"], json: args["--json"], profile: args["--profile"], schemas: args["--schemas"] });
+      return 0;
+    }
+
+    case "reset": {
+      const spec = getFlagsSpecification([...resetSubcommand.options, ...globalCommandOptions]);
+      let args: arg.Result<typeof spec>;
+      try {
+        args = arg(spec, { argv: rest, permissive: false });
+      } catch (err) {
+        if (err instanceof Error) console.error(`Error: ${err.message}`);
+        return 1;
+      }
+      if (args["--help"]) { renderHelp(resetSubcommand, { parent: branchesSubcommand }); return 0; }
+      await resetBranch({ yes: args["--yes"], json: args["--json"], profile: args["--profile"], verbose: args["--verbose"] });
       return 0;
     }
 

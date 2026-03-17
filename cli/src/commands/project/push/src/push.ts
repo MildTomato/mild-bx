@@ -27,7 +27,7 @@ import {
   applySchemaWithPgDelta,
   setVerbose,
 } from "@/lib/pg-delta.js";
-import { printCommandHeader, printProjectContextLines, S_BAR } from "@/components/command-header.js";
+import { printHeader, S_BAR } from "@/components/command-header.js";
 import { C } from "@/lib/colors.js";
 import { generated as fmtGenerated, verboseLog } from "@/lib/styles.js";
 import { printWarning, createSpinner } from "@/components/output.js";
@@ -302,8 +302,8 @@ export async function pushCommand(options: PushOptions) {
 
   setVerbose(options.verbose ?? false);
 
-  const { cwd, config, branch: currentBranch, profile, projectRef, token, isBranch } =
-    await resolveProjectContext(options);
+  const ctx = await resolveProjectContext(options);
+  const { cwd, config, branch: currentBranch, profile, projectRef, token, isBranch } = ctx;
 
   // Inject local env vars so implicit binding can resolve canonical names
   injectLocalEnvVars(cwd);
@@ -496,19 +496,12 @@ export async function pushCommand(options: PushOptions) {
   }
 
   // Interactive mode
-  const mainProjectRef = projectConfig.project_id ?? projectRef;
-  printCommandHeader({
-    command: "supa project push",
-    description: ["Push local changes to remote."],
-  });
-  printProjectContextLines({
-    projectRef,
-    mainProjectRef,
-    gitBranch: currentBranch || undefined,
-    profileName: profile?.name,
-    dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${projectRef}`,
-    extra: dryRun ? [["Mode", `${C.warning}plan (dry-run)${C.reset}`]] : undefined,
-  });
+  printHeader(
+    "supa project push",
+    "Push local changes to remote.",
+    ctx,
+    dryRun ? [["Mode", `${C.warning}plan (dry-run)${C.reset}`]] : undefined
+  );
 
   const spinner = createSpinner(options);
   spinner.start("Connecting...");

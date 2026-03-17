@@ -3,7 +3,7 @@ import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
 import { diffRemoteAuthConfig, diffRemotePostgrestConfig } from "@supabase-dx/config";
-import { printCommandHeader } from "@/components/command-header.js";
+import { printHeader } from "@/components/command-header.js";
 import { createSpinner } from "@/components/output.js";
 
 export interface DiffOptions {
@@ -13,10 +13,8 @@ export interface DiffOptions {
 }
 
 export async function diffBranch(options: DiffOptions = {}): Promise<void> {
-  const { projectRef, parentProjectRef, token, branch, isBranch } = await resolveProjectContext({
-    ...options,
-    skipBranchResolution: false,
-  });
+  const ctx = await resolveProjectContext({ ...options, skipBranchResolution: false });
+  const { projectRef, parentProjectRef, token, branch, isBranch } = ctx;
 
   if (!isBranch || !parentProjectRef) {
     if (options.json) {
@@ -28,11 +26,7 @@ export async function diffBranch(options: DiffOptions = {}): Promise<void> {
   }
 
   if (!options.json) {
-    printCommandHeader({
-      command: "supa project branches diff",
-      description: ["Show differences between this branch and production."],
-      context: [["Branch", branch]],
-    });
+    printHeader("supa project branches diff", "Show differences between this branch and production.", ctx);
   }
 
   const client = createClient(token);

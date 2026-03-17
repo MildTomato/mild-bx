@@ -7,6 +7,7 @@ import {
   jsonOption,
   yesOption,
   dryRunOption,
+  verboseOption,
 } from "@/util/commands/arg-common.js";
 import type { Command } from "@/util/commands/types.js";
 
@@ -236,12 +237,30 @@ export const mergeSubcommand = {
   ],
 } as const satisfies Command;
 
+export const resetSubcommand = {
+  name: "reset",
+  aliases: [],
+  description: "Wipe a preview branch and re-apply schema + seed",
+  arguments: [],
+  options: [
+    { ...yesOption },
+    { ...verboseOption },
+    { ...profileOption },
+    { ...jsonOption },
+  ],
+  examples: [
+    { name: "Reset current branch (with confirmation)", value: "supa project branches reset" },
+    { name: "Reset without confirmation", value: "supa project branches reset --yes" },
+    { name: "Reset as JSON", value: "supa project branches reset --json --yes" },
+  ],
+} as const satisfies Command;
+
 export const branchesSubcommand = {
   name: "branches",
   aliases: [],
   description: "Manage database branches for your project",
   arguments: [],
-  subcommands: [listSubcommand, createSubcommand, diffSubcommand, mergeSubcommand, updateSubcommand, deleteSubcommand],
+  subcommands: [listSubcommand, createSubcommand, diffSubcommand, mergeSubcommand, resetSubcommand, updateSubcommand, deleteSubcommand],
   options: [],
   examples: [
     {

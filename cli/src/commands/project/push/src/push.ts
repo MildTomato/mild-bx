@@ -14,7 +14,8 @@ import {
 import { dirname, join } from "node:path";
 import { createClient, type Project } from "@/lib/api.js";
 import { SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
-import { resolveProjectContext } from "@/lib/resolve-project.js";
+import { resolveProjectContext, resolveEnvScope } from "@/lib/resolve-project.js";
+import { listRemoteVariables, setRemoteVariable } from "@/lib/env-api-bridge.js";
 import {
   buildPostgrestPayload,
   buildAuthPayload,
@@ -30,7 +31,7 @@ import {
 import { printCommandHeader, printProjectContextLines, S_BAR } from "@/components/command-header.js";
 import { C } from "@/lib/colors.js";
 import { generated as fmtGenerated, verboseLog } from "@/lib/styles.js";
-import { printWarning, createSpinner } from "@/components/output.js";
+import { printWarning, createSpinner, printConfigDiffs } from "@/components/output.js";
 import { injectLocalEnvVars } from "@/lib/env-file.js";
 import { checkEnvMatchesBranch, refreshTypesAndCodegen, runCodegenIfStale } from "@/lib/precheck.js";
 import {
@@ -39,6 +40,7 @@ import {
   diagnoseBindings,
   formatDiagnostics,
 } from "@supabase-dx/config";
+import { providerPayloadToEnvVars } from "@/lib/auth-providers.js";
 
 export interface PushOptions {
   profile?: string;
@@ -72,18 +74,6 @@ interface PushPlan {
   warnings: string[];
 }
 
-function printConfigDiffs(diffs: ConfigDiff[], label: string) {
-  const changes = diffs.filter((d) => d.changed);
-  if (changes.length === 0) return;
-
-  console.log(S_BAR);
-  console.log(`${S_BAR}  ${chalk.dim(`${label}:`)}`);
-  for (const diff of changes) {
-    console.log(
-      `${S_BAR}    ${chalk.yellow(diff.key)}: ${chalk.red(String(diff.oldValue))} → ${chalk.green(String(diff.newValue))}`
-    );
-  }
-}
 
 async function buildPlan(options: {
   cwd: string;
@@ -93,8 +83,9 @@ async function buildPlan(options: {
   client?: ReturnType<typeof createClient>;
   projectRef?: string;
   verbose?: boolean;
+  lookupEnvVar?: (key: string) => string | undefined;
 }): Promise<PushPlan> {
-  const { cwd, migrationsOnly, configOnly, config, client, projectRef, verbose } = options;
+  const { cwd, migrationsOnly, configOnly, config, client, projectRef, verbose, lookupEnvVar = (k) => process.env[k] } = options;
   const log = (msg: string) => verbose && console.error(msg);
   const warnings: string[] = [];
   const plan: PushPlan = {
@@ -123,7 +114,7 @@ async function buildPlan(options: {
       }
     }
 
-    const authPayload = buildAuthPayload(config, (n) => process.env[n]);
+    const authPayload = buildAuthPayload(config, lookupEnvVar);
     if (authPayload) {
       plan.config.auth.keys = Object.keys(authPayload);
 
@@ -302,11 +293,24 @@ export async function pushCommand(options: PushOptions) {
 
   setVerbose(options.verbose ?? false);
 
-  const { cwd, config, branch: currentBranch, profile, projectRef, token, isBranch } =
+  const { cwd, config, branch: currentBranch, profile, projectRef, parentProjectRef, token, isBranch } =
     await resolveProjectContext(options);
 
   // Inject local env vars so implicit binding can resolve canonical names
   injectLocalEnvVars(cwd);
+
+  // Build env var lookup: env-server is the source of truth, local process.env as fallback
+  const scope = resolveEnvScope({ isBranch, config });
+  let envServerVars: Record<string, string> = {};
+  try {
+    const vars = await listRemoteVariables(parentProjectRef, scope);
+    envServerVars = Object.fromEntries(vars.map((v) => [v.key, v.value]));
+  } catch (err) {
+    if (options.verbose) {
+      console.error(`[push] env-server fetch failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  const lookupEnvVar = (key: string): string | undefined => envServerVars[key] ?? process.env[key];
 
   // Warn if .env.local SUPABASE_URL doesn't match the resolved branch
   checkEnvMatchesBranch({ cwd, gitBranch: currentBranch, resolvedProjectRef: projectRef, config, json: options.json });
@@ -318,7 +322,7 @@ export async function pushCommand(options: PushOptions) {
   if (!migrationsOnly) {
     const enabledFeatures = getEnabledFeatures(projectConfig);
     if (enabledFeatures.length > 0) {
-      const lookup = (varName: string) => process.env[varName];
+      const lookup = lookupEnvVar;
       const resolved = resolveAllVariables(enabledFeatures, projectConfig, lookup);
       const diagnostics = diagnoseBindings(resolved, enabledFeatures);
       const errors = diagnostics.filter((d) => d.level === "error");
@@ -382,6 +386,7 @@ export async function pushCommand(options: PushOptions) {
         client,
         projectRef,
         verbose: options.verbose,
+        lookupEnvVar,
       });
 
       const hasConfig =
@@ -437,7 +442,7 @@ export async function pushCommand(options: PushOptions) {
           await client.updatePostgrestConfig(projectRef, postgrestPayload);
         }
 
-        const authPayload = buildAuthPayload(projectConfig, (n) => process.env[n]);
+        const authPayload = buildAuthPayload(projectConfig, lookupEnvVar);
         if (authPayload && plan.config.auth.keys.length > 0) {
           await client.updateAuthConfig(projectRef, authPayload);
         }
@@ -496,17 +501,16 @@ export async function pushCommand(options: PushOptions) {
   }
 
   // Interactive mode
-  const mainProjectRef = projectConfig.project_id ?? projectRef;
   printCommandHeader({
     command: "supa project push",
     description: ["Push local changes to remote."],
   });
   printProjectContextLines({
-    projectRef,
-    mainProjectRef,
+    parentRef: parentProjectRef,
+    branchRef: isBranch ? projectRef : undefined,
     gitBranch: currentBranch || undefined,
     profileName: profile?.name,
-    dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${projectRef}`,
+    dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${parentProjectRef}`,
     extra: dryRun ? [["Mode", `${C.warning}plan (dry-run)${C.reset}`]] : undefined,
   });
 
@@ -541,12 +545,13 @@ export async function pushCommand(options: PushOptions) {
       client,
       projectRef,
       verbose: options.verbose,
+      lookupEnvVar,
     });
 
     // Check for actual changes
-    const postgrestChanges = plan.config.postgrest.diffs.filter((d) => d.changed);
-    const authChanges = plan.config.auth.diffs.filter((d) => d.changed);
-    const hasConfigChanges = postgrestChanges.length > 0 || authChanges.length > 0;
+    const hasConfigChanges =
+      plan.config.postgrest.diffs.some((d) => d.changed) ||
+      plan.config.auth.diffs.some((d) => d.changed);
     const hasSchemaChanges = plan.schema.hasChanges;
     const hasMigrations = plan.migrations.length > 0;
 
@@ -617,6 +622,7 @@ export async function pushCommand(options: PushOptions) {
     applySpinner.start("Applying changes...");
 
     let appliedCount = 0;
+    let configChangesApplied = 0;
     let typesRefreshed = false;
     let codegenFiles: string[] = [];
     const applyWarnings: string[] = [];
@@ -627,12 +633,27 @@ export async function pushCommand(options: PushOptions) {
       if (postgrestPayload && plan.config.postgrest.keys.length > 0) {
         applySpinner.message("Updating API config...");
         await client.updatePostgrestConfig(projectRef, postgrestPayload);
+        configChangesApplied += plan.config.postgrest.diffs.filter((d) => d.changed).length;
       }
 
-      const authPayload = buildAuthPayload(projectConfig, (n) => process.env[n]);
+      const authPayload = buildAuthPayload(projectConfig, lookupEnvVar);
       if (authPayload && plan.config.auth.keys.length > 0) {
         applySpinner.message("Updating Auth config...");
         await client.updateAuthConfig(projectRef, authPayload);
+        configChangesApplied += plan.config.auth.diffs.filter((d) => d.changed).length;
+
+        // Sync changed auth values back to env-server.
+        // Only write keys that actually differ from remote (plan.config.auth.diffs tells us
+        // which fields changed). Skipping unchanged/default values prevents cluttering
+        // env-server with Supabase defaults that weren't explicitly set by the user.
+        const changedKeys = new Set(plan.config.auth.diffs.filter((d) => d.changed).map((d) => d.key));
+        if (changedKeys.size > 0) {
+          const changedPayload = Object.fromEntries(
+            Object.entries(authPayload as Record<string, unknown>).filter(([k]) => changedKeys.has(k))
+          );
+          const envVars = providerPayloadToEnvVars(changedPayload).map((v) => ({ ...v, scope }));
+          setRemoteVariable(parentProjectRef, envVars).catch(() => {});
+        }
       }
     }
 
@@ -682,8 +703,12 @@ export async function pushCommand(options: PushOptions) {
       appliedCount++;
     }
 
+    const parts = [];
+    if (appliedCount > 0) parts.push(`${appliedCount} migration${appliedCount !== 1 ? "s" : ""}`);
+    if (configChangesApplied > 0) parts.push(`${configChangesApplied} config change${configChangesApplied !== 1 ? "s" : ""}`);
     const typesNote = typesRefreshed ? " (types refreshed)" : "";
-    applySpinner.stop(chalk.green(`Pushed ${appliedCount} changes${typesNote}`));
+    const summary = parts.length > 0 ? parts.join(", ") : "nothing";
+    applySpinner.stop(chalk.green(`Pushed ${summary}${typesNote}`));
 
     for (const f of codegenFiles) console.log(chalk.dim(`  ${fmtGenerated(f)}`));
     for (const w of applyWarnings) printWarning(w);

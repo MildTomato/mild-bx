@@ -251,3 +251,245 @@ const outputPath = join(__dirname, "config-schema", "config.schema.json");
 writeFileSync(outputPath, JSON.stringify(extendedSchema, null, 2));
 
 console.log(`Extended schema written to ${outputPath}`);
+
+// ---------------------------------------------------------------------------
+// TypeScript interface generation from the extended schema
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a dot-path segment or property key to a PascalCase interface name.
+ * e.g. "auth_config" -> "AuthConfig", "pre_push" -> "PrePush"
+ */
+function toPascalCase(str: string): string {
+  return str
+    .split(/[_\-\s]+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+}
+
+/**
+ * Map a JSON Schema node to a TypeScript type string.
+ * Collects interface definitions into `interfaces` as a side-effect.
+ *
+ * @param node        - The JSON Schema node
+ * @param ifaceName   - The interface name to use if this node becomes an interface
+ * @param interfaces  - Accumulator for interface declarations (in order)
+ * @param emitted     - Set of already-emitted interface names (dedup guard)
+ */
+function schemaNodeToType(
+  node: any,
+  ifaceName: string,
+  interfaces: string[],
+  emitted: Set<string>
+): string {
+  if (!node || typeof node !== "object") return "unknown";
+
+  // Handle oneOf → union type
+  if (node.oneOf && Array.isArray(node.oneOf)) {
+    const members = node.oneOf.map((variant: any, i: number) =>
+      schemaNodeToType(variant, `${ifaceName}Variant${i}`, interfaces, emitted)
+    );
+    return members.join(" | ");
+  }
+
+  // Handle enum → string literal union
+  if (node.enum && Array.isArray(node.enum)) {
+    return node.enum.map((v: any) => JSON.stringify(v)).join(" | ");
+  }
+
+  const type = node.type;
+
+  if (type === "string") return "string";
+  if (type === "boolean") return "boolean";
+  if (type === "number" || type === "integer") return "number";
+
+  if (type === "array") {
+    if (node.items) {
+      const itemType = schemaNodeToType(
+        node.items,
+        `${ifaceName}Item`,
+        interfaces,
+        emitted
+      );
+      return `Array<${itemType}>`;
+    }
+    return "Array<unknown>";
+  }
+
+  if (type === "object" || node.properties || node.additionalProperties || node.patternProperties) {
+    // patternProperties without own meaningful properties → Record
+    if (node.patternProperties && (!node.properties || Object.keys(node.properties).length === 0)) {
+      // Use the first (and typically only) patternProperties value schema
+      const patternSchemas = Object.values(node.patternProperties) as any[];
+      if (patternSchemas.length > 0) {
+        const entryIfaceName = `${ifaceName}Entry`;
+        const valueType = schemaNodeToType(patternSchemas[0], entryIfaceName, interfaces, emitted);
+        return `Record<string, ${valueType}>`;
+      }
+      return "Record<string, unknown>";
+    }
+
+    // Pure additionalProperties without own properties → Record
+    if (!node.properties && node.additionalProperties) {
+      const valueType = schemaNodeToType(
+        node.additionalProperties,
+        ifaceName,
+        interfaces,
+        emitted
+      );
+      return `Record<string, ${valueType}>`;
+    }
+
+    // Has own properties — emit an interface
+    if (node.properties) {
+      if (!emitted.has(ifaceName)) {
+        emitted.add(ifaceName);
+        // node.required can be a JSON Schema array (standard) or a boolean
+        // (annotated by annotateScope). Normalise to an array.
+        const requiredFields: string[] = Array.isArray(node.required) ? node.required : [];
+        const lines: string[] = [];
+
+        for (const [propKey, propNode] of Object.entries<any>(node.properties)) {
+          const childIfaceName = `${ifaceName}${toPascalCase(propKey)}`;
+          const tsType = schemaNodeToType(
+            propNode,
+            childIfaceName,
+            interfaces,
+            emitted
+          );
+          const isRequired = requiredFields.includes(propKey);
+          const optMark = isRequired ? "" : "?";
+          const jsdoc =
+            propNode.description
+              ? `  /** ${propNode.description.replace(/\*\//g, "* /")} */\n`
+              : "";
+          lines.push(`${jsdoc}  ${propKey}${optMark}: ${tsType};`);
+        }
+
+        // If the object also accepts additionalProperties, add an index signature
+        if (node.additionalProperties && typeof node.additionalProperties === "object") {
+          const apIfaceName = `${ifaceName}Entry`;
+          const apType = schemaNodeToType(
+            node.additionalProperties,
+            apIfaceName,
+            interfaces,
+            emitted
+          );
+          lines.push(`  [key: string]: ${apType} | undefined;`);
+        }
+
+        interfaces.push(`export interface ${ifaceName} {\n${lines.join("\n")}\n}`);
+      }
+      return ifaceName;
+    }
+
+    // Empty object
+    return "Record<string, unknown>";
+  }
+
+  return "unknown";
+}
+
+/**
+ * Generate the full `src/types.ts` content from the extended schema.
+ */
+function generateTypesFile(schema: any): string {
+  const interfaces: string[] = [];
+  const emitted = new Set<string>();
+
+  // We'll collect top-level field types so we can build ProjectConfig last
+  const topLevelFields: Array<{ key: string; tsType: string; required: boolean; description?: string }> = [];
+
+  const properties = schema.properties as Record<string, any>;
+  const schemaRequired: string[] = schema.required ?? [];
+
+  for (const [key, node] of Object.entries<any>(properties)) {
+    // $schema is a special meta-key — type as string, don't generate interface
+    if (key === "$schema") {
+      topLevelFields.push({ key, tsType: "string", required: false, description: node.description });
+      continue;
+    }
+
+    // workflow_profile uses the imported WorkflowProfile type
+    if (key === "workflow_profile") {
+      const isRequired = schemaRequired.includes(key);
+      topLevelFields.push({ key, tsType: "WorkflowProfile", required: isRequired, description: node.description });
+      continue;
+    }
+
+    // schema_management uses the standalone SchemaManagement type alias
+    if (key === "schema_management") {
+      const isRequired = schemaRequired.includes(key);
+      topLevelFields.push({ key, tsType: "SchemaManagement", required: isRequired, description: node.description });
+      continue;
+    }
+
+    // config_source uses the standalone ConfigSource type alias
+    if (key === "config_source") {
+      const isRequired = schemaRequired.includes(key);
+      topLevelFields.push({ key, tsType: "ConfigSource", required: isRequired, description: node.description });
+      continue;
+    }
+
+    const ifaceName = toPascalCase(key) + "Config";
+    const tsType = schemaNodeToType(node, ifaceName, interfaces, emitted);
+    const isRequired = schemaRequired.includes(key);
+    topLevelFields.push({ key, tsType, required: isRequired, description: node.description });
+  }
+
+  // Build ProjectConfig interface
+  const projectConfigLines = topLevelFields.map(({ key, tsType, required, description }) => {
+    const optMark = required ? "" : "?";
+    const jsdoc = description ? `  /** ${description.replace(/\*\//g, "* /")} */\n` : "";
+    return `${jsdoc}  ${key}${optMark}: ${tsType};`;
+  });
+
+  const projectConfigInterface = `export interface ProjectConfig {\n${projectConfigLines.join("\n")}\n}`;
+
+  const header = `// AUTO-GENERATED — do not edit manually.
+// Run: pnpm generate in packages/config to regenerate.
+// Source: packages/config/generate.ts`;
+
+  // WorkflowProfile is defined in workflow-profiles.ts and must be re-exported
+  // so consumers importing from types.ts continue to get it.
+  const imports = `import type { WorkflowProfile } from "./workflow-profiles.js";
+export type { WorkflowProfile } from "./workflow-profiles.js";`;
+
+  // Derive SchemaManagement values from the extended schema
+  const schemaManagementValues: string[] = properties["schema_management"]?.enum ?? ["declarative", "migrations"];
+  const schemaManagementType = `export type SchemaManagement = ${schemaManagementValues.map((v: string) => JSON.stringify(v)).join(" | ")};`;
+
+  // Derive ConfigSource values from the extended schema
+  const configSourceValues: string[] = properties["config_source"]?.enum ?? ["code", "remote"];
+  const configSourceType = `export type ConfigSource = ${configSourceValues.map((v: string) => JSON.stringify(v)).join(" | ")};`;
+
+  const sections = [
+    header,
+    "",
+    imports,
+    "",
+    schemaManagementType,
+    configSourceType,
+    "",
+    ...interfaces,
+    "",
+    projectConfigInterface,
+    "",
+    "/**",
+    " * Config diff entry showing old and new values",
+    " */",
+    "export interface ConfigDiff {",
+    "  key: string;",
+    "  oldValue: unknown;",
+    "  newValue: unknown;",
+    "  changed: boolean;",
+    "}",
+  ];
+
+  return sections.join("\n") + "\n";
+}
+
+const typesContent = generateTypesFile(extendedSchema);
+const typesOutputPath = join(__dirname, "src", "types.ts");
+writeFileSync(typesOutputPath, typesContent);
+console.log(`TypeScript types written to ${typesOutputPath}`);

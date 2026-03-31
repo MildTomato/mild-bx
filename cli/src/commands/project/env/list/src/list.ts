@@ -97,7 +97,7 @@ export async function listCommand(options: ListOptions): Promise<void> {
 
   let raw: Array<{ key: string; value: string; secret: boolean }>;
   try {
-    raw = await listRemoteVariables(client, ctx.projectRef);
+    raw = await listRemoteVariables( ctx.parentProjectRef);
     spinner.stop(`Fetched ${raw.length} stored var(s)`);
   } catch (error) {
     spinner.stop(chalk.red("Failed"));

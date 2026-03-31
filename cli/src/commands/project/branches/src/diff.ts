@@ -52,16 +52,16 @@ export async function diffBranch(options: DiffOptions = {}): Promise<void> {
   const authDiffs =
     branchAuth.status === "fulfilled" && prodAuth.status === "fulfilled"
       ? diffRemoteAuthConfig(
-          branchAuth.value as Record<string, unknown>,
           prodAuth.value as Record<string, unknown>,
+          branchAuth.value as Record<string, unknown>,
         )
       : [];
 
   const postgrestDiffs =
     branchPostgrest.status === "fulfilled" && prodPostgrest.status === "fulfilled"
       ? diffRemotePostgrestConfig(
-          branchPostgrest.value as Record<string, unknown>,
           prodPostgrest.value as Record<string, unknown>,
+          branchPostgrest.value as Record<string, unknown>,
         )
       : [];
 

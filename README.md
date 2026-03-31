@@ -63,10 +63,41 @@ A Next.js documentation site built with Fumadocs. Covers Auth Rules,
 CLI usage, workflow profiles, configuration reference, and schema
 sync. CLI reference pages are auto-generated from command specs.
 
+### Env Server (`apps/env-server/`)
+
+A local SQLite-backed HTTP server (port 3457) used as a **demo
+stand-in** for a real secrets/env var service. In production this
+would be a hosted API — for now it runs locally and stores env vars
+per project and scope so the CLI has somewhere to read and write
+credentials (OAuth secrets, SMTP config, etc.) without touching
+`process.env`.
+
+The env-server is **not started automatically**. Start it manually
+before running any CLI commands that touch env vars:
+
+```bash
+node apps/env-server/server.js
+```
+
+Or in watch mode during development:
+
+```bash
+cd apps/env-server && npm run dev
+```
+
+The SQLite database lives at `apps/env-server/env.db`. To reset and
+re-sync from your remote project:
+
+```bash
+supa project env-server reset   # clear all entries
+supa project env-server sync    # clear and re-pull from remote
+```
+
 ## Project structure
 
 ```
 cli/               CLI application (TypeScript, Ink)
+apps/env-server/   Local env var store (SQLite + Hono, port 3457)
 auth-rules-sql/    Auth Rules SQL implementation and docs
 apps/docs/         Documentation site (Next.js, Fumadocs)
 docs/              Architecture notes
@@ -76,9 +107,10 @@ skills/            AI agent skills
 ## Development
 
 ```bash
-pnpm install   # Install dependencies
-pnpm build     # Build everything
-pnpm dev       # Watch mode (CLI)
+pnpm install                      # Install dependencies
+pnpm build                        # Build everything
+pnpm dev                          # Watch mode (CLI)
+node apps/env-server/server.js    # Start env-server (required)
 ```
 
 See the [CLI development guide](apps/docs/content/docs/cli/development.mdx)

@@ -1292,7 +1292,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
     command: "supa dev",
     description: ["Watch for schema and config changes."],
   });
-  const mainProjectRef = config.project_id ?? projectRef;
+  const parentProjectRef = config.project_id ?? projectRef;
   const extra: [string, string][] = [
     ["Schema", relative(cwd, schemaDir)],
   ];
@@ -1314,11 +1314,11 @@ export async function devCommand(options: DevOptions): Promise<void> {
   }
   if (options.dryRun) extra.push(["Mode", `${C.warning}dry-run${C.reset}`]);
   printProjectContextLines({
-    projectRef,
-    mainProjectRef,
+    parentRef: parentProjectRef,
+    branchRef: projectRef !== parentProjectRef ? projectRef : undefined,
     gitBranch: currentBranch,
     profileName: profile?.name,
-    dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${projectRef}`,
+    dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${parentProjectRef}`,
     extra,
   });
 

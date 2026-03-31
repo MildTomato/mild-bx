@@ -6,6 +6,7 @@ export interface EnvVariable {
   key: string;
   value: string;
   secret: boolean;
+  scope?: string;
 }
 
 export interface Environment {

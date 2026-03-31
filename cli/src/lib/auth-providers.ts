@@ -230,6 +230,23 @@ export function parseProviderFromRemote(
 }
 
 /**
+ * Convert a provider API payload to env vars for the env-server.
+ * Keys like `external_google_client_id` → `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID`
+ * Secret fields (_secret) are marked secret: true.
+ */
+export function providerPayloadToEnvVars(
+  payload: Record<string, unknown>
+): Array<{ key: string; value: string; secret: boolean }> {
+  return Object.entries(payload)
+    .filter(([, v]) => v !== undefined && v !== null && v !== "")
+    .map(([k, v]) => ({
+      key: `SUPABASE_AUTH_${k.toUpperCase()}`,
+      value: String(v),
+      secret: k.endsWith("_secret"),
+    }));
+}
+
+/**
  * Get callback URL for a project, derived from the database host returned by the management API.
  */
 export function getCallbackUrl(dbHost: string, projectRef: string): string {

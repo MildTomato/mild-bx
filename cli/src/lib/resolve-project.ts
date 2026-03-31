@@ -23,6 +23,8 @@ import { createClient } from "./api.js";
 import { runCodegenIfStale } from "./precheck.js";
 import { runHooks } from "./hooks.js";
 import type { HooksConfig } from "@supabase-dx/config";
+import { setRemoteVariable } from "./env-api-bridge.js";
+import type { EnvScope } from "./env-server-types.js";
 
 
 
@@ -32,7 +34,7 @@ export interface ProjectContext {
   branch: string;
   profile: Profile | null;
   projectRef: string;
-  parentProjectRef?: string;
+  parentProjectRef: string;
   token: string;
   isBranch: boolean;
 }
@@ -42,6 +44,42 @@ export interface ConfigContext {
   config: ProjectConfig;
   branch: string;
   profile: Profile | null;
+}
+
+/**
+ * Derive the env-server scope from the current project context.
+ *
+ * - local / branching-local (not on a branch) → "development"
+ * - any branching profile + on a branch       → "preview"
+ * - remote (no branching)                     → "production"
+ */
+export function resolveEnvScope(ctx: Pick<ProjectContext, "isBranch" | "config">): EnvScope {
+  const profile = getWorkflowProfile(ctx.config);
+  if (ctx.isBranch) return "preview";
+  if (profile === "local" || profile === "branching-local") return "development";
+  return "production";
+}
+
+/**
+ * Fire-and-forget: push the 4 project config values to the env-server under scope "config".
+ * Errors are silently swallowed — this must never block or break a command.
+ */
+function syncConfigToEnvServer(parentProjectRef: string, config: ProjectConfig): void {
+  const entries: Array<{ key: string; value: string }> = [
+    { key: "workflow_profile", value: config.workflow_profile as string },
+    { key: "schema_management", value: (config as Record<string, unknown>).schema_management as string },
+    { key: "config_source", value: (config as Record<string, unknown>).config_source as string },
+    { key: "production_branch", value: config.production_branch as string },
+  ].filter((e): e is { key: string; value: string } => typeof e.value === "string" && e.value.length > 0);
+
+  if (entries.length === 0) return;
+
+  setRemoteVariable(
+    parentProjectRef,
+    entries.map((e) => ({ key: e.key, value: e.value, secret: false, scope: "config" as const }))
+  ).catch(() => {
+    // env-server may not be running — that's fine
+  });
 }
 
 /**
@@ -121,6 +159,7 @@ export async function resolveProjectContext(options: {
             console.error(`[resolve-project] writeBranchEnv failed: ${envErr instanceof Error ? envErr.message : String(envErr)}`);
           }
         }
+        syncConfigToEnvServer(projectRef, config);
         return { cwd, config, branch, profile, projectRef: match.project_ref, parentProjectRef: projectRef, token, isBranch: true };
       } else {
         // No branch found — auto-create it. Same behaviour for interactive and --json:
@@ -154,6 +193,7 @@ export async function resolveProjectContext(options: {
               console.error(`[resolve-project] writeBranchEnv failed: ${envErr instanceof Error ? envErr.message : String(envErr)}`);
             }
           }
+          syncConfigToEnvServer(projectRef, config);
           return { cwd, config, branch, profile, projectRef: created.project_ref, parentProjectRef: projectRef, token, isBranch: true };
         }
         // If still not found, fall through to main ref — user can retry
@@ -186,7 +226,8 @@ export async function resolveProjectContext(options: {
     runCodegenIfStale(cwd, config);
   }
 
-  return { cwd, config, branch, profile, projectRef, token, isBranch: false };
+  syncConfigToEnvServer(projectRef, config);
+  return { cwd, config, branch, profile, projectRef, parentProjectRef: projectRef, token, isBranch: false };
 }
 
 /**

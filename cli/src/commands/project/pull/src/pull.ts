@@ -54,10 +54,9 @@ export async function pullCommand(options: PullOptions) {
 
   setVerbose(options.verbose ?? false);
 
-  const { cwd, config, branch: currentBranch, profile, projectRef, token } =
+  const { cwd, config, branch: currentBranch, profile, projectRef, parentProjectRef, isBranch, token } =
     await resolveProjectContext(options);
   const projectConfig = config as ProjectConfig;
-  const mainProjectRef = projectConfig.project_id ?? projectRef;
 
   // Run pre-pull hooks before pulling remote state. This allows users to
   // prepare local files (e.g. reset generated outputs) before the pull
@@ -156,8 +155,8 @@ export async function pullCommand(options: PullOptions) {
   if (typesOnly) extra.push(["Mode", "types only"]);
   if (dryRun) extra.push(["Mode", `${C.warning}plan (dry-run)${C.reset}`]);
   printProjectContextLines({
-    projectRef,
-    mainProjectRef,
+    parentRef: parentProjectRef,
+    branchRef: isBranch ? projectRef : undefined,
     gitBranch: currentBranch || undefined,
     profileName: profile?.name,
     extra: extra.length ? extra : undefined,

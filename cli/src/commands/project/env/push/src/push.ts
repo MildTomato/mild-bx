@@ -55,7 +55,7 @@ export async function pushCommand(options: PushOptions): Promise<void> {
 
   let remoteVars;
   try {
-    remoteVars = await listRemoteVariables(client, ctx.projectRef);
+    remoteVars = await listRemoteVariables( ctx.parentProjectRef);
   } catch (error) {
     spinner.stop(chalk.red("Failed"));
     await handleCommandError(error, options, client, ctx.projectRef);
@@ -114,18 +114,18 @@ export async function pushCommand(options: PushOptions): Promise<void> {
   pushSpinner.start("Pushing...");
 
   try {
-    const result = await bulkPushVariables(client, ctx.projectRef, pushableVars, {
+    const result = await bulkPushVariables( ctx.parentProjectRef, pushableVars, {
       prune: options.prune,
     });
 
     // Write sentinel so the dashboard knows this project is config-in-code
     const configSource = (ctx.config.config_source as string | undefined) ?? "code";
-    await setRemoteVariable(client, ctx.projectRef, SENTINEL_CONFIG_SOURCE, configSource, false);
+    await setRemoteVariable( ctx.parentProjectRef, [{ key: SENTINEL_CONFIG_SOURCE, value: configSource, secret: false }]);
 
     const hasPreviewVars = pushableVars.some((v) => v.key.includes("__preview"));
     if (hasPreviewVars) {
       const { propagateToPreviewBranches } = await import("@/lib/env-propagate.js");
-      await propagateToPreviewBranches({ client, projectRef: ctx.projectRef });
+      await propagateToPreviewBranches({ client, projectRef: ctx.parentProjectRef });
     }
 
     pushSpinner.stop(

@@ -46,7 +46,7 @@ export async function pullCommand(options: PullOptions): Promise<void> {
 
   let raw: Array<{ key: string; value: string; secret: boolean }>;
   try {
-    raw = await listRemoteVariables(client, ctx.projectRef);
+    raw = await listRemoteVariables( ctx.parentProjectRef);
   } catch (error) {
     spinner.stop(chalk.red("Failed"));
     await handleCommandError(error, options, client, ctx.projectRef);

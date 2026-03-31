@@ -63,10 +63,10 @@ export const S_BAR = pipe("│");
 export { pipe };
 
 export interface ProjectContextOptions {
-  /** Current resolved project ref (may be a preview branch ref) */
-  projectRef: string;
-  /** Parent project ref from config.project_id — shows indented └ ref if differs from projectRef */
-  mainProjectRef?: string;
+  /** Production / parent project ref */
+  parentRef: string;
+  /** Branch project ref — shown as └ ref if set and different from parentRef */
+  branchRef?: string;
   gitBranch?: string;
   profileName?: string;
   dashboardUrl?: string;
@@ -79,20 +79,18 @@ export interface ProjectContextOptions {
  * Call after printCommandHeader (without context) to render project-level details.
  */
 export function printProjectContextLines(opts: ProjectContextOptions): void {
-  const { projectRef, mainProjectRef, gitBranch, profileName, dashboardUrl, extra } = opts;
-  const displayRef = mainProjectRef ?? projectRef;
-  const isPreview = mainProjectRef != null && projectRef !== mainProjectRef;
+  const { parentRef, branchRef, gitBranch, profileName, dashboardUrl, extra } = opts;
 
   console.log(bar);
-  console.log(`${bar}  ${secondary("Project:".padEnd(10))} ${displayRef}`);
+  console.log(`${bar}  ${secondary("Project:".padEnd(10))} ${parentRef}`);
   if (dashboardUrl) {
     console.log(`${bar}  ${secondary("Dashboard:".padEnd(10))} ${dashboardUrl}`);
   }
   console.log(`${bar}  ${secondary("Profile:".padEnd(10))} ${profileName ?? "default"}`);
   if (gitBranch) {
     console.log(`${bar}  ${secondary("Branch:".padEnd(10))} ${gitBranch}`);
-    if (isPreview) {
-      console.log(`${bar}  ${secondary("  └ ref:".padEnd(10))} ${secondary(projectRef)}`);
+    if (branchRef && branchRef !== parentRef) {
+      console.log(`${bar}  ${secondary("  └ ref:".padEnd(10))} ${secondary(branchRef)}`);
     }
   }
   for (const [label, value] of extra ?? []) {

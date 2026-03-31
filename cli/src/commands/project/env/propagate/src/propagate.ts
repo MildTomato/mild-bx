@@ -48,8 +48,8 @@ export async function propagateCommand(options: PropagateOptions): Promise<void>
   let branches;
   try {
     [allVars, branches] = await Promise.all([
-      listRemoteVariables(client, ctx.projectRef),
-      client.listBranches(ctx.projectRef),
+      listRemoteVariables( ctx.parentProjectRef),
+      client.listBranches(ctx.parentProjectRef),
     ]);
   } catch (error) {
     spinner.stop(chalk.red("Failed"));

@@ -132,6 +132,33 @@ export function printSectionHeader(title: string, indent = 2): void {
   console.log(chalk.dim(`${pad}${title}`))
 }
 
+// ── Config diff block ───────────────────────────────────────────────────────
+
+import { S_BAR } from "@/components/command-header.js";
+import type { ConfigDiff } from "@/lib/sync.js";
+
+const strikethrough = (s: string) => `\x1b[9m${s}\x1b[0m`;
+
+/**
+ * Print a labelled block of config diffs inside the Clack rail.
+ * Old value is shown with strikethrough, new value in green.
+ *
+ * Example:
+ *   │  Auth config changes:
+ *   │    jwt_exp:  ~~3600~~ → 500
+ */
+export function printConfigDiffs(diffs: ConfigDiff[], label: string): void {
+  const changes = diffs.filter((d) => d.changed);
+  if (changes.length === 0) return;
+  console.log(S_BAR);
+  console.log(`${S_BAR}  ${chalk.dim(`${label}:`)}`);
+  for (const diff of changes) {
+    console.log(
+      `${S_BAR}  ${chalk.yellow(diff.key)}: ${strikethrough(chalk.dim(String(diff.oldValue)))} → ${chalk.green(String(diff.newValue))}`
+    );
+  }
+}
+
 // ── Spinner ─────────────────────────────────────────────────────────────────
 
 type Spinner = ReturnType<typeof p.spinner>;

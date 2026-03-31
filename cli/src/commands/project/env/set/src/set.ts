@@ -110,12 +110,12 @@ export async function setCommand(options: SetOptions): Promise<void> {
   spinner.start(`Setting ${storedKey}...`);
 
   try {
-    await setRemoteVariable(client, ctx.projectRef, storedKey, value, isSecret ?? false);
+    await setRemoteVariable( ctx.parentProjectRef, [{ key: storedKey, value, secret: isSecret ?? false }]);
     spinner.stop(`Set ${chalk.cyan(storedKey)} (scope: ${scopeLabel})`);
 
     if (scope === "preview") {
       const { propagateToPreviewBranches } = await import("@/lib/env-propagate.js");
-      await propagateToPreviewBranches({ client, projectRef: ctx.projectRef });
+      await propagateToPreviewBranches({ client, projectRef: ctx.parentProjectRef });
     }
 
     if (options.json) {

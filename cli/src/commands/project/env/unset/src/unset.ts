@@ -63,12 +63,12 @@ export async function unsetCommand(options: UnsetOptions): Promise<void> {
   spinner.start(`Deleting ${storedKey}...`);
 
   try {
-    await deleteRemoteVariable(client, ctx.projectRef, storedKey);
+    await deleteRemoteVariable( ctx.parentProjectRef, storedKey);
     spinner.stop(`Deleted ${chalk.cyan(storedKey)} (scope: ${scopeLabel})`);
 
     if (scope === "preview") {
       const { propagateToPreviewBranches } = await import("@/lib/env-propagate.js");
-      await propagateToPreviewBranches({ client, projectRef: ctx.projectRef });
+      await propagateToPreviewBranches({ client, projectRef: ctx.parentProjectRef });
     }
 
     if (options.json) {

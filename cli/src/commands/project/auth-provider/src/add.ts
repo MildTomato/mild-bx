@@ -3,8 +3,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
-import { resolveProjectContext } from "@/lib/resolve-project.js";
-import { printCommandHeader, S_BAR } from "@/components/command-header.js";
+import { resolveProjectContext, resolveEnvScope } from "@/lib/resolve-project.js";
+import { printCommandHeader, printProjectContextLines, S_BAR } from "@/components/command-header.js";
 import { searchSelect, cancelSymbol } from "@/components/search-select.js";
 import { writeJsonAtomic } from "@/lib/fs-atomic.js";
 import { findSimilar } from "@/lib/string-similarity.js";
@@ -13,13 +13,12 @@ import {
   PROVIDER_DEFINITIONS,
   findProvider,
   buildProviderPayload,
-  envVarName,
+  providerPayloadToEnvVars,
   getCallbackUrl,
   type ProviderDefinition,
 } from "@/lib/auth-providers.js";
 import type { ExternalProviderConfig } from "@/lib/config-types.js";
-import { loadLocalEnvVars, writeEnvFile } from "@/lib/env-file.js";
-import type { EnvVariable } from "@/lib/env-types.js";
+import { replaceRemoteVariables } from "@/lib/env-api-bridge.js";
 import { createSpinner } from "@/components/output.js";
 
 export interface AddOptions {
@@ -42,13 +41,14 @@ export async function addAuthProvider(
   const isTTY = process.stdout.isTTY && !options.json;
   const isDryRun = options["dry-run"] || false;
 
-  const { projectRef, token: authToken, cwd } = await resolveProjectContext(options);
+  const ctx = await resolveProjectContext(options);
+  const { projectRef, parentProjectRef, token: authToken, cwd } = ctx;
 
   // Fetch the project's database host so we can derive the correct project URL
   let dbHost = "";
   try {
     const projectClient = createClient(authToken);
-    const projectData = await projectClient.getProject(projectRef);
+    const projectData = await projectClient.getProject(parentProjectRef);
     dbHost = projectData.database.host;
   } catch {
     // Non-fatal — callback URL display will be empty if project fetch fails
@@ -61,11 +61,16 @@ export async function addAuthProvider(
       command: "supa project auth-provider add",
       description: ["Configure an OAuth provider for your project."],
     });
-    console.log(S_BAR);
-    if (isDryRun) {
-      console.log(`${S_BAR}  ${chalk.yellow("Mode:")} ${chalk.yellow("dry-run")}`);
-      console.log(S_BAR);
-    }
+    printProjectContextLines({
+      parentRef: parentProjectRef,
+      branchRef: ctx.isBranch ? ctx.projectRef : undefined,
+      gitBranch: ctx.branch,
+      profileName: ctx.profile?.name,
+      extra: [
+        ["Scope", resolveEnvScope(ctx)],
+        ...(isDryRun ? [["Mode", "dry-run"] as [string, string]] : []),
+      ],
+    });
   }
 
   // Select provider
@@ -339,11 +344,10 @@ export async function addAuthProvider(
         },
         local: {
           configFile: "supabase/config.json",
-          envFile: "supabase/.env",
-          envVars: [
-            `SUPABASE_AUTH_EXTERNAL_${provider.key.toUpperCase()}_CLIENT_ID`,
-            envVarName(provider.key),
-          ],
+        },
+        envServer: {
+          projectRef: parentProjectRef,
+          envVars: providerPayloadToEnvVars(apiPayload).map((v) => v.key),
         },
       },
       callbackUrl: getCallbackUrl(dbHost, projectRef),
@@ -366,7 +370,8 @@ export async function addAuthProvider(
         `${S_BAR}\n` +
         `${S_BAR}  Local changes:\n` +
         `${S_BAR}    • Update: supabase/config.json (enabled: true)\n` +
-        `${S_BAR}    • Write: supabase/.env (${`SUPABASE_AUTH_EXTERNAL_${provider.key.toUpperCase()}_CLIENT_ID`}, ${envVarName(provider.key)})\n` +
+        `${S_BAR}  Env server (${parentProjectRef}):\n` +
+        `${S_BAR}    • Push: ${providerPayloadToEnvVars(apiPayload).map((v) => v.key).join(", ")}\n` +
         `${S_BAR}\n` +
         `${S_BAR}  Callback URL:\n` +
         `${S_BAR}  ${chalk.cyan(getCallbackUrl(dbHost, projectRef))}\n` +
@@ -378,63 +383,24 @@ export async function addAuthProvider(
     return;
   }
 
-  // Push to remote
-  spinner.start("Updating remote config...");
-
-  try {
-    const client = createClient(authToken);
-    await client.updateAuthConfig(projectRef, apiPayload);
-
-    spinner.stop("Remote config updated");
-  } catch (error) {
-    spinner.stop("Failed to update remote config");
-
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    if (options.json) {
-      console.error(JSON.stringify({
-        error: "NetworkError",
-        message: "Failed to update remote config",
-        details: errorMessage,
-        provider: provider.key,
-        exitCode: EXIT_CODES.NETWORK_ERROR,
-      }, null, 2));
-    } else {
-      p.log.error(`Failed to update remote config: ${errorMessage}`);
-      if (errorMessage.includes("timeout") || errorMessage.includes("ETIMEDOUT")) {
-        p.log.message("\nThis might be a network issue. Check your connection and try again.");
-      }
-    }
-    process.exit(EXIT_CODES.NETWORK_ERROR);
-  }
-
-  // Update local config.json with implicit binding model
-  // Only store enabled + non-sensitive optional fields
+  // Step 1: Update local config.json
   const supabaseDir = path.join(cwd, "supabase");
   const configPath = path.join(supabaseDir, "config.json");
 
   try {
     const configContent = JSON.parse(fs.readFileSync(configPath, "utf-8"));
 
-    if (!configContent.auth) {
-      configContent.auth = {};
-    }
-    if (!configContent.auth.external) {
-      configContent.auth.external = {};
-    }
+    if (!configContent.auth) configContent.auth = {};
+    if (!configContent.auth.external) configContent.auth.external = {};
 
-    // Implicit binding: only store enabled + optional non-sensitive fields
-    // client_id and secret are resolved from canonical env vars
-    const providerEntry: Record<string, unknown> = {
-      enabled: true,
-    };
+    // Implicit binding: only store enabled + optional non-sensitive fields.
+    // client_id and secret are resolved from the canonical env vars at push time.
+    const providerEntry: Record<string, unknown> = { enabled: true };
     if (providerConfig.url) providerEntry.url = providerConfig.url;
     if (providerConfig.redirect_uri) providerEntry.redirect_uri = providerConfig.redirect_uri;
     if (providerConfig.skip_nonce_check) providerEntry.skip_nonce_check = true;
 
     configContent.auth.external[provider.key] = providerEntry;
-
-    // Atomic write to prevent corruption
     writeJsonAtomic(configPath, configContent);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -452,43 +418,77 @@ export async function addAuthProvider(
     process.exit(EXIT_CODES.GENERIC_ERROR);
   }
 
-  // Write canonical env vars to supabase/.env
-  const clientIdEnvVar = `SUPABASE_AUTH_EXTERNAL_${provider.key.toUpperCase()}_CLIENT_ID`;
-  const secretEnvVar = envVarName(provider.key);
+  // Step 2: Push env vars to env-server
+  const envScope = resolveEnvScope(ctx);
+  const envVars = providerPayloadToEnvVars(apiPayload).map((v) => ({ ...v, scope: envScope }));
 
   try {
-    const existing = loadLocalEnvVars(cwd);
-    const existingMap = new Map(existing.variables.map((v) => [v.key, v]));
-
-    // Update or add client_id
-    existingMap.set(clientIdEnvVar, {
-      key: clientIdEnvVar,
-      value: providerConfig.client_id!,
-      secret: false,
-    });
-
-    // Update or add secret
-    existingMap.set(secretEnvVar, {
-      key: secretEnvVar,
-      value: secretValue,
-      secret: true,
-    });
-
-    const variables: EnvVariable[] = Array.from(existingMap.values());
-    writeEnvFile(cwd, variables, existing.header);
+    await replaceRemoteVariables(parentProjectRef, envVars);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (options.json) {
       console.error(JSON.stringify({
-        error: "FileWriteError",
-        message: "Failed to update supabase/.env file",
+        error: "EnvServerError",
+        message: "Failed to push env vars to env-server",
         details: errorMessage,
         exitCode: EXIT_CODES.GENERIC_ERROR,
       }, null, 2));
     } else {
-      p.log.error(`Failed to update supabase/.env: ${errorMessage}`);
+      p.log.error(`Failed to push env vars to env-server: ${errorMessage}`);
     }
     process.exit(EXIT_CODES.GENERIC_ERROR);
+  }
+
+  // Step 3: Apply auth config via management API.
+  // On a preview branch: demo hack — push to every preview branch so they all
+  // reflect the env vars stored in env-server under the "preview" scope
+  // (the platform doesn't resolve env vars per-branch yet).
+  // On production: apply only to the parent project.
+  spinner.start("Applying auth config…");
+  try {
+    const client = createClient(authToken);
+
+    if (ctx.isBranch) {
+      // Demo hack: the platform doesn't resolve env vars per-branch yet, so we
+      // must push auth config to every preview branch manually.
+      // We deliberately skip the default (production) branch — production is
+      // only updated when auth-provider add is run directly on production.
+      let allBranches: { project_ref: string; is_default: boolean }[] = [];
+      try {
+        allBranches = await client.listBranches(parentProjectRef);
+      } catch {
+        allBranches = [{ project_ref: projectRef, is_default: false }];
+      }
+
+      const previewRefs = allBranches
+        .filter((b) => !b.is_default)
+        .map((b) => b.project_ref);
+
+      await Promise.allSettled(previewRefs.map((ref) => client.updateAuthConfig(ref, apiPayload)));
+    } else {
+      // Production — apply only to the parent
+      await client.updateAuthConfig(parentProjectRef, apiPayload);
+    }
+
+    spinner.stop("Auth config applied");
+  } catch (error) {
+    spinner.stop("Failed to apply auth config");
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (options.json) {
+      console.error(JSON.stringify({
+        error: "NetworkError",
+        message: "Failed to apply auth config",
+        details: errorMessage,
+        provider: provider.key,
+        exitCode: EXIT_CODES.NETWORK_ERROR,
+      }, null, 2));
+    } else {
+      p.log.error(`Failed to apply auth config: ${errorMessage}`);
+      if (errorMessage.includes("timeout") || errorMessage.includes("ETIMEDOUT")) {
+        p.log.message("\nThis might be a network issue. Check your connection and try again.");
+      }
+    }
+    process.exit(EXIT_CODES.NETWORK_ERROR);
   }
 
   // Success message

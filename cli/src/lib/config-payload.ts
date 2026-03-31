@@ -47,6 +47,7 @@ export function buildAuthPayload(config: ProjectConfig): Record<string, unknown>
   if (external) {
     for (const [provider, settings] of Object.entries(external)) {
       const prefix = `external_${provider}`;
+      if (settings.enabled !== undefined)     payload[`${prefix}_enabled`] = settings.enabled;
       if (settings.client_id !== undefined)   payload[`${prefix}_client_id`] = settings.client_id;
       if (settings.secret !== undefined)      payload[`${prefix}_secret`] = settings.secret;
       if (settings.redirect_uri !== undefined) payload[`${prefix}_redirect_uri`] = settings.redirect_uri;

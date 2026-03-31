@@ -1,179 +1,116 @@
 /**
- * Environment API bridge
- * Routes env commands to real APIs. Uses the secrets API as a bridge
- * for non-platform variables, and config APIs for platform variables.
- *
- * Key constraint: secrets API rejects names starting with `SUPABASE_`.
- * Platform variables (SUPABASE_AUTH_*, SUPABASE_API_*) go through their
- * respective config APIs.
- *
- * PROTOTYPE NOTE: The secrets API (/v1/projects/{ref}/secrets) is designed
- * for Edge Function secrets, not general project environment variables. We're
- * using it here as a temporary storage mechanism for the prototype because a
- * dedicated project env vars API doesn't exist yet. This needs to be replaced
- * with the real API once it's available on the platform.
+ * Environment API bridge — talks to the local env-server (http://localhost:3457).
  */
-import type { SupabaseClient } from "./api.js";
 import type { EnvVariable } from "./env-types.js";
-import { isPlatformVar } from "@supabase-dx/env-vars";
-import { parseScopedVarName } from "@supabase-dx/env-vars";
+import type { EnvScope } from "./env-server-types.js";
 
-/**
- * Check if a key is a platform variable (routed to config APIs, not secrets API).
- * Strips scope suffix before checking so VAR__preview is treated same as VAR.
- */
-export function isPlatformVariable(key: string): boolean {
-  const { base } = parseScopedVarName(key);
-  return isPlatformVar(base);
+const ENV_SERVER_URL = process.env.ENV_SERVER_URL ?? "http://localhost:3457";
+const VERBOSE = process.env.SUPA_VERBOSE === "1" || process.env.SUPA_VERBOSE === "true";
+
+function log(msg: string) {
+  if (VERBOSE) process.stderr.write(`[env-server] ${msg}\n`);
 }
 
-/**
- * Warn if a SUPABASE_* var is not in the platform registry.
- * These are likely typos or unsupported vars.
- */
-export function warnIfUnrecognisedPlatformVar(key: string): string | null {
-  const { base } = parseScopedVarName(key);
-  if (base.startsWith("SUPABASE_") && !isPlatformVar(base)) {
-    return `Warning: ${base} starts with SUPABASE_ but is not a recognised platform variable. Check the name is correct.`;
+async function envFetch(path: string, options?: RequestInit): Promise<Response> {
+  const res = await fetch(`${ENV_SERVER_URL}${path}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...options?.headers },
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`env-server ${options?.method ?? "GET"} ${path} → ${res.status}: ${body}`);
   }
-  return null;
+  return res;
 }
 
-/**
- * List all remote variables from secrets API + config APIs
- */
 export async function listRemoteVariables(
-  client: SupabaseClient,
-  projectRef: string
+  projectRef: string,
+  scope?: EnvScope
 ): Promise<EnvVariable[]> {
-  const variables: EnvVariable[] = [];
-
-  // PROTOTYPE: Using Edge Function secrets API as a stand-in for project env vars.
-  const secrets = await client.listSecrets(projectRef);
-  for (const s of secrets) {
-    variables.push({
-      key: s.name,
-      value: s.value ?? "",
-      secret: true,
-    });
-  }
-
-  // Fetch auth config for SUPABASE_AUTH_* variables
-  const authConfig = await client.getAuthConfig(projectRef);
-  const authRecord = authConfig as unknown as Record<string, unknown>;
-
-  for (const [key, value] of Object.entries(authRecord)) {
-    if (
-      key.startsWith("external_") &&
-      typeof value === "string" &&
-      value !== ""
-    ) {
-      const canonicalKey = `SUPABASE_AUTH_${key.toUpperCase()}`;
-      const isSecret = key.endsWith("_secret");
-      variables.push({
-        key: canonicalKey,
-        value: isSecret ? "" : String(value),
-        secret: isSecret,
-      });
-    }
-  }
-
-  return variables;
+  const qs = scope ? `?scope=${encodeURIComponent(scope)}` : "";
+  log(`LIST ${projectRef}${scope ? ` scope=${scope}` : " (all scopes)"}`);
+  const res = await envFetch(`/projects/${projectRef}/env${qs}`);
+  const vars = await res.json() as EnvVariable[];
+  log(`LIST ${projectRef} → ${vars.length} vars: ${vars.map(v => `${v.key}[${v.scope}]`).join(", ") || "(none)"}`);
+  return vars;
 }
 
-/**
- * Set a single remote variable
- */
 export async function setRemoteVariable(
-  client: SupabaseClient,
+  projectRef: string,
+  vars: Array<{ key: string; value: string; secret: boolean; scope?: EnvScope }>
+): Promise<void> {
+  for (const v of vars) {
+    log(`SET ${projectRef} ${v.key} scope=${v.scope ?? "production"} caller=${new Error().stack?.split("\n")[2]?.trim() ?? "unknown"}`);
+  }
+  await Promise.all(
+    vars.map((v) =>
+      envFetch(`/projects/${projectRef}/env/${encodeURIComponent(v.key)}`, {
+        method: "PUT",
+        body: JSON.stringify({ value: v.value, secret: v.secret, scope: v.scope ?? "production" }),
+      })
+    )
+  );
+}
+
+export async function deleteRemoteVariable(
   projectRef: string,
   key: string,
-  value: string,
-  secret: boolean
+  scope: EnvScope = "production"
 ): Promise<void> {
-  if (isPlatformVariable(key)) {
-    // Route through config APIs
-    if (key.startsWith("SUPABASE_AUTH_")) {
-      const authKey = key.replace("SUPABASE_AUTH_", "").toLowerCase();
-      await client.updateAuthConfig(projectRef, {
-        [authKey]: value,
-      } as Record<string, unknown>);
-    } else if (key.startsWith("SUPABASE_API_")) {
-      const apiKey = key.replace("SUPABASE_API_", "").toLowerCase();
-      await client.updatePostgrestConfig(projectRef, {
-        [apiKey]: value,
-      } as Record<string, unknown>);
-    }
-  } else {
-    // PROTOTYPE: Using Edge Function secrets API as a stand-in for project env vars.
-    await client.createSecrets(projectRef, [{ name: key, value }]);
-  }
+  log(`DELETE ${projectRef} ${key} scope=${scope}`);
+  const result = await envFetch(
+    `/projects/${projectRef}/env/${encodeURIComponent(key)}?scope=${encodeURIComponent(scope)}`,
+    { method: "DELETE" }
+  );
+  await result.text();
 }
 
 /**
- * Delete a single remote variable
+ * Replace env vars for a set of keys across ALL scopes, then write the new values.
+ * Use this instead of setRemoteVariable when re-adding a provider to avoid stale
+ * entries from a previous scope (e.g. a production entry left over from before
+ * scope-aware writes were introduced).
  */
-export async function deleteRemoteVariable(
-  client: SupabaseClient,
+export async function replaceRemoteVariables(
   projectRef: string,
-  key: string
+  vars: Array<{ key: string; value: string; secret: boolean; scope: EnvScope }>
 ): Promise<void> {
-  if (isPlatformVariable(key)) {
-    // Platform variables can be unset by setting empty string
-    if (key.startsWith("SUPABASE_AUTH_")) {
-      const authKey = key.replace("SUPABASE_AUTH_", "").toLowerCase();
-      await client.updateAuthConfig(projectRef, {
-        [authKey]: "",
-      } as Record<string, unknown>);
-    }
-  } else {
-    await client.deleteSecrets(projectRef, [key]);
-  }
+  const keys = new Set(vars.map((v) => v.key));
+  // Find all existing entries for these keys (any scope)
+  const all = await listRemoteVariables(projectRef);
+  const stale = all.filter((v) => keys.has(v.key));
+  // Delete stale entries
+  await Promise.allSettled(
+    stale.map((v) => deleteRemoteVariable(projectRef, v.key, (v.scope ?? "production") as EnvScope))
+  );
+  // Write fresh
+  await setRemoteVariable(projectRef, vars);
 }
 
-/**
- * Bulk push variables to remote
- */
 export async function bulkPushVariables(
-  client: SupabaseClient,
   projectRef: string,
   variables: EnvVariable[],
   options: { prune?: boolean } = {}
 ): Promise<{ pushed: number; deleted: number }> {
-  let pushed = 0;
+  await setRemoteVariable(projectRef, variables.map((v) => ({ ...v, scope: "production" as EnvScope })));
+  let pushed = variables.length;
   let deleted = 0;
 
-  // Split into platform and non-platform variables
-  const platformVars = variables.filter((v) => isPlatformVariable(v.key));
-  const secretVars = variables.filter((v) => !isPlatformVariable(v.key));
-
-  // PROTOTYPE: Using Edge Function secrets API as a stand-in for project env vars.
-  if (secretVars.length > 0) {
-    const secretPayload = secretVars.map((v) => ({
-      name: v.key,
-      value: v.value,
-    }));
-    await client.createSecrets(projectRef, secretPayload);
-    pushed += secretVars.length;
-  }
-
-  // Push platform variables via config APIs
-  for (const v of platformVars) {
-    await setRemoteVariable(client, projectRef, v.key, v.value, v.secret);
-    pushed++;
-  }
-
-  // Handle prune: delete remote vars not in the local list
   if (options.prune) {
     const localKeys = new Set(variables.map((v) => v.key));
-    const remoteVars = await listRemoteVariables(client, projectRef);
+    const remoteVars = await listRemoteVariables(projectRef, "production");
     const toDelete = remoteVars.filter((v) => !localKeys.has(v.key));
-
-    for (const v of toDelete) {
-      await deleteRemoteVariable(client, projectRef, v.key);
-      deleted++;
-    }
+    await Promise.all(toDelete.map((v) => deleteRemoteVariable(projectRef, v.key, "production")));
+    deleted = toDelete.length;
   }
 
   return { pushed, deleted };
+}
+
+export function isPlatformVariable(_key: string): boolean {
+  return false;
+}
+
+export function warnIfUnrecognisedPlatformVar(_key: string): string | null {
+  return null;
 }

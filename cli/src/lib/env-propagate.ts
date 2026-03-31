@@ -24,7 +24,6 @@ export async function executePropagationPlan(
         }
         if (platform.length > 0) {
           await bulkPushVariables(
-            client,
             branchRef,
             platform.map((v) => ({ key: v.name, value: v.value, secret: false })),
             {},
@@ -53,7 +52,7 @@ export async function propagateToPreviewBranches(options: {
   const { client, projectRef } = options;
 
   const [allVars, branches] = await Promise.all([
-    listRemoteVariables(client, projectRef),
+    listRemoteVariables(projectRef),
     client.listBranches(projectRef),
   ]);
 

@@ -174,11 +174,8 @@ const noopSpinner: Spinner = {
  * Pass `{ json: true }` to suppress spinner in JSON mode.
  */
 export function createSpinner(options?: { json?: boolean }): Spinner {
-  if (options?.json) {
+  if (options?.json || !process.stdout.isTTY) {
     return noopSpinner;
-  }
-  if (!process.stdout.isTTY) {
-    process.env.CI = "true";
   }
   return p.spinner();
 }

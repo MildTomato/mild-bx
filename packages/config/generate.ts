@@ -300,7 +300,7 @@ function schemaNodeToType(
   const type = node.type;
 
   if (type === "string") return "string";
-  if (type === "boolean") return "boolean";
+  if (type === "boolean") return "boolean | string";
   if (type === "number" || type === "integer") return "number";
 
   if (type === "array") {

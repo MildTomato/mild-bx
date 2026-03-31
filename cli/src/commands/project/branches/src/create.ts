@@ -17,6 +17,8 @@ export interface CreateBranchOptions {
   json?: boolean;
   yes?: boolean;
   profile?: string;
+  /** Called from a parent command (e.g. push via resolve-project). Suppresses the command header. */
+  subOperation?: boolean;
 }
 
 // Poll until the branch's preview_project_status is healthy (or a terminal failure state).
@@ -41,6 +43,8 @@ async function pollBranchUntilHealthy(
   ]);
   const BRANCH_FAILED = new Set(["MIGRATIONS_FAILED", "FUNCTIONS_FAILED"]);
 
+  let lastStatus = "";
+
   for (let i = 0; i < MAX_POLLS; i++) {
     await new Promise((r) => setTimeout(r, INTERVAL_MS));
 
@@ -52,8 +56,13 @@ async function pollBranchUntilHealthy(
 
       const branchStatus = branch.status;
       const projectStatus = branch.preview_project_status;
+      const currentStatus = projectStatus ?? branchStatus;
 
-      spinner.message(`Waiting for branch to become healthy… (${branchStatus})`);
+      // Only update spinner message when status changes — avoids flooding CI/non-TTY output
+      if (currentStatus !== lastStatus) {
+        spinner.message(`Waiting for branch to become healthy… (${currentStatus})`);
+        lastStatus = currentStatus;
+      }
 
       if (BRANCH_FAILED.has(branchStatus)) return false;
 
@@ -73,7 +82,7 @@ export async function createBranch(
   nameArg: string | undefined,
   options: CreateBranchOptions = {}
 ): Promise<void> {
-  const isTTY = process.stdout.isTTY && !options.json;
+  const isTTY = process.stdout.isTTY && !options.json && !options.subOperation;
   const spinner = createSpinner(options);
 
   if (isTTY) {

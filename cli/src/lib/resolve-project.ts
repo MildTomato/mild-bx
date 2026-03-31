@@ -142,6 +142,11 @@ export async function resolveProjectContext(options: {
   // For branching profiles, resolve the Supabase branch ref matching the current git branch
   const workflowProfile = getWorkflowProfile(config);
 
+  const HEALTHY_BRANCH = "ACTIVE_HEALTHY";
+  const FAILED_BRANCH_STATUSES = new Set([
+    "ACTIVE_UNHEALTHY", "INIT_FAILED", "REMOVED", "RESTORE_FAILED", "PAUSE_FAILED",
+  ]);
+
   if (isBranchingProfile(workflowProfile) && branch && branch !== "main" && branch !== "master" && !options.skipBranchResolution) {
     try {
       const client = createClient(token);
@@ -149,6 +154,27 @@ export async function resolveProjectContext(options: {
       const match = branches.find((b) => b.git_branch === branch);
 
       if (match) {
+        const projectStatus = match.preview_project_status;
+
+        // Guard: don't use a branch that isn't ready
+        if (projectStatus && projectStatus !== HEALTHY_BRANCH) {
+          if (FAILED_BRANCH_STATUSES.has(projectStatus)) {
+            if (options.json) {
+              console.log(JSON.stringify({ status: "error", message: `Preview branch is in a failed state (${projectStatus}). Delete and recreate it.`, exitCode: 1 }));
+            } else {
+              console.error(chalk.red(`Preview branch "${branch}" is in a failed state (${projectStatus}). Delete and recreate it.`));
+            }
+            process.exit(1);
+          }
+          // Still starting up
+          if (options.json) {
+            console.log(JSON.stringify({ status: "error", message: `Preview branch is not ready yet (${projectStatus}). Wait a moment and try again.`, exitCode: 1 }));
+          } else {
+            console.error(chalk.yellow(`Preview branch "${branch}" is not ready yet (${projectStatus}). Wait a moment and try again.`));
+          }
+          process.exit(1);
+        }
+
         const { writeBranchEnv } = await import("./env-file.js");
         try {
           const dbPass = await writeBranchEnv({ cwd, projectRef: match.project_ref, branchId: match.id, token });
@@ -176,7 +202,7 @@ export async function resolveProjectContext(options: {
           process.stderr.write(`  Creating preview branch for git branch "${branch}"…\n`);
         }
 
-        await createBranch(undefined, { profile: options.profile ?? undefined, yes: true, noPush: true });
+        await createBranch(undefined, { profile: options.profile ?? undefined, yes: true, noPush: true, subOperation: true });
 
         // Re-fetch and return the newly created branch
         const updatedBranches = await client.listBranches(projectRef);

@@ -47,6 +47,9 @@ import { checkEnvMatchesBranch, runCodegenIfStale, refreshTypesAndCodegen } from
 import { runHooks, runHooksAsync, getHookWatchSources } from "@/lib/hooks.js";
 import { createFileWatcher, type WatchSource } from "@/lib/file-watcher.js";
 import type { HooksConfig } from "@supabase-dx/config";
+import { getEnvRefs, getSecretRefs } from "@/lib/config-ref.js";
+import { listRemoteVariables } from "@/lib/env-api-bridge.js";
+import { resolveEnvScope } from "@/lib/resolve-project.js";
 
 function watchGitBranch(cwd: string, onChange: () => void): () => void {
   const gitHeadPath = join(cwd, ".git", "HEAD");
@@ -87,6 +90,26 @@ function formatConfigValue(value: unknown): string {
   return String(value);
 }
 
+/**
+ * Scan config for env() and secret() refs and return any that are missing
+ * from process.env.
+ */
+function getMissingEnvVars(
+  config: ProjectConfig,
+  lookupEnvVar: (key: string) => string | undefined = (k) => process.env[k],
+): { name: string; isSecret: boolean }[] {
+  const missing: { name: string; isSecret: boolean }[] = [];
+  const envRefs = getEnvRefs(config);
+  const secretRefs = getSecretRefs(config);
+  for (const name of envRefs.keys()) {
+    if (!lookupEnvVar(name)) missing.push({ name, isSecret: false });
+  }
+  for (const name of secretRefs.keys()) {
+    if (!lookupEnvVar(name)) missing.push({ name, isSecret: true });
+  }
+  return missing;
+}
+
 // Clack-style symbols (S_BAR imported from command-header)
 const S_STEP_SUBMIT = C.success + "◇" + C.reset;
 const S_STEP_ERROR = C.error + "■" + C.reset;
@@ -106,6 +129,7 @@ interface DevOptions {
 interface DevState {
   profile?: Profile;
   projectRef?: string;
+  isBranch: boolean;
   connectionString?: string;
   pendingSchemaChanges: Set<string>;
   pendingConfigChange: boolean;
@@ -688,6 +712,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
   const state: DevState = {
     profile,
     projectRef,
+    isBranch: false, // updated when branch resolution runs
     connectionString,
     pendingSchemaChanges: new Set(),
     pendingConfigChange: false,
@@ -754,6 +779,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
             }).then(async (result) => {
               if (result) {
                 state.projectRef = result.projectRef;
+                state.isBranch = result.isBranch;
                 // Rebuild connection string for the new project ref
                 try {
                   const cs = await resolveConnectionString(
@@ -997,6 +1023,18 @@ export async function devCommand(options: DevOptions): Promise<void> {
               }),
             );
           }
+        }
+
+        // Warn about missing env vars after every change cycle
+        const currentConfig = (loadProjectConfig(cwd) ?? config) as ProjectConfig;
+        const missingVarsJson = getMissingEnvVars(currentConfig);
+        if (missingVarsJson.length > 0) {
+          console.log(
+            JSON.stringify({
+              event: "missing_env_vars",
+              vars: missingVarsJson.map(({ name, isSecret }) => ({ name, isSecret })),
+            }),
+          );
         }
 
         state.isApplying = false;
@@ -1364,6 +1402,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
             }).then(async (result) => {
               if (result) {
                 state.projectRef = result.projectRef;
+                state.isBranch = result.isBranch;
                 logVerbose(`branch: resolved → ${result.projectRef} (${result.isBranch ? "preview" : "main"})`);
                 // Rebuild connection string for the new project ref
                 try {
@@ -1400,8 +1439,19 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
   // Compare local config against remote and apply any differences.
   // Returns the list of changes (empty = already in sync). Throws on API error.
-  const syncConfig = async (freshConfig: ProjectConfig): Promise<ConfigChange[]> => {
+  const syncConfig = async (freshConfig: ProjectConfig): Promise<{ changes: ConfigChange[]; lookupEnvVar: (key: string) => string | undefined }> => {
     const allChanges: ConfigChange[] = [];
+
+    // Fetch env-server vars for the current scope (same as push.ts)
+    const scope = resolveEnvScope({ isBranch: state.isBranch, config: freshConfig });
+    let envServerVars: Record<string, string> = {};
+    try {
+      const vars = await listRemoteVariables(parentProjectRef, scope);
+      envServerVars = Object.fromEntries(vars.map((v) => [v.key, v.value]));
+    } catch {
+      // env-server not running — fall back to process.env only
+    }
+    const lookupEnvVar = (key: string): string | undefined => envServerVars[key] ?? process.env[key];
 
     const postgrestPayload = buildPostgrestPayload(freshConfig);
     if (postgrestPayload && Object.keys(postgrestPayload).length > 0) {
@@ -1426,7 +1476,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
       }
     }
 
-    const authPayload = buildAuthPayload(freshConfig);
+    const authPayload = buildAuthPayload(freshConfig, lookupEnvVar);
     if (authPayload && Object.keys(authPayload).length > 0) {
       logVerbose(`GET /v1/projects/${state.projectRef}/config/auth`);
       const remoteConfig = await client.getAuthConfig(state.projectRef!);
@@ -1449,7 +1499,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
       }
     }
 
-    return allChanges;
+    return { changes: allChanges, lookupEnvVar };
   };
 
   // Show config change details under the rail
@@ -1462,16 +1512,35 @@ export async function devCommand(options: DevOptions): Promise<void> {
     if (changes.length > 5) logNested(`+${changes.length - 5} more`);
   };
 
+  // Warn about unresolved env() / secret() refs in config
+  const logMissingEnvVarsWarning = (missingVars: { name: string; isSecret: boolean }[]) => {
+    if (missingVars.length === 0) return;
+    clearLine();
+    console.log(S_BAR);
+    console.log(`${S_BAR}  ${C.warning}⚠${C.reset}  Missing environment variables:`);
+    for (const { name, isSecret } of missingVars) {
+      if (isSecret) {
+        console.log(`${S_BAR}    ${C.secondary}•${C.reset}  ${C.fileName}${name}${C.reset}  ${C.secondary}(secret)${C.reset}`);
+        console.log(`${S_BAR}       ${C.secondary}export ${name}=<value>${C.reset}`);
+      } else {
+        console.log(`${S_BAR}    ${C.secondary}•${C.reset}  ${C.fileName}${name}${C.reset}`);
+        console.log(`${S_BAR}       ${C.value}supa env set ${name} <value>${C.reset}`);
+      }
+    }
+    console.log(S_BAR);
+    lastActivity = Date.now();
+  };
+
   // Apply config changes (called from file watcher)
-  const applyConfigChanges = async () => {
+  const applyConfigChanges = async (): Promise<((key: string) => string | undefined) | undefined> => {
     startStep("Comparing config with remote");
     try {
       const freshConfig = loadProjectConfig(cwd) as ProjectConfig;
       if (!freshConfig) {
         completeStep("Config push failed", "could not reload config.json", "error");
-        return;
+        return undefined;
       }
-      const allChanges = await syncConfig(freshConfig);
+      const { changes: allChanges, lookupEnvVar } = await syncConfig(freshConfig);
       if (allChanges.length === 0) {
         cancelStep();
       } else if (options.dryRun) {
@@ -1481,9 +1550,11 @@ export async function devCommand(options: DevOptions): Promise<void> {
         completeStep("Pushed config to remote", `${allChanges.length} change${allChanges.length === 1 ? "" : "s"}`);
         logConfigChanges(allChanges);
       }
+      return lookupEnvVar;
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       completeStep("Config push failed", undefined, "error", msg);
+      return undefined;
     }
   };
 
@@ -1627,8 +1698,9 @@ export async function devCommand(options: DevOptions): Promise<void> {
     state.pendingSeedChange = false;
 
     // Apply config first
+    let lookupEnvVar: ((key: string) => string | undefined) | undefined;
     if (configChanged) {
-      await applyConfigChanges();
+      lookupEnvVar = await applyConfigChanges();
       // Re-run codegen in case codegen settings (e.g. client_path) changed
       const freshConfig = loadProjectConfig(cwd);
       if (freshConfig) {
@@ -1654,6 +1726,9 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
     state.isApplying = false;
     state.lastPush = Date.now();
+
+    // Warn about missing env vars after every change cycle
+    logMissingEnvVarsWarning(getMissingEnvVars(config as ProjectConfig, lookupEnvVar));
 
     // If changes accumulated during apply (e.g. hook-generated SQL picked up by watcher), re-schedule
     if (state.pendingSchemaChanges.size > 0 || state.pendingConfigChange || state.pendingSeedChange) {
@@ -1789,10 +1864,11 @@ export async function devCommand(options: DevOptions): Promise<void> {
       // Config
       logVerbose(`config: syncing…`);
       let configChanges: ConfigChange[] = [];
+      let startupLookupEnvVar: ((key: string) => string | undefined) | undefined;
       const freshConfig = loadProjectConfig(cwd) as ProjectConfig;
       if (freshConfig) {
         try {
-          configChanges = await syncConfig(freshConfig);
+          ({ changes: configChanges, lookupEnvVar: startupLookupEnvVar } = await syncConfig(freshConfig));
           logVerbose(`config: ${configChanges.length} change(s)`);
           config = freshConfig;
         } catch (error) {
@@ -1832,6 +1908,9 @@ export async function devCommand(options: DevOptions): Promise<void> {
       if (seedEnabled && !state.seedApplied) {
         await applySeed("initial");
       }
+
+      // Warn about any unresolved env() / secret() refs at startup
+      logMissingEnvVarsWarning(getMissingEnvVars(config as ProjectConfig, startupLookupEnvVar));
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

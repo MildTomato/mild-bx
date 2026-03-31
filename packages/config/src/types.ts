@@ -10,7 +10,7 @@ export type ConfigSource = "code" | "remote";
 
 export interface AnalyticsConfig {
   /** Enable the local Logflare service. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Port to the local Logflare service. */
   port?: number;
   /** Port to the local syslog ingest service. */
@@ -23,11 +23,11 @@ export interface AnalyticsConfig {
 }
 export interface ApiConfigTls {
   /** Enable TLS for the local PostgREST service. */
-  enabled?: boolean;
+  enabled?: boolean | string;
 }
 export interface ApiConfig {
   /** Enable the local PostgREST service. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Port to use for the API URL. */
   port?: number;
   schemas?: Array<string>;
@@ -40,7 +40,7 @@ export interface ApiConfig {
 }
 export interface AuthConfigHookMfaVerificationAttempt {
   /** Enable/disable the mfa verification hook. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** The URI of the postgres function or HTTP endpoint to call. */
   uri?: string;
   /** The secrets to pass to the postgres function or HTTP endpoint. */
@@ -48,7 +48,7 @@ export interface AuthConfigHookMfaVerificationAttempt {
 }
 export interface AuthConfigHookPasswordVerificationAttempt {
   /** Enable/disable the password verification hook. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** The URI of the postgres function or HTTP endpoint to call. */
   uri?: string;
   /** The secrets to pass to the postgres function or HTTP endpoint. */
@@ -56,7 +56,7 @@ export interface AuthConfigHookPasswordVerificationAttempt {
 }
 export interface AuthConfigHookCustomAccessToken {
   /** Enable/disable the custom access token hook. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** The URI of the postgres function or HTTP endpoint to call. */
   uri?: string;
   /** The secrets to pass to the postgres function or HTTP endpoint. */
@@ -64,7 +64,7 @@ export interface AuthConfigHookCustomAccessToken {
 }
 export interface AuthConfigHookSendSms {
   /** Enable/disable the send sms hook. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** The URI of the postgres function or HTTP endpoint to call. */
   uri?: string;
   /** The secrets to pass to the postgres function or HTTP endpoint. */
@@ -72,7 +72,7 @@ export interface AuthConfigHookSendSms {
 }
 export interface AuthConfigHookSendEmail {
   /** Enable/disable the send email hook. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** The URI of the postgres function or HTTP endpoint to call. */
   uri?: string;
   /** The secrets to pass to the postgres function or HTTP endpoint. */
@@ -87,15 +87,15 @@ export interface AuthConfigHook {
 }
 export interface AuthConfigMfaTotp {
   /** Allow/disallow TOTP enrollment for users. */
-  enroll_enabled?: boolean;
+  enroll_enabled?: boolean | string;
   /** Allow/disallow TOTP verification for users. */
-  verify_enabled?: boolean;
+  verify_enabled?: boolean | string;
 }
 export interface AuthConfigMfaPhone {
   /** Allow/disallow phone enrollment for users. */
-  enroll_enabled?: boolean;
+  enroll_enabled?: boolean | string;
   /** Allow/disallow phone verification for users. */
-  verify_enabled?: boolean;
+  verify_enabled?: boolean | string;
   /** The length of the OTP code. */
   otp_length?: number;
   /** The template to use for the phone message. */
@@ -168,13 +168,13 @@ export interface AuthConfigEmailTemplate {
 }
 export interface AuthConfigEmail {
   /** Allow/disallow new user signups via email to your project. */
-  enable_signup?: boolean;
+  enable_signup?: boolean | string;
   /** If enabled, a user will be required to confirm any email change on both the old, and new email addresses. If disabled, only the new email is required to confirm. */
-  double_confirm_changes?: boolean;
+  double_confirm_changes?: boolean | string;
   /** If enabled, users need to confirm their email address before signing in. */
-  enable_confirmations?: boolean;
+  enable_confirmations?: boolean | string;
   /** If enabled, users will need to reauthenticate or have logged in recently to change their password. */
-  secure_password_change?: boolean;
+  secure_password_change?: boolean | string;
   /** Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email. */
   max_frequency?: string;
   smtp?: AuthConfigEmailSmtp;
@@ -182,7 +182,7 @@ export interface AuthConfigEmail {
 }
 export interface AuthConfigSmsTwilio {
   /** Enable/disable Twilio provider for phone login. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** The account SID for the Twilio API. */
   account_sid?: string;
   /** The message service SID for the Twilio API. */
@@ -192,7 +192,7 @@ export interface AuthConfigSmsTwilio {
 }
 export interface AuthConfigSmsTwilioVerify {
   /** Enable/disable Twilio Verify provider for phone verification. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** The account SID for the Twilio API. */
   account_sid?: string;
   /** The message service SID for the Twilio API. */
@@ -202,7 +202,7 @@ export interface AuthConfigSmsTwilioVerify {
 }
 export interface AuthConfigSmsMessagebird {
   /** Enable/disable MessageBird provider for phone login. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** The originator of the SMS message. */
   originator?: string;
   /** The API key for the MessageBird API. */
@@ -210,7 +210,7 @@ export interface AuthConfigSmsMessagebird {
 }
 export interface AuthConfigSmsTextlocal {
   /** Enable/disable Textlocal provider for phone login. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** The sender of the SMS message. */
   sender?: string;
   /** The API key for the Textlocal API. */
@@ -218,7 +218,7 @@ export interface AuthConfigSmsTextlocal {
 }
 export interface AuthConfigSmsVonage {
   /** Enable/disable Vonage provider for phone login. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** The sender of the SMS message. */
   from?: string;
   /** The API key for the Vonage API. */
@@ -228,9 +228,9 @@ export interface AuthConfigSmsVonage {
 }
 export interface AuthConfigSms {
   /** Allow/disallow new user signups via SMS to your project. */
-  enable_signup?: boolean;
+  enable_signup?: boolean | string;
   /** If enabled, users need to confirm their phone number before signing in. */
-  enable_confirmations?: boolean;
+  enable_confirmations?: boolean | string;
   /** The template to use for the SMS message. */
   template?: string;
   /** Controls the minimum amount of time that must pass before sending another sms otp. */
@@ -245,7 +245,7 @@ export interface AuthConfigSms {
 }
 export interface AuthConfigExternalApple {
   /** Use the Apple OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the Apple OAuth provider. */
   client_id?: string;
   /** Client secret for the Apple OAuth provider.
@@ -257,11 +257,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the Apple OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalAzure {
   /** Use the Azure OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the Azure OAuth provider. */
   client_id?: string;
   /** Client secret for the Azure OAuth provider.
@@ -273,11 +273,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the Azure OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalBitbucket {
   /** Use the Bitbucket OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the Bitbucket OAuth provider. */
   client_id?: string;
   /** Client secret for the Bitbucket OAuth provider.
@@ -289,11 +289,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the Bitbucket OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalDiscord {
   /** Use the Discord OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the Discord OAuth provider. */
   client_id?: string;
   /** Client secret for the Discord OAuth provider.
@@ -305,11 +305,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the Discord OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalFacebook {
   /** Use the Facebook OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the Facebook OAuth provider. */
   client_id?: string;
   /** Client secret for the Facebook OAuth provider.
@@ -321,11 +321,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the Facebook OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalGithub {
   /** Use the GitHub OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the GitHub OAuth provider. */
   client_id?: string;
   /** Client secret for the GitHub OAuth provider.
@@ -337,11 +337,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the GitHub OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalGitlab {
   /** Use the Gitlab OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the Gitlab OAuth provider. */
   client_id?: string;
   /** Client secret for the Gitlab OAuth provider.
@@ -353,11 +353,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the Gitlab OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalGoogle {
   /** Use the Google OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the Google OAuth provider. */
   client_id?: string;
   /** Client secret for the Google OAuth provider.
@@ -369,11 +369,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the Google OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalKakao {
   /** Use the Kakao OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the Kakao OAuth provider. */
   client_id?: string;
   /** Client secret for the Kakao OAuth provider.
@@ -385,11 +385,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the Kakao OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalKeycloak {
   /** Use the Keycloak OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the Keycloak OAuth provider. */
   client_id?: string;
   /** Client secret for the Keycloak OAuth provider.
@@ -401,11 +401,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the Keycloak OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalLinkedin {
   /** Use the LinkedIn OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the LinkedIn OAuth provider. */
   client_id?: string;
   /** Client secret for the LinkedIn OAuth provider.
@@ -417,11 +417,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the LinkedIn OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalNotion {
   /** Use the Notion OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the Notion OAuth provider. */
   client_id?: string;
   /** Client secret for the Notion OAuth provider.
@@ -433,11 +433,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the Notion OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalTwitch {
   /** Use the Twitch OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the Twitch OAuth provider. */
   client_id?: string;
   /** Client secret for the Twitch OAuth provider.
@@ -449,11 +449,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the Twitch OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalTwitter {
   /** Use the Twitter OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the Twitter OAuth provider. */
   client_id?: string;
   /** Client secret for the Twitter OAuth provider.
@@ -465,11 +465,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the Twitter OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalSlack {
   /** Use the Slack OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the Slack OAuth provider. */
   client_id?: string;
   /** Client secret for the Slack OAuth provider.
@@ -481,11 +481,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the Slack OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalSpotify {
   /** Use the Spotify OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the Spotify OAuth provider. */
   client_id?: string;
   /** Client secret for the Spotify OAuth provider.
@@ -497,11 +497,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the Spotify OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalWorkos {
   /** Use the WorkOS OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the WorkOS OAuth provider. */
   client_id?: string;
   /** Client secret for the WorkOS OAuth provider.
@@ -513,11 +513,11 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the WorkOS OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternalZoom {
   /** Use the Zoom OAuth provider. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Client ID for the Zoom OAuth provider. */
   client_id?: string;
   /** Client secret for the Zoom OAuth provider.
@@ -529,7 +529,7 @@ DO NOT commit your OAuth provider secret to git. Use environment variable substi
   /** The URI the Zoom OAuth2 provider will redirect to with the code and state values. */
   redirect_uri?: string;
   /** If true, the nonce check will be skipped. */
-  skip_nonce_check?: boolean;
+  skip_nonce_check?: boolean | string;
 }
 export interface AuthConfigExternal {
   apple?: AuthConfigExternalApple;
@@ -553,7 +553,7 @@ export interface AuthConfigExternal {
 }
 export interface AuthConfig {
   /** Enable the local GoTrue service. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** The base URL of your website. Used as an allow-list for redirects and for constructing URLs used in emails. */
   site_url?: string;
   /** A list of _exact_ URLs that auth providers are permitted to redirect to post authentication. */
@@ -561,15 +561,15 @@ export interface AuthConfig {
   /** How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 seconds (one week). */
   jwt_expiry?: number;
   /** If disabled, the refresh token will never expire. */
-  enable_refresh_token_rotation?: boolean;
+  enable_refresh_token_rotation?: boolean | string;
   /** Allows refresh tokens to be reused after expiry, up to the specified interval in seconds. Requires enable_refresh_token_rotation = true. */
   refresh_token_reuse_interval?: number;
   /** Allow/disallow testing manual linking of accounts. */
-  enable_manual_linking?: boolean;
+  enable_manual_linking?: boolean | string;
   /** Allow/disallow new user signups to your project. */
-  enable_signup?: boolean;
+  enable_signup?: boolean | string;
   /** Allow/disallow anonymous sign-ins to your project. */
-  enable_anonymous_sign_ins?: boolean;
+  enable_anonymous_sign_ins?: boolean | string;
   hook?: AuthConfigHook;
   mfa?: AuthConfigMfa;
   sessions?: AuthConfigSessions;
@@ -579,7 +579,7 @@ export interface AuthConfig {
 }
 export interface DbConfigPooler {
   /** Enable the local PgBouncer service. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Port to use for the local connection pooler. */
   port?: number;
   /** Specifies when a server connection can be reused by other clients. Configure one of the supported pooler modes: `transaction`, `session`. */
@@ -591,7 +591,7 @@ export interface DbConfigPooler {
 }
 export interface DbConfigSeed {
   /** Enable seeding the database with SQL files. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Paths to SQL files to seed the database with. Supports glob patterns relative to supabase directory. */
   sql_paths?: Array<string>;
 }
@@ -607,7 +607,7 @@ export interface DbConfig {
 }
 export interface EdgeRuntimeConfig {
   /** Enable the local Edge Runtime service. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Configure the supported request policy. Use `oneshot` for hot reload, or `per_worker` for load testing. */
   policy?: "oneshot" | "per_worker";
   /** Port to run the Edge Functions inspector on. */
@@ -618,11 +618,11 @@ export interface FunctionsConfigEntry {
 the function will be skipped during deployment and won't be served locally.
 This is useful for disabling demo functions or temporarily disabling a function
 without removing its code. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** By default, when you deploy your Edge Functions or serve them locally, it
 will reject requests without a valid JWT in the Authorization header.
 Setting this configuration changes the default behavior. */
-  verify_jwt?: boolean;
+  verify_jwt?: boolean | string;
   /** Specify the Deno import map file to use for the Function.
 
 Note that the `--import-map` flag overrides this configuration. */
@@ -634,7 +634,7 @@ Both `.js` and `.ts` file extensions are supported. */
 }
 export interface InbucketConfig {
   /** Enable the local InBucket service. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Port to use for the email testing server web interface.
 
 Emails sent with the local dev setup are not actually sent - rather, they are monitored, and you can view the emails that would have been sent from the web interface. */
@@ -654,7 +654,7 @@ If set, you can access the POP3 server from this port. */
 }
 export interface RealtimeConfig {
   /** Enable the local Realtime service. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Bind realtime via either IPv4 or IPv6. */
   ip_version?: "IPv4" | "IPv6";
   /** Maximum length of the HTTP header. */
@@ -662,11 +662,11 @@ export interface RealtimeConfig {
 }
 export interface StorageConfigImageTransformation {
   /** Enable image transformation. */
-  enabled?: boolean;
+  enabled?: boolean | string;
 }
 export interface StorageConfigBuckets {
   /** Enable public access to the bucket. */
-  public?: boolean;
+  public?: boolean | string;
   /** The maximum file size allowed for the bucket. */
   file_size_limit?: string;
   /** The list of allowed MIME types for the bucket. */
@@ -676,7 +676,7 @@ export interface StorageConfigBuckets {
 }
 export interface StorageConfig {
   /** Enable the local Storage service. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** The maximum file size allowed. */
   file_size_limit?: string;
   image_transformation?: StorageConfigImageTransformation;
@@ -685,7 +685,7 @@ export interface StorageConfig {
 }
 export interface StudioConfig {
   /** Enable the local Supabase Studio dashboard. */
-  enabled?: boolean;
+  enabled?: boolean | string;
   /** Port to use for Supabase Studio. */
   port?: number;
   /** External URL of the API server that frontend connects to. */

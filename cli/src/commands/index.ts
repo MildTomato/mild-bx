@@ -13,6 +13,8 @@ import projects, { projectsCommand } from "./projects/index.js";
 import project, { projectCommand } from "./project/index.js";
 import login, { loginCommand } from "./login/index.js";
 import logout, { logoutCommand } from "./logout/index.js";
+import push, { pushSubcommand } from "./project/push/index.js";
+import pull, { pullSubcommand } from "./project/pull/index.js";
 
 // Command entries with spec and handler
 interface CommandEntry {
@@ -30,6 +32,8 @@ const commandEntries: CommandEntry[] = [
   { spec: orgsCommand, handler: orgs },
   { spec: projectsCommand, handler: projects },
   { spec: projectCommand, handler: project },
+  { spec: { ...pushSubcommand, name: "push" }, handler: push },
+  { spec: { ...pullSubcommand, name: "pull" }, handler: pull },
 ];
 
 // Build command map (name + aliases → handler)

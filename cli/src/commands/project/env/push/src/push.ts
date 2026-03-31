@@ -9,6 +9,7 @@ import { createClient } from "@/lib/api.js";
 import { handleCommandError } from "@/lib/command-error.js";
 import { loadLocalEnvVars } from "@/lib/env-file.js";
 import { listRemoteVariables, bulkPushVariables, setRemoteVariable } from "@/lib/env-api-bridge.js";
+import { getSecretRefs } from "@/lib/config-ref.js";
 import { computeEnvDiff, formatEnvDiff, hasChanges, getDiffSummary } from "@/lib/env-diff.js";
 import { SENTINEL_CONFIG_SOURCE } from "@supabase-dx/env-vars";
 import { createSpinner } from "@/components/output.js";
@@ -45,8 +46,11 @@ export async function pushCommand(options: PushOptions): Promise<void> {
   // 1. Load local variables from supabase/.env
   const localParsed = loadLocalEnvVars(ctx.cwd);
 
-  // Filter out # @secret vars - secrets are never pushed from .env per spec
-  const pushableVars = localParsed.variables.filter((v) => !v.secret);
+  // Filter out secrets: vars marked @secret in .env AND vars declared as secret() refs in config
+  const configSecretVarNames = new Set(getSecretRefs(ctx.config).keys());
+  const pushableVars = localParsed.variables.filter(
+    (v) => !v.secret && !configSecretVarNames.has(v.key)
+  );
 
   // 2. Load remote variables
   const client = createClient(ctx.token);

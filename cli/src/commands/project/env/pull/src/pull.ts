@@ -9,6 +9,7 @@ import { createClient } from "@/lib/api.js";
 import { handleCommandError } from "@/lib/command-error.js";
 import { writeEnvFile } from "@/lib/env-file.js";
 import { listRemoteVariables } from "@/lib/env-api-bridge.js";
+import { getSecretRefs } from "@/lib/config-ref.js";
 import {
   resolveScoped,
   SENTINEL_KEYS,
@@ -59,6 +60,9 @@ export async function pullCommand(options: PullOptions): Promise<void> {
     context
   );
 
+  // Also exclude vars declared as secret() refs in config — never pulled to .env.local
+  const configSecretVarNames = new Set(getSecretRefs(ctx.config).keys());
+
   // Build the variable list to write, skip sentinels and secrets
   const secretKeys = new Set(raw.filter((v) => v.secret).map((v) => v.key));
   const toWrite: Array<{ key: string; value: string; secret: boolean }> = [];
@@ -66,7 +70,7 @@ export async function pullCommand(options: PullOptions): Promise<void> {
 
   for (const [key, value] of resolved) {
     if (SENTINEL_KEYS.has(key)) continue;
-    if (secretKeys.has(key)) {
+    if (secretKeys.has(key) || configSecretVarNames.has(key)) {
       excludedSecrets.push(key);
       continue;
     }

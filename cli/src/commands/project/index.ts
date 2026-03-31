@@ -10,7 +10,7 @@ import seed from "./seed/index.js";
 import seedStatus from "./seed-status/index.js";
 import apiKeys from "./api-keys/index.js";
 import profile from "./profile/index.js";
-import authProvider from "./auth-provider/index.js";
+// import authProvider from "./auth-provider/index.js";
 import env from "./env/index.js";
 import branches from "./branches/index.js";
 import envServer from "./env-server/index.js";
@@ -44,9 +44,9 @@ export default async function project(argv: string[]): Promise<number> {
       return apiKeys(rest);
     case "profile":
       return profile(rest);
-    case "auth-provider":
-    case "auth":
-      return authProvider(rest);
+    // case "auth-provider":
+    // case "auth":
+    //   return authProvider(rest);
     case "env":
       return env(rest);
     case "branches":

@@ -15,11 +15,13 @@ import {
   buildProviderPayload,
   providerPayloadToEnvVars,
   getCallbackUrl,
+  envVarName,
   type ProviderDefinition,
 } from "@/lib/auth-providers.js";
 import type { ExternalProviderConfig } from "@/lib/config-types.js";
 import { replaceRemoteVariables } from "@/lib/env-api-bridge.js";
 import { createSpinner } from "@/components/output.js";
+import { makeEnvRef, makeSecretRef, isConfigRef } from "@/lib/config-ref.js";
 
 export interface AddOptions {
   "client-id"?: string;
@@ -199,8 +201,8 @@ export async function addAuthProvider(
     process.exit(EXIT_CODES.VALIDATION_ERROR);
   }
 
-  // Validate client ID format
-  if (!providerConfig.client_id?.match(/^[a-zA-Z0-9._-]+$/)) {
+  // Validate client ID format (skip validation for ref syntax)
+  if (!isConfigRef(providerConfig.client_id) && !providerConfig.client_id?.match(/^[a-zA-Z0-9._-]+$/)) {
     const errorMsg = "Invalid client ID format. Client IDs should contain only letters, numbers, dots, underscores, and hyphens.";
     if (options.json) {
       console.error(JSON.stringify({
@@ -214,8 +216,10 @@ export async function addAuthProvider(
     process.exit(EXIT_CODES.VALIDATION_ERROR);
   }
 
-  // Secret
-  let secretValue: string;
+  // Secret — collect if available, otherwise continue without it.
+  // In non-TTY mode we can't prompt, so we write everything else first
+  // and then tell the user to set the secret separately.
+  let secretValue: string | undefined;
   if (options.secret) {
     secretValue = options.secret;
   } else if (options["secret-from-env"]) {
@@ -251,19 +255,8 @@ export async function addAuthProvider(
     }
 
     secretValue = String(secret);
-  } else {
-    const errorMsg = "--secret or --secret-from-env is required in non-interactive mode";
-    if (options.json) {
-      console.error(JSON.stringify({
-        error: "MissingFlag",
-        message: errorMsg,
-        exitCode: EXIT_CODES.VALIDATION_ERROR,
-      }, null, 2));
-    } else {
-      p.log.error(errorMsg);
-    }
-    process.exit(EXIT_CODES.VALIDATION_ERROR);
   }
+  // else: non-TTY with no secret — continue, write config + env vars, then prompt
 
   // Warn about short secrets and ask for confirmation
   if (secretValue.length < 16 && isTTY) {
@@ -319,10 +312,10 @@ export async function addAuthProvider(
     providerConfig.skip_nonce_check = true;
   }
 
-  // Build API payload with actual secret value
+  // Build API payload — secret may be undefined in non-TTY mode
   const apiPayload = buildProviderPayload(provider, {
     ...providerConfig,
-    secret: secretValue,
+    ...(secretValue !== undefined && { secret: secretValue }),
   });
 
   // Dry run: show what would happen
@@ -393,9 +386,15 @@ export async function addAuthProvider(
     if (!configContent.auth) configContent.auth = {};
     if (!configContent.auth.external) configContent.auth.external = {};
 
-    // Implicit binding: only store enabled + optional non-sensitive fields.
-    // client_id and secret are resolved from the canonical env vars at push time.
-    const providerEntry: Record<string, unknown> = { enabled: true };
+    // Write ref syntax so config.json can point to env vars without storing values.
+    const clientIdVar = `SUPABASE_AUTH_EXTERNAL_${provider.key.toUpperCase()}_CLIENT_ID`;
+    const secretVar = envVarName(provider.key);
+
+    const providerEntry: Record<string, unknown> = {
+      enabled: true,
+      client_id: makeEnvRef(clientIdVar),
+      secret: makeSecretRef(secretVar),
+    };
     if (providerConfig.url) providerEntry.url = providerConfig.url;
     if (providerConfig.redirect_uri) providerEntry.redirect_uri = providerConfig.redirect_uri;
     if (providerConfig.skip_nonce_check) providerEntry.skip_nonce_check = true;
@@ -418,12 +417,19 @@ export async function addAuthProvider(
     process.exit(EXIT_CODES.GENERIC_ERROR);
   }
 
-  // Step 2: Push env vars to env-server
+  // Step 2: Push non-secret env vars to env-server.
+  // Secret values (marked secret: true) are never stored in env-server —
+  // they must be set by the user directly via `supa env set`.
   const envScope = resolveEnvScope(ctx);
-  const envVars = providerPayloadToEnvVars(apiPayload).map((v) => ({ ...v, scope: envScope }));
+  const allEnvVars = providerPayloadToEnvVars(apiPayload);
+  const nonSecretEnvVars = allEnvVars
+    .filter((v) => !v.secret)
+    .map((v) => ({ ...v, scope: envScope }));
 
   try {
-    await replaceRemoteVariables(parentProjectRef, envVars);
+    if (nonSecretEnvVars.length > 0) {
+      await replaceRemoteVariables(parentProjectRef, nonSecretEnvVars);
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (options.json) {
@@ -492,17 +498,19 @@ export async function addAuthProvider(
   }
 
   // Success message
+  const secretVar = envVarName(provider.key);
+  const callbackUrl = getCallbackUrl(dbHost, projectRef);
+
   if (isTTY) {
     // Close the rail
     console.log(S_BAR);
     console.log(`${chalk.dim("└")}`);
     console.log();
 
-    const callbackUrl = getCallbackUrl(dbHost, projectRef);
     console.log(chalk.green("✓") + ` ${provider.displayName} configured successfully`);
     console.log();
     console.log(chalk.dim("  Changes made:"));
-    console.log(`  ${chalk.dim("•")} Remote: Provider enabled with credentials`);
+    console.log(`  ${chalk.dim("•")} Remote: Provider enabled${secretValue ? " with credentials" : " (secret pending)"}`);
     console.log(`  ${chalk.dim("•")} Local: Config updated (supabase/config.json)`);
     console.log(`  ${chalk.dim("•")} Local: Env vars stored (supabase/.env)`);
     console.log();
@@ -511,22 +519,21 @@ export async function addAuthProvider(
     console.log(`  ${chalk.cyan(callbackUrl)}`);
     console.log();
   } else if (options.json) {
-    console.log(
-      JSON.stringify(
-        {
-          success: true,
-          provider: provider.key,
-          displayName: provider.displayName,
-          enabled: true,
-          callbackUrl: getCallbackUrl(dbHost, projectRef),
-          files: {
-            config: "supabase/config.json",
-            env: "supabase/.env",
-          },
-        },
-        null,
-        2
-      )
-    );
+    const output: Record<string, unknown> = {
+      status: secretValue ? "success" : "action_required",
+      provider: provider.key,
+      displayName: provider.displayName,
+      enabled: true,
+      callbackUrl,
+      files: {
+        config: "supabase/config.json",
+        env: "supabase/.env",
+      },
+    };
+    if (!secretValue) {
+      output.action = `Set the client secret: supa env set ${secretVar}`;
+      output.variable = secretVar;
+    }
+    console.log(JSON.stringify(output, null, 2));
   }
 }

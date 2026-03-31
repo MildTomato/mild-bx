@@ -8,7 +8,7 @@ import { seedSubcommand } from "./seed/command.js";
 import { seedStatusSubcommand } from "./seed-status/command.js";
 import { apiKeysSubcommand } from "./api-keys/command.js";
 import { profileSubcommand } from "./profile/command.js";
-import { authProviderSubcommand } from "./auth-provider/command.js";
+// import { authProviderSubcommand } from "./auth-provider/command.js";
 import { envCommand } from "./env/command.js";
 import { branchesSubcommand } from "./branches/command.js";
 import { envServerCommand } from "./env-server/command.js";
@@ -28,7 +28,7 @@ export const projectCommand = {
     seedStatusSubcommand,
     apiKeysSubcommand,
     profileSubcommand,
-    authProviderSubcommand,
+    // authProviderSubcommand,
     envCommand,
     envServerCommand,
     branchesSubcommand,

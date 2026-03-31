@@ -41,6 +41,7 @@ import {
   formatDiagnostics,
 } from "@supabase-dx/config";
 import { providerPayloadToEnvVars } from "@/lib/auth-providers.js";
+import { getEnvRefs, getSecretRefs } from "@/lib/config-ref.js";
 
 export interface PushOptions {
   profile?: string;
@@ -389,6 +390,20 @@ export async function pushCommand(options: PushOptions) {
         lookupEnvVar,
       });
 
+      // Scan for missing env/secret refs and append to plan warnings
+      if (projectConfig) {
+        const missingEnvWarnings: string[] = [];
+        const envRefs = getEnvRefs(projectConfig);
+        const secretRefs = getSecretRefs(projectConfig);
+        for (const [varName] of envRefs) {
+          if (!lookupEnvVar(varName)) missingEnvWarnings.push(varName);
+        }
+        for (const [varName] of secretRefs) {
+          if (!lookupEnvVar(varName)) missingEnvWarnings.push(varName);
+        }
+        plan.warnings.push(...missingEnvWarnings.map((v) => `Missing env var: ${v}`));
+      }
+
       const hasConfig =
         plan.config.postgrest.keys.length > 0 || plan.config.auth.keys.length > 0;
       const isEmpty =
@@ -405,6 +420,7 @@ export async function pushCommand(options: PushOptions) {
             migrationsFound: 0,
             migrationsApplied: 0,
             configChanges: 0,
+            warnings: plan.warnings,
           })
         );
         return;
@@ -547,6 +563,29 @@ export async function pushCommand(options: PushOptions) {
       verbose: options.verbose,
       lookupEnvVar,
     });
+
+    // Scan for missing env/secret refs and warn
+    if (projectConfig) {
+      const missingEnvVars: { varName: string; isSecret: boolean }[] = [];
+      const envRefs = getEnvRefs(projectConfig);
+      const secretRefs = getSecretRefs(projectConfig);
+      for (const [varName] of envRefs) {
+        if (!lookupEnvVar(varName)) missingEnvVars.push({ varName, isSecret: false });
+      }
+      for (const [varName] of secretRefs) {
+        if (!lookupEnvVar(varName)) missingEnvVars.push({ varName, isSecret: true });
+      }
+      if (missingEnvVars.length > 0) {
+        console.log(S_BAR);
+        console.log(`${S_BAR}  ${chalk.yellow("⚠ Missing environment variables:")}`);
+        for (const { varName, isSecret } of missingEnvVars) {
+          const cmd = chalk.cyan(`supa env set ${varName}`);
+          const note = isSecret ? chalk.dim("  (secret — run in terminal)") : "";
+          console.log(`${S_BAR}    ${chalk.dim("•")} ${chalk.bold(varName.padEnd(30))} ${cmd}${note}`);
+        }
+        console.log(S_BAR);
+      }
+    }
 
     // Check for actual changes
     const hasConfigChanges =

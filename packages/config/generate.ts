@@ -276,6 +276,20 @@ function stripSecretFields(node: any): any {
   return result;
 }
 
+// Routing fields that belong only in config.json, not in overlay files.
+const ROUTING_FIELDS = new Set([
+  "project_id",
+  "project",
+  "workflow_profile",
+  "schema_management",
+  "config_source",
+  "production_branch",
+  "environments",
+  "profiles",
+  "hooks",
+  "codegen",
+]);
+
 // Platform schema — full, including secret fields. Used by backend only.
 const platformOutputPath = join(__dirname, "config-schema", "config.platform.schema.json");
 writeFileSync(platformOutputPath, JSON.stringify(extendedSchema, null, 2));
@@ -286,6 +300,20 @@ const repoSchema = stripSecretFields(extendedSchema);
 const repoOutputPath = join(__dirname, "config-schema", "config.schema.json");
 writeFileSync(repoOutputPath, JSON.stringify(repoSchema, null, 2));
 console.log(`Repo schema written to ${repoOutputPath}`);
+
+// Overlay schema — repo schema minus routing fields. Used by config.<env>.json overlay files.
+const overlayProperties: Record<string, any> = {};
+for (const [key, value] of Object.entries(repoSchema.properties)) {
+  if (!ROUTING_FIELDS.has(key)) overlayProperties[key] = value;
+}
+const overlaySchema = {
+  ...repoSchema,
+  description: "Supabase config overlay — environment-specific overrides for config.json. Routing fields (project_id, workflow_profile, etc.) belong only in config.json.",
+  properties: overlayProperties,
+};
+const overlayOutputPath = join(__dirname, "config-schema", "config.overlay.schema.json");
+writeFileSync(overlayOutputPath, JSON.stringify(overlaySchema, null, 2));
+console.log(`Overlay schema written to ${overlayOutputPath}`);
 
 // ---------------------------------------------------------------------------
 // TypeScript interface generation from the extended schema

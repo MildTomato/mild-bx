@@ -1,0 +1,4034 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference for editor support"
+    },
+    "analytics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable the local Logflare service.",
+          "default": false,
+          "tags": [
+            "analytics"
+          ],
+          "links": [
+            {
+              "name": "Self-hosted Logflare Configuration",
+              "link": "https://supabase.com/docs/reference/self-hosting-analytics/list-endpoints#getting-started"
+            }
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "port": {
+          "type": "number",
+          "description": "Port to the local Logflare service.",
+          "default": 54327,
+          "tags": [
+            "analytics"
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "vector_port": {
+          "type": "number",
+          "description": "Port to the local syslog ingest service.",
+          "default": 54328,
+          "tags": [
+            "analytics"
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "backend": {
+          "type": "string",
+          "description": "Configure one of the supported backends:\n\n- `postgres`\n- `bigquery`",
+          "enum": [
+            "postgres",
+            "bigquery"
+          ],
+          "default": "postgres",
+          "tags": [
+            "analytics"
+          ],
+          "links": [
+            {
+              "name": "Self-hosted Logflare Configuration",
+              "link": "https://supabase.com/docs/reference/self-hosting-analytics/list-endpoints#getting-started"
+            }
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
+    },
+    "api": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable the local PostgREST service.",
+          "default": true,
+          "tags": [
+            "api"
+          ],
+          "links": [
+            {
+              "name": "PostgREST configuration",
+              "link": "https://postgrest.org/en/stable/configuration.html"
+            }
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "port": {
+          "type": "number",
+          "description": "Port to use for the API URL.",
+          "default": 54321,
+          "tags": [
+            "api"
+          ],
+          "links": [
+            {
+              "name": "PostgREST configuration",
+              "link": "https://postgrest.org/en/stable/configuration.html"
+            }
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "schemas": {
+          "type": "array",
+          "default": [
+            "public",
+            "storage",
+            "graphql_public"
+          ],
+          "items": {
+            "type": "string",
+            "description": "Schemas to expose in your API. Tables, views and functions in this schema will get API endpoints. `public` and `storage` are always included.",
+            "tags": [
+              "api"
+            ],
+            "links": [
+              {
+                "name": "PostgREST configuration",
+                "link": "https://postgrest.org/en/stable/configuration.html"
+              }
+            ]
+          },
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "extra_search_path": {
+          "type": "array",
+          "default": [
+            "public",
+            "extensions"
+          ],
+          "items": {
+            "type": "string",
+            "description": "Extra schemas to add to the search_path of every request. public is always included.",
+            "tags": [
+              "api"
+            ],
+            "links": [
+              {
+                "name": "PostgREST configuration",
+                "link": "https://postgrest.org/en/stable/configuration.html"
+              }
+            ]
+          },
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "max_rows": {
+          "type": "number",
+          "description": "The maximum number of rows returned from a view, table, or stored procedure. Limits payload size for accidental or malicious requests.",
+          "default": 1000,
+          "tags": [
+            "api"
+          ],
+          "links": [
+            {
+              "name": "PostgREST configuration",
+              "link": "https://postgrest.org/en/stable/configuration.html"
+            }
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable TLS for the local PostgREST service.",
+              "default": false,
+              "tags": [
+                "api"
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "external_url": {
+          "type": "string",
+          "description": "External URL for accessing the API server.",
+          "default": "http://127.0.0.1:54321",
+          "tags": [
+            "api"
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable the local GoTrue service.",
+          "default": true,
+          "tags": [
+            "auth"
+          ],
+          "links": [
+            {
+              "name": "Auth Server configuration",
+              "link": "https://supabase.com/docs/reference/auth"
+            }
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "site_url": {
+          "type": "string",
+          "description": "The base URL of your website. Used as an allow-list for redirects and for constructing URLs used in emails.",
+          "default": "http://localhost:3000",
+          "tags": [
+            "auth"
+          ],
+          "links": [
+            {
+              "name": "Auth Server configuration",
+              "link": "https://supabase.com/docs/reference/auth"
+            }
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "additional_redirect_urls": {
+          "type": "array",
+          "description": "A list of _exact_ URLs that auth providers are permitted to redirect to post authentication.",
+          "default": [
+            "https://localhost:3000"
+          ],
+          "tags": [
+            "auth"
+          ],
+          "links": [
+            {
+              "name": "Auth Server configuration",
+              "link": "https://supabase.com/docs/reference/auth"
+            }
+          ],
+          "items": {
+            "type": "string",
+            "description": "A URL that auth providers are permitted to redirect to.",
+            "tags": [
+              "auth"
+            ]
+          },
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "jwt_expiry": {
+          "type": "number",
+          "description": "How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 seconds (one week).",
+          "default": 3600,
+          "tags": [
+            "auth"
+          ],
+          "links": [
+            {
+              "name": "Auth Server configuration",
+              "link": "https://supabase.com/docs/reference/auth"
+            }
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "enable_refresh_token_rotation": {
+          "type": "boolean",
+          "description": "If disabled, the refresh token will never expire.",
+          "default": true,
+          "tags": [
+            "auth"
+          ],
+          "links": [
+            {
+              "name": "Auth Server configuration",
+              "link": "https://supabase.com/docs/reference/auth"
+            }
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "refresh_token_reuse_interval": {
+          "type": "number",
+          "description": "Allows refresh tokens to be reused after expiry, up to the specified interval in seconds. Requires enable_refresh_token_rotation = true.",
+          "default": 10,
+          "tags": [
+            "auth"
+          ],
+          "links": [
+            {
+              "name": "Auth Server configuration",
+              "link": "https://supabase.com/docs/reference/auth"
+            }
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "enable_manual_linking": {
+          "type": "boolean",
+          "description": "Allow/disallow testing manual linking of accounts.",
+          "default": false,
+          "tags": [
+            "auth"
+          ],
+          "links": [
+            {
+              "name": "Auth Server configuration",
+              "link": "https://supabase.com/docs/reference/auth"
+            }
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "enable_signup": {
+          "type": "boolean",
+          "description": "Allow/disallow new user signups to your project.",
+          "default": true,
+          "tags": [
+            "auth"
+          ],
+          "links": [
+            {
+              "name": "Auth Server configuration",
+              "link": "https://supabase.com/docs/reference/auth"
+            }
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "enable_anonymous_sign_ins": {
+          "type": "boolean",
+          "description": "Allow/disallow anonymous sign-ins to your project.",
+          "default": false,
+          "tags": [
+            "auth"
+          ],
+          "links": [
+            {
+              "name": "Auth Server configuration",
+              "link": "https://supabase.com/docs/reference/auth"
+            }
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "hook": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mfa_verification_attempt": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable the mfa verification hook.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "MFA Verification Hook",
+                      "link": "https://supabase.com/docs/guides/auth/auth-hooks/mfa-verification-hook"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "uri": {
+                  "type": "string",
+                  "description": "The URI of the postgres function or HTTP endpoint to call.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "MFA Verification Hook",
+                      "link": "https://supabase.com/docs/guides/auth/auth-hooks/mfa-verification-hook"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "password_verification_attempt": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable the password verification hook.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Password Verification Hook",
+                      "link": "https://supabase.com/docs/guides/auth/auth-hooks/password-verification-hook"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "uri": {
+                  "type": "string",
+                  "description": "The URI of the postgres function or HTTP endpoint to call.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Password Verification Hook",
+                      "link": "https://supabase.com/docs/guides/auth/auth-hooks/password-verification-hook"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "custom_access_token": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable the custom access token hook.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Custom Access Token Hook",
+                      "link": "https://supabase.com/docs/guides/auth/auth-hooks/custom-access-token-hook"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "uri": {
+                  "type": "string",
+                  "description": "The URI of the postgres function or HTTP endpoint to call.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Custom Access Token Hook",
+                      "link": "https://supabase.com/docs/guides/auth/auth-hooks/custom-access-token-hook"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "send_sms": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable the send sms hook.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Send SMS Hook",
+                      "link": "https://supabase.com/docs/guides/auth/auth-hooks/send-sms-hook"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "uri": {
+                  "type": "string",
+                  "description": "The URI of the postgres function or HTTP endpoint to call.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Send SMS Hook",
+                      "link": "https://supabase.com/docs/guides/auth/auth-hooks/send-sms-hook"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "send_email": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable the send email hook.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Send Email Hook",
+                      "link": "https://supabase.com/docs/guides/auth/auth-hooks/send-email-hook"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "uri": {
+                  "type": "string",
+                  "description": "The URI of the postgres function or HTTP endpoint to call.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Send Email Hook",
+                      "link": "https://supabase.com/docs/guides/auth/auth-hooks/send-email-hook"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "mfa": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "totp": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enroll_enabled": {
+                  "type": "boolean",
+                  "description": "Allow/disallow TOTP enrollment for users.",
+                  "default": true,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Multi-Factor Authentication (TOTP)",
+                      "link": "https://supabase.com/docs/guides/auth/auth-mfa/totp"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "verify_enabled": {
+                  "type": "boolean",
+                  "description": "Allow/disallow TOTP verification for users.",
+                  "default": true,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Multi-Factor Authentication (TOTP)",
+                      "link": "https://supabase.com/docs/guides/auth/auth-mfa/totp"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "phone": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enroll_enabled": {
+                  "type": "boolean",
+                  "description": "Allow/disallow phone enrollment for users.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Multi-Factor Authentication (Phone)",
+                      "link": "https://supabase.com/docs/guides/auth/auth-mfa/phone"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "verify_enabled": {
+                  "type": "boolean",
+                  "description": "Allow/disallow phone verification for users.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Multi-Factor Authentication (Phone)",
+                      "link": "https://supabase.com/docs/guides/auth/auth-mfa/phone"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "otp_length": {
+                  "type": "number",
+                  "description": "The length of the OTP code.",
+                  "default": 6,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Multi-Factor Authentication (Phone)",
+                      "link": "https://supabase.com/docs/guides/auth/auth-mfa/phone"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "template": {
+                  "type": "string",
+                  "description": "The template to use for the phone message.",
+                  "default": "Your code is {{ .Code }}",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Multi-Factor Authentication (Phone)",
+                      "link": "https://supabase.com/docs/guides/auth/auth-mfa/phone"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "max_frequency": {
+                  "type": "string",
+                  "description": "The maximum frequency of the phone messages.",
+                  "default": "60s",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Multi-Factor Authentication (Phone)",
+                      "link": "https://supabase.com/docs/guides/auth/auth-mfa/phone"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "max_enrolled_factors": {
+              "type": "number",
+              "description": "The maximum number of MFA factors a user can enroll in.",
+              "default": 10,
+              "tags": [
+                "auth"
+              ],
+              "links": [
+                {
+                  "name": "Multi-Factor Authentication",
+                  "link": "https://supabase.com/docs/guides/auth/auth-mfa"
+                }
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "sessions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timebox": {
+              "type": "string",
+              "description": "The timebox for the user session.",
+              "tags": [
+                "auth"
+              ],
+              "links": [
+                {
+                  "name": "User sessions",
+                  "link": "https://supabase.com/docs/guides/auth/sessions"
+                }
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            },
+            "inactivity_timeout": {
+              "type": "string",
+              "description": "The inactivity timeout for the user session.",
+              "tags": [
+                "auth"
+              ],
+              "links": [
+                {
+                  "name": "User sessions",
+                  "link": "https://supabase.com/docs/guides/auth/sessions"
+                }
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "email": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enable_signup": {
+              "type": "boolean",
+              "description": "Allow/disallow new user signups via email to your project.",
+              "default": true,
+              "tags": [
+                "auth"
+              ],
+              "links": [
+                {
+                  "name": "Auth Server configuration",
+                  "link": "https://supabase.com/docs/reference/auth"
+                }
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            },
+            "double_confirm_changes": {
+              "type": "boolean",
+              "description": "If enabled, a user will be required to confirm any email change on both the old, and new email addresses. If disabled, only the new email is required to confirm.",
+              "default": true,
+              "tags": [
+                "auth"
+              ],
+              "links": [
+                {
+                  "name": "Auth Server configuration",
+                  "link": "https://supabase.com/docs/reference/auth"
+                }
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            },
+            "enable_confirmations": {
+              "type": "boolean",
+              "description": "If enabled, users need to confirm their email address before signing in.",
+              "default": false,
+              "tags": [
+                "auth"
+              ],
+              "links": [
+                {
+                  "name": "Auth Server configuration",
+                  "link": "https://supabase.com/docs/reference/auth"
+                }
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            },
+            "secure_password_change": {
+              "type": "boolean",
+              "description": "If enabled, users will need to reauthenticate or have logged in recently to change their password.",
+              "default": false,
+              "tags": [
+                "auth"
+              ],
+              "links": [
+                {
+                  "name": "Auth Server configuration",
+                  "link": "https://supabase.com/docs/reference/auth"
+                }
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            },
+            "max_frequency": {
+              "type": "string",
+              "description": "Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.",
+              "default": "1s",
+              "tags": [
+                "auth"
+              ],
+              "links": [
+                {
+                  "name": "Auth Server configuration",
+                  "link": "https://supabase.com/docs/reference/auth"
+                }
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            },
+            "smtp": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "host": {
+                  "type": "string",
+                  "description": "Hostname or IP address of the SMTP server.",
+                  "default": "inbucket",
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "port": {
+                  "type": "number",
+                  "description": "Port number of the SMTP server.",
+                  "default": 2500,
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "user": {
+                  "type": "string",
+                  "description": "Username for authenticating with the SMTP server.",
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "admin_email": {
+                  "type": "string",
+                  "description": "Email used as the sender for emails sent from the application.",
+                  "default": "admin@email.com",
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "sender_name": {
+                  "type": "string",
+                  "description": "Display name used as the sender for emails sent from the application.",
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "template": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "invite": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "subject": {
+                      "type": "string",
+                      "description": "The subject of the invite email.",
+                      "default": "You have been invited",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
+                    },
+                    "content_path": {
+                      "type": "string",
+                      "description": "The path to the content of the invite email.",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
+                    }
+                  },
+                  "scope": "global",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "confirmation": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "subject": {
+                      "type": "string",
+                      "description": "The subject of the confirmation email.",
+                      "default": "Confirm Your Signup",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
+                    },
+                    "content_path": {
+                      "type": "string",
+                      "description": "The path to the content of the confirmation email.",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
+                    }
+                  },
+                  "scope": "global",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "recovery": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "subject": {
+                      "type": "string",
+                      "description": "The subject of the recovery email.",
+                      "default": "Reset Your Password",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
+                    },
+                    "content_path": {
+                      "type": "string",
+                      "description": "The path to the content of the recovery email.",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
+                    }
+                  },
+                  "scope": "global",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "magic_link": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "subject": {
+                      "type": "string",
+                      "description": "The subject of the magic link email.",
+                      "default": "Your Magic Link",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
+                    },
+                    "content_path": {
+                      "type": "string",
+                      "description": "The path to the content of the magic link email.",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
+                    }
+                  },
+                  "scope": "global",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "email_change": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "subject": {
+                      "type": "string",
+                      "description": "The subject of the email change email.",
+                      "default": "Confirm Email Change",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
+                    },
+                    "content_path": {
+                      "type": "string",
+                      "description": "The path to the content of the email change email.",
+                      "scope": "global",
+                      "promotable": true,
+                      "secret": false,
+                      "required": false
+                    }
+                  },
+                  "scope": "global",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "sms": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enable_signup": {
+              "type": "boolean",
+              "description": "Allow/disallow new user signups via SMS to your project.",
+              "default": true,
+              "tags": [
+                "auth"
+              ],
+              "links": [
+                {
+                  "name": "Auth Server configuration",
+                  "link": "https://supabase.com/docs/reference/auth"
+                }
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            },
+            "enable_confirmations": {
+              "type": "boolean",
+              "description": "If enabled, users need to confirm their phone number before signing in.",
+              "default": false,
+              "tags": [
+                "auth"
+              ],
+              "links": [
+                {
+                  "name": "Auth Server configuration",
+                  "link": "https://supabase.com/docs/reference/auth"
+                }
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            },
+            "template": {
+              "type": "string",
+              "description": "The template to use for the SMS message.",
+              "default": "Your code is {{ .Code }}",
+              "tags": [
+                "auth"
+              ],
+              "links": [
+                {
+                  "name": "Auth Server configuration",
+                  "link": "https://supabase.com/docs/reference/auth"
+                }
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            },
+            "max_frequency": {
+              "type": "string",
+              "description": "Controls the minimum amount of time that must pass before sending another sms otp.",
+              "default": "60s",
+              "tags": [
+                "auth"
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            },
+            "twilio": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable Twilio provider for phone login.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (Twilio)",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Twilio#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "account_sid": {
+                  "type": "string",
+                  "description": "The account SID for the Twilio API.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (Twilio)",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Twilio#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "message_service_sid": {
+                  "type": "string",
+                  "description": "The message service SID for the Twilio API.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (Twilio)",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Twilio#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "twilio_verify": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable Twilio Verify provider for phone verification.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (Twilio)",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Twilio#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "account_sid": {
+                  "type": "string",
+                  "description": "The account SID for the Twilio API.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (Twilio)",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Twilio#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "message_service_sid": {
+                  "type": "string",
+                  "description": "The message service SID for the Twilio API.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (Twilio)",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Twilio#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "messagebird": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable MessageBird provider for phone login.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (MessageBird)",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=MessageBird#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "originator": {
+                  "type": "string",
+                  "description": "The originator of the SMS message.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (MessageBird)",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=MessageBird#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "textlocal": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable Textlocal provider for phone login.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (Textlocal%2520(Community%2520Supported))",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Textlocal%2520(Community%2520Supported)#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "sender": {
+                  "type": "string",
+                  "description": "The sender of the SMS message.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (Textlocal%2520(Community%2520Supported))",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Textlocal%2520(Community%2520Supported)#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "vonage": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable Vonage provider for phone login.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (Vonage)",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Vonage#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "from": {
+                  "type": "string",
+                  "description": "The sender of the SMS message.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (Vonage)",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Vonage#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "test_otp": {
+              "type": "object",
+              "description": "Use pre-defined map of phone number to OTP for testing.",
+              "tags": [
+                "auth"
+              ],
+              "links": [
+                {
+                  "name": "Auth Server configuration",
+                  "link": "https://supabase.com/docs/reference/auth"
+                }
+              ],
+              "additionalProperties": {
+                "type": "string",
+                "scope": "global",
+                "promotable": false,
+                "secret": false,
+                "required": false
+              },
+              "scope": "env",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "external": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apple": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the Apple OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Apple",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-apple"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the Apple OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Apple",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-apple"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Apple",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-apple"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the Apple OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Apple",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-apple"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Apple",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-apple"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "azure": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the Azure OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Azure",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-azure"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the Azure OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Azure",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-azure"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Azure",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-azure"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the Azure OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Azure",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-azure"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Azure",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-azure"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "bitbucket": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the Bitbucket OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Bitbucket",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-bitbucket"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the Bitbucket OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Bitbucket",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-bitbucket"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Bitbucket",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-bitbucket"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the Bitbucket OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Bitbucket",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-bitbucket"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Bitbucket",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-bitbucket"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "discord": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the Discord OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Discord",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-discord"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the Discord OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Discord",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-discord"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Discord",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-discord"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the Discord OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Discord",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-discord"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Discord",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-discord"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "facebook": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the Facebook OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Facebook",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-facebook"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the Facebook OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Facebook",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-facebook"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Facebook",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-facebook"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the Facebook OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Facebook",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-facebook"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Facebook",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-facebook"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "github": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the GitHub OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with GitHub",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-github"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the GitHub OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with GitHub",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-github"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with GitHub",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-github"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the GitHub OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with GitHub",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-github"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with GitHub",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-github"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "gitlab": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the Gitlab OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Gitlab",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-gitlab"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the Gitlab OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Gitlab",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-gitlab"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "default": "https://gitlab.com",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Gitlab",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-gitlab"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the Gitlab OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Gitlab",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-gitlab"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Gitlab",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-gitlab"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "google": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the Google OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Google",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-google"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the Google OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Google",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-google"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Google",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-google"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the Google OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Google",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-google"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Google",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-google"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "kakao": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the Kakao OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Kakao",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-kakao"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the Kakao OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Kakao",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-kakao"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Kakao",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-kakao"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the Kakao OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Kakao",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-kakao"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Kakao",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-kakao"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "keycloak": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the Keycloak OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Keycloak",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-keycloak"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the Keycloak OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Keycloak",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-keycloak"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "examples": [
+                    "https://keycloak.example.com/realms/myrealm"
+                  ],
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Keycloak",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-keycloak"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the Keycloak OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Keycloak",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-keycloak"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Keycloak",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-keycloak"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "linkedin": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the LinkedIn OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with LinkedIn",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-linkedin"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the LinkedIn OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with LinkedIn",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-linkedin"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with LinkedIn",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-linkedin"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the LinkedIn OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with LinkedIn",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-linkedin"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with LinkedIn",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-linkedin"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "notion": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the Notion OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Notion",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-notion"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the Notion OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Notion",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-notion"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Notion",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-notion"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the Notion OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Notion",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-notion"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Notion",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-notion"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "twitch": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the Twitch OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Twitch",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitch"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the Twitch OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Twitch",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitch"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Twitch",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitch"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the Twitch OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Twitch",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitch"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Twitch",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitch"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "twitter": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the Twitter OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Twitter",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitter"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the Twitter OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Twitter",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitter"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Twitter",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitter"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the Twitter OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Twitter",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitter"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Twitter",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitter"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "slack": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the Slack OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Slack",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-slack"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the Slack OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Slack",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-slack"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Slack",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-slack"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the Slack OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Slack",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-slack"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Slack",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-slack"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "spotify": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the Spotify OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Spotify",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-spotify"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the Spotify OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Spotify",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-spotify"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Spotify",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-spotify"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the Spotify OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Spotify",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-spotify"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Spotify",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-spotify"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "workos": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the WorkOS OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with WorkOS",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-workos"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the WorkOS OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with WorkOS",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-workos"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with WorkOS",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-workos"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the WorkOS OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with WorkOS",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-workos"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with WorkOS",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-workos"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "zoom": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Use the Zoom OAuth provider.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Zoom",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-zoom"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                },
+                "client_id": {
+                  "type": "string",
+                  "description": "Client ID for the Zoom OAuth provider.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Zoom",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-zoom"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": true
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Zoom",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-zoom"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "redirect_uri": {
+                  "type": "string",
+                  "description": "The URI the Zoom OAuth2 provider will redirect to with the code and state values.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Zoom",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-zoom"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": false,
+                  "required": false
+                },
+                "skip_nonce_check": {
+                  "type": "boolean",
+                  "description": "If true, the nonce check will be skipped.",
+                  "default": false,
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Zoom",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-zoom"
+                    }
+                  ],
+                  "scope": "global",
+                  "promotable": true,
+                  "secret": false,
+                  "required": false
+                }
+              },
+              "scope": "global",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
+    },
+    "db": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "port": {
+          "type": "number",
+          "description": "Port to use for the local database URL.",
+          "default": 54322,
+          "tags": [
+            "database"
+          ],
+          "links": [
+            {
+              "name": "PostgreSQL configuration",
+              "link": "https://postgrest.org/en/stable/configuration.html"
+            }
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "shadow_port": {
+          "type": "number",
+          "description": "Port to use for the local shadow database.",
+          "default": 54320,
+          "tags": [
+            "database"
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "major_version": {
+          "type": "number",
+          "description": "The database major version to use. This has to be the same as your remote database's. Run `SHOW server_version;` on the remote database to check.",
+          "default": 15,
+          "tags": [
+            "database"
+          ],
+          "links": [
+            {
+              "name": "PostgreSQL configuration",
+              "link": "https://postgrest.org/en/stable/configuration.html"
+            }
+          ],
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "pooler": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable the local PgBouncer service.",
+              "default": false,
+              "tags": [
+                "database"
+              ],
+              "links": [
+                {
+                  "name": "PgBouncer Configuration",
+                  "link": "https://www.pgbouncer.org/config.html"
+                }
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            },
+            "port": {
+              "type": "number",
+              "description": "Port to use for the local connection pooler.",
+              "default": 54329,
+              "tags": [
+                "database"
+              ],
+              "links": [
+                {
+                  "name": "PgBouncer Configuration",
+                  "link": "https://www.pgbouncer.org/config.html#listen_port"
+                }
+              ],
+              "scope": "env",
+              "promotable": false,
+              "secret": false,
+              "required": false
+            },
+            "pool_mode": {
+              "type": "string",
+              "description": "Specifies when a server connection can be reused by other clients. Configure one of the supported pooler modes: `transaction`, `session`.",
+              "enum": [
+                "transaction",
+                "session"
+              ],
+              "default": "transaction",
+              "tags": [
+                "database"
+              ],
+              "links": [
+                {
+                  "name": "PgBouncer Configuration",
+                  "link": "https://www.pgbouncer.org/config.html#pool_mode"
+                }
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            },
+            "default_pool_size": {
+              "type": "number",
+              "description": "How many server connections to allow per user/database pair.",
+              "default": 20,
+              "tags": [
+                "database"
+              ],
+              "links": [
+                {
+                  "name": "PgBouncer Configuration",
+                  "link": "https://www.pgbouncer.org/config.html#default_pool_size"
+                }
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            },
+            "max_client_conn": {
+              "type": "number",
+              "description": "Maximum number of client connections allowed.",
+              "default": 100,
+              "tags": [
+                "database"
+              ],
+              "links": [
+                {
+                  "name": "PgBouncer Configuration",
+                  "link": "https://www.pgbouncer.org/config.html#max_client_conn"
+                }
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "seed": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable seeding the database with SQL files.",
+              "default": true,
+              "tags": [
+                "database"
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            },
+            "sql_paths": {
+              "type": "array",
+              "description": "Paths to SQL files to seed the database with. Supports glob patterns relative to supabase directory.",
+              "examples": [
+                [
+                  "./seeds/*.sql",
+                  "../project-src/seeds/*-load-testing.sql"
+                ]
+              ],
+              "default": [
+                "./seed.sql"
+              ],
+              "tags": [
+                "database"
+              ],
+              "items": {
+                "type": "string",
+                "description": "Path to a SQL file to seed the database with.",
+                "tags": [
+                  "database"
+                ]
+              },
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
+    },
+    "edge_runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable the local Edge Runtime service.",
+          "default": true,
+          "tags": [
+            "edge-functions"
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "policy": {
+          "type": "string",
+          "description": "Configure the supported request policy. Use `oneshot` for hot reload, or `per_worker` for load testing.",
+          "enum": [
+            "oneshot",
+            "per_worker"
+          ],
+          "default": "oneshot",
+          "tags": [
+            "edge-functions"
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "inspector_port": {
+          "type": "number",
+          "description": "Port to run the Edge Functions inspector on.",
+          "default": 8083,
+          "tags": [
+            "edge-functions"
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
+    },
+    "functions": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]+$": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Controls whether a function is deployed or served. When set to false,\nthe function will be skipped during deployment and won't be served locally.\nThis is useful for disabling demo functions or temporarily disabling a function\nwithout removing its code.",
+              "default": true,
+              "tags": [
+                "functions"
+              ],
+              "links": [
+                {
+                  "name": "`supabase functions` CLI subcommands",
+                  "link": "https://supabase.com/docs/reference/cli/supabase-functions"
+                }
+              ]
+            },
+            "verify_jwt": {
+              "type": "boolean",
+              "description": "By default, when you deploy your Edge Functions or serve them locally, it\nwill reject requests without a valid JWT in the Authorization header.\nSetting this configuration changes the default behavior.",
+              "default": true,
+              "tags": [
+                "functions"
+              ],
+              "links": [
+                {
+                  "name": "`supabase functions` CLI subcommands",
+                  "link": "https://supabase.com/docs/reference/cli/supabase-functions"
+                }
+              ]
+            },
+            "import_map": {
+              "type": "string",
+              "description": "Specify the Deno import map file to use for the Function.\n\nNote that the `--import-map` flag overrides this configuration.",
+              "tags": [
+                "functions"
+              ],
+              "links": [
+                {
+                  "name": "`supabase functions` CLI subcommands",
+                  "link": "https://supabase.com/docs/reference/cli/supabase-functions"
+                }
+              ]
+            },
+            "entrypoint": {
+              "type": "string",
+              "description": "Specify the entrypoint path to the Function (defaults to \"functions/slug/index.ts\").\n\nBoth `.js` and `.ts` file extensions are supported.",
+              "tags": [
+                "functions"
+              ],
+              "links": [
+                {
+                  "name": "`supabase functions` CLI subcommands",
+                  "link": "https://supabase.com/docs/reference/cli/supabase-functions"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": false,
+      "properties": {},
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
+    },
+    "inbucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable the local InBucket service.",
+          "default": true,
+          "tags": [
+            "local"
+          ],
+          "links": [
+            {
+              "name": "Inbucket documentation",
+              "link": "https://www.inbucket.org"
+            }
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "port": {
+          "type": "number",
+          "description": "Port to use for the email testing server web interface.\n\nEmails sent with the local dev setup are not actually sent - rather, they are monitored, and you can view the emails that would have been sent from the web interface.",
+          "default": 54324,
+          "tags": [
+            "local"
+          ],
+          "links": [
+            {
+              "name": "Inbucket documentation",
+              "link": "https://www.inbucket.org"
+            }
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "smtp_port": {
+          "type": "number",
+          "description": "Port to use for the email testing server SMTP port.\n\nEmails sent with the local dev setup are not actually sent - rather, they are monitored, and you can view the emails that would have been sent from the web interface.\n\nIf set, you can access the SMTP server from this port.",
+          "default": 54325,
+          "tags": [
+            "local"
+          ],
+          "links": [
+            {
+              "name": "Inbucket documentation",
+              "link": "https://www.inbucket.org"
+            }
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "pop3_port": {
+          "type": "number",
+          "description": "Port to use for the email testing server POP3 port.\n\nEmails sent with the local dev setup are not actually sent - rather, they are monitored, and you can view the emails that would have been sent from the web interface.\n\nIf set, you can access the POP3 server from this port.",
+          "default": 54326,
+          "tags": [
+            "local"
+          ],
+          "links": [
+            {
+              "name": "Inbucket documentation",
+              "link": "https://www.inbucket.org"
+            }
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
+    },
+    "realtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable the local Realtime service.",
+          "default": true,
+          "tags": [
+            "realtime"
+          ],
+          "links": [
+            {
+              "name": "Supabase Realtime",
+              "link": "https://supabase.com/docs/guides/realtime"
+            }
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "ip_version": {
+          "type": "string",
+          "description": "Bind realtime via either IPv4 or IPv6.",
+          "enum": [
+            "IPv4",
+            "IPv6"
+          ],
+          "default": "IPv4",
+          "tags": [
+            "realtime"
+          ],
+          "links": [
+            {
+              "name": "Supabase Realtime Configuration",
+              "link": "https://supabase.com/docs/guides/realtime/self-hosting"
+            }
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "max_header_length": {
+          "type": "number",
+          "description": "Maximum length of the HTTP header.",
+          "default": 4096,
+          "tags": [
+            "realtime"
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable the local Storage service.",
+          "default": true,
+          "tags": [
+            "storage"
+          ],
+          "links": [
+            {
+              "name": "Storage server configuration",
+              "link": "https://supabase.com/docs/guides/self-hosting/storage/config"
+            }
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "file_size_limit": {
+          "type": "string",
+          "description": "The maximum file size allowed.",
+          "examples": [
+            "5MB",
+            "500KB"
+          ],
+          "default": "50MiB",
+          "tags": [
+            "storage"
+          ],
+          "links": [
+            {
+              "name": "Storage server configuration",
+              "link": "https://supabase.com/docs/guides/self-hosting/storage/config"
+            }
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "image_transformation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable image transformation.",
+              "default": true,
+              "tags": [
+                "storage"
+              ],
+              "links": [
+                {
+                  "name": "Storage server configuration",
+                  "link": "https://supabase.com/docs/guides/self-hosting/storage/config"
+                }
+              ],
+              "scope": "global",
+              "promotable": true,
+              "secret": false,
+              "required": false
+            }
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "buckets": {
+          "type": "object",
+          "description": "Storage buckets configuration.",
+          "tags": [
+            "storage"
+          ],
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "public": {
+                "type": "boolean",
+                "description": "Enable public access to the bucket.",
+                "default": false,
+                "scope": "global",
+                "promotable": true,
+                "secret": false,
+                "required": false
+              },
+              "file_size_limit": {
+                "type": "string",
+                "description": "The maximum file size allowed for the bucket.",
+                "examples": [
+                  "5MB",
+                  "500KB"
+                ],
+                "default": "50MiB",
+                "tags": [
+                  "storage"
+                ],
+                "links": [
+                  {
+                    "name": "Storage server configuration",
+                    "link": "https://supabase.com/docs/guides/self-hosting/storage/config"
+                  }
+                ],
+                "scope": "global",
+                "promotable": true,
+                "secret": false,
+                "required": false
+              },
+              "allowed_mime_types": {
+                "type": "array",
+                "description": "The list of allowed MIME types for the bucket.",
+                "examples": [
+                  [
+                    "image/png",
+                    "image/jpeg"
+                  ]
+                ],
+                "tags": [
+                  "storage"
+                ],
+                "items": {
+                  "type": "string",
+                  "description": "A MIME type allowed for the bucket.",
+                  "tags": [
+                    "storage"
+                  ]
+                },
+                "scope": "global",
+                "promotable": true,
+                "secret": false,
+                "required": false
+              },
+              "objects_path": {
+                "type": "string",
+                "description": "The path to the objects in the bucket.",
+                "tags": [
+                  "storage"
+                ],
+                "scope": "global",
+                "promotable": true,
+                "secret": false,
+                "required": false
+              }
+            },
+            "scope": "global",
+            "promotable": false,
+            "secret": false,
+            "required": false
+          },
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
+    },
+    "studio": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable the local Supabase Studio dashboard.",
+          "default": true,
+          "tags": [
+            "studio"
+          ],
+          "links": [
+            {
+              "name": "Supabase Studio",
+              "link": "https://supabase.com/docs/guides/studio"
+            }
+          ],
+          "scope": "global",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "port": {
+          "type": "number",
+          "description": "Port to use for Supabase Studio.",
+          "default": 54323,
+          "tags": [
+            "studio"
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "api_url": {
+          "type": "string",
+          "description": "External URL of the API server that frontend connects to.",
+          "default": "http://localhost",
+          "tags": [
+            "studio"
+          ],
+          "links": [
+            {
+              "name": "Supabase Studio Configuration",
+              "link": "https://supabase.com/docs/guides/self-hosting/studio"
+            }
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
+    },
+    "experimental": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "orioledb_version": {
+          "type": "string",
+          "description": "Postgres storage engine to use OrioleDB (S3)",
+          "tags": [
+            "experimental"
+          ],
+          "scope": "global",
+          "promotable": true,
+          "secret": false,
+          "required": false
+        },
+        "s3_host": {
+          "type": "string",
+          "description": "S3 bucket URL.",
+          "examples": [
+            "<bucket_name>.s3-<region>.amazonaws.com"
+          ],
+          "default": "env(S3_HOST)",
+          "tags": [
+            "experimental"
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        },
+        "s3_region": {
+          "type": "string",
+          "description": "S3 bucket region.",
+          "examples": [
+            "us-east-1"
+          ],
+          "default": "env(S3_REGION)",
+          "tags": [
+            "experimental"
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": false,
+          "required": false
+        }
+      },
+      "scope": "global",
+      "promotable": false,
+      "secret": false,
+      "required": false
+    }
+  },
+  "description": "Supabase config overlay — environment-specific overrides for config.json. Routing fields (project_id, workflow_profile, etc.) belong only in config.json."
+}

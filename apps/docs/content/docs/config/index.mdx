@@ -39,6 +39,37 @@ The CLI supports two configuration management modes:
 - **Remote-first** (`config_source: "remote"`) — The Supabase dashboard is the
   source of truth. Use `supa project pull` to sync changes to your local config.
 
+## Secrets in config
+
+Do not store literal secrets in `config.json`. Put secret values in environment
+variables, and reference them from config with `env(NAME)`.
+
+Some config fields are still part of the declarative config model even when
+their values come from secrets. In those cases, the field stays in
+`config.json`, but the value must come from an environment variable reference
+instead of a raw string.
+
+For example, this is valid:
+
+```json
+{
+  "studio": {
+    "openai_api_key": "env(OPENAI_API_KEY)"
+  }
+}
+```
+
+This distinction matters:
+
+- Raw secret values do not belong in `config.json`.
+- Secret-backed bindings can still belong in `config.json` when the field
+  itself is part of the intended project configuration.
+- OAuth provider secrets are not the only declarative signal for those
+  providers, because the surrounding provider config already expresses intent.
+- Fields such as `studio.openai_api_key` and some `experimental.s3_*` settings
+  are closer to declarative bindings, because there is no separate non-secret
+  field that expresses the same intent.
+
 ## Config sections
 
 Your configuration is organized into these sections:

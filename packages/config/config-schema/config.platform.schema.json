@@ -456,6 +456,30 @@
                   "promotable": false,
                   "secret": false,
                   "required": false
+                },
+                "secrets": {
+                  "type": "array",
+                  "description": "The secrets to pass to the postgres function or HTTP endpoint.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "MFA Verification Hook",
+                      "link": "https://supabase.com/docs/guides/auth/auth-hooks/mfa-verification-hook"
+                    }
+                  ],
+                  "items": {
+                    "type": "string",
+                    "description": "A secret to pass to the function or endpoint.",
+                    "tags": [
+                      "auth"
+                    ]
+                  },
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 }
               },
               "scope": "global",
@@ -500,6 +524,30 @@
                   "scope": "env",
                   "promotable": false,
                   "secret": false,
+                  "required": false
+                },
+                "secrets": {
+                  "type": "array",
+                  "description": "The secrets to pass to the postgres function or HTTP endpoint.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Password Verification Hook",
+                      "link": "https://supabase.com/docs/guides/auth/auth-hooks/password-verification-hook"
+                    }
+                  ],
+                  "items": {
+                    "type": "string",
+                    "description": "A secret to pass to the function or endpoint.",
+                    "tags": [
+                      "auth"
+                    ]
+                  },
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
                   "required": false
                 }
               },
@@ -546,6 +594,30 @@
                   "promotable": false,
                   "secret": false,
                   "required": false
+                },
+                "secrets": {
+                  "type": "array",
+                  "description": "The secrets to pass to the postgres function or HTTP endpoint.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Custom Access Token Hook",
+                      "link": "https://supabase.com/docs/guides/auth/auth-hooks/custom-access-token-hook"
+                    }
+                  ],
+                  "items": {
+                    "type": "string",
+                    "description": "A secret to pass to the function or endpoint.",
+                    "tags": [
+                      "auth"
+                    ]
+                  },
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 }
               },
               "scope": "global",
@@ -591,6 +663,30 @@
                   "promotable": false,
                   "secret": false,
                   "required": false
+                },
+                "secrets": {
+                  "type": "array",
+                  "description": "The secrets to pass to the postgres function or HTTP endpoint.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Send SMS Hook",
+                      "link": "https://supabase.com/docs/guides/auth/auth-hooks/send-sms-hook"
+                    }
+                  ],
+                  "items": {
+                    "type": "string",
+                    "description": "A secret to pass to the function or endpoint.",
+                    "tags": [
+                      "auth"
+                    ]
+                  },
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 }
               },
               "scope": "global",
@@ -635,6 +731,30 @@
                   "scope": "env",
                   "promotable": false,
                   "secret": false,
+                  "required": false
+                },
+                "secrets": {
+                  "type": "array",
+                  "description": "The secrets to pass to the postgres function or HTTP endpoint.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Send Email Hook",
+                      "link": "https://supabase.com/docs/guides/auth/auth-hooks/send-email-hook"
+                    }
+                  ],
+                  "items": {
+                    "type": "string",
+                    "description": "A secret to pass to the function or endpoint.",
+                    "tags": [
+                      "auth"
+                    ]
+                  },
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
                   "required": false
                 }
               },
@@ -991,6 +1111,14 @@
                   "secret": false,
                   "required": true
                 },
+                "pass": {
+                  "type": "string",
+                  "description": "Password for authenticating with the SMTP server.",
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
+                },
                 "admin_email": {
                   "type": "string",
                   "description": "Email used as the sender for emails sent from the application.",
@@ -1290,6 +1418,23 @@
                   "promotable": false,
                   "secret": false,
                   "required": false
+                },
+                "auth_token": {
+                  "type": "string",
+                  "description": "The auth token for the Twilio API.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (Twilio)",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Twilio#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 }
               },
               "scope": "global",
@@ -1352,6 +1497,23 @@
                   "promotable": false,
                   "secret": false,
                   "required": false
+                },
+                "auth_token": {
+                  "type": "string",
+                  "description": "The auth token for the Twilio API.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (Twilio)",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Twilio#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 }
               },
               "scope": "global",
@@ -1396,6 +1558,23 @@
                   "scope": "env",
                   "promotable": false,
                   "secret": false,
+                  "required": false
+                },
+                "api_key": {
+                  "type": "string",
+                  "description": "The API key for the MessageBird API.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (MessageBird)",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=MessageBird#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
                   "required": false
                 }
               },
@@ -1442,6 +1621,23 @@
                   "promotable": false,
                   "secret": false,
                   "required": false
+                },
+                "api_key": {
+                  "type": "string",
+                  "description": "The API key for the Textlocal API.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (Textlocal%2520(Community%2520Supported))",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Textlocal%2520(Community%2520Supported)#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
                 }
               },
               "scope": "global",
@@ -1486,6 +1682,40 @@
                   "scope": "env",
                   "promotable": false,
                   "secret": false,
+                  "required": false
+                },
+                "api_key": {
+                  "type": "string",
+                  "description": "The API key for the Vonage API.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (Vonage)",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Vonage#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": false
+                },
+                "api_secret": {
+                  "type": "string",
+                  "description": "The API secret for the Vonage API.",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Enabling Phone Login (Vonage)",
+                      "link": "https://supabase.com/docs/guides/auth/phone-login?showSmsProvider=Vonage#enabling-phone-login"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
                   "required": false
                 }
               },
@@ -1565,6 +1795,24 @@
                   "scope": "env",
                   "promotable": false,
                   "secret": false,
+                  "required": true
+                },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the Apple OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Apple",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-apple"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
                   "required": true
                 },
                 "url": {
@@ -1664,6 +1912,24 @@
                   "secret": false,
                   "required": true
                 },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the Azure OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_AZURE_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Azure",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-azure"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
+                },
                 "url": {
                   "type": "string",
                   "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
@@ -1759,6 +2025,24 @@
                   "scope": "env",
                   "promotable": false,
                   "secret": false,
+                  "required": true
+                },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the Bitbucket OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_BITBUCKET_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Bitbucket",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-bitbucket"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
                   "required": true
                 },
                 "url": {
@@ -1858,6 +2142,24 @@
                   "secret": false,
                   "required": true
                 },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the Discord OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_DISCORD_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Discord",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-discord"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
+                },
                 "url": {
                   "type": "string",
                   "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
@@ -1953,6 +2255,24 @@
                   "scope": "env",
                   "promotable": false,
                   "secret": false,
+                  "required": true
+                },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the Facebook OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_FACEBOOK_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Facebook",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-facebook"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
                   "required": true
                 },
                 "url": {
@@ -2052,6 +2372,24 @@
                   "secret": false,
                   "required": true
                 },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the GitHub OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with GitHub",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-github"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
+                },
                 "url": {
                   "type": "string",
                   "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
@@ -2147,6 +2485,24 @@
                   "scope": "env",
                   "promotable": false,
                   "secret": false,
+                  "required": true
+                },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the Gitlab OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_GITLAB_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Gitlab",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-gitlab"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
                   "required": true
                 },
                 "url": {
@@ -2247,6 +2603,24 @@
                   "secret": false,
                   "required": true
                 },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the Google OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Google",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-google"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
+                },
                 "url": {
                   "type": "string",
                   "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
@@ -2344,6 +2718,24 @@
                   "secret": false,
                   "required": true
                 },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the Kakao OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_KAKAO_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Kakao",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-kakao"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
+                },
                 "url": {
                   "type": "string",
                   "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
@@ -2439,6 +2831,24 @@
                   "scope": "env",
                   "promotable": false,
                   "secret": false,
+                  "required": true
+                },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the Keycloak OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_KEYCLOAK_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Keycloak",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-keycloak"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
                   "required": true
                 },
                 "url": {
@@ -2541,6 +2951,24 @@
                   "secret": false,
                   "required": true
                 },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the LinkedIn OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_LINKEDIN_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with LinkedIn",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-linkedin"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
+                },
                 "url": {
                   "type": "string",
                   "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
@@ -2636,6 +3064,24 @@
                   "scope": "env",
                   "promotable": false,
                   "secret": false,
+                  "required": true
+                },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the Notion OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_NOTION_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Notion",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-notion"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
                   "required": true
                 },
                 "url": {
@@ -2735,6 +3181,24 @@
                   "secret": false,
                   "required": true
                 },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the Twitch OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_TWITCH_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Twitch",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitch"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
+                },
                 "url": {
                   "type": "string",
                   "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
@@ -2830,6 +3294,24 @@
                   "scope": "env",
                   "promotable": false,
                   "secret": false,
+                  "required": true
+                },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the Twitter OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_TWITTER_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Twitter",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-twitter"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
                   "required": true
                 },
                 "url": {
@@ -2929,6 +3411,24 @@
                   "secret": false,
                   "required": true
                 },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the Slack OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_SLACK_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Slack",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-slack"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
+                },
                 "url": {
                   "type": "string",
                   "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
@@ -3024,6 +3524,24 @@
                   "scope": "env",
                   "promotable": false,
                   "secret": false,
+                  "required": true
+                },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the Spotify OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_SPOTIFY_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Spotify",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-spotify"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
                   "required": true
                 },
                 "url": {
@@ -3123,6 +3641,24 @@
                   "secret": false,
                   "required": true
                 },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the WorkOS OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_WORKOS_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with WorkOS",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-workos"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
+                  "required": true
+                },
                 "url": {
                   "type": "string",
                   "description": "The base URL used for constructing the URLs to request authorization and access tokens.",
@@ -3218,6 +3754,24 @@
                   "scope": "env",
                   "promotable": false,
                   "secret": false,
+                  "required": true
+                },
+                "secret": {
+                  "type": "string",
+                  "description": "Client secret for the Zoom OAuth provider.\n\nDO NOT commit your OAuth provider secret to git. Use environment variable substitution instead.",
+                  "default": "env(SUPABASE_AUTH_EXTERNAL_ZOOM_SECRET)",
+                  "tags": [
+                    "auth"
+                  ],
+                  "links": [
+                    {
+                      "name": "Login with Zoom",
+                      "link": "https://supabase.com/docs/guides/auth/social-login/auth-zoom"
+                    }
+                  ],
+                  "scope": "env",
+                  "promotable": false,
+                  "secret": true,
                   "required": true
                 },
                 "url": {
@@ -3982,6 +4536,24 @@
           "promotable": false,
           "secret": false,
           "required": false
+        },
+        "openai_api_key": {
+          "type": "string",
+          "description": "OpenAI API key to use for Supabase AI in the Supabase Studio.",
+          "default": "env(OPENAI_API_KEY)",
+          "tags": [
+            "studio"
+          ],
+          "links": [
+            {
+              "name": "Supabase Studio Configuration",
+              "link": "https://supabase.com/docs/guides/self-hosting/studio"
+            }
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": true,
+          "required": false
         }
       },
       "scope": "global",
@@ -4032,6 +4604,30 @@
           "scope": "env",
           "promotable": false,
           "secret": false,
+          "required": false
+        },
+        "s3_access_key": {
+          "type": "string",
+          "description": "S3 access key.",
+          "default": "env(S3_ACCESS_KEY)",
+          "tags": [
+            "experimental"
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": true,
+          "required": false
+        },
+        "s3_secret_key": {
+          "type": "string",
+          "description": "S3 secret key.",
+          "default": "env(S3_SECRET_KEY)",
+          "tags": [
+            "experimental"
+          ],
+          "scope": "env",
+          "promotable": false,
+          "secret": true,
           "required": false
         }
       },

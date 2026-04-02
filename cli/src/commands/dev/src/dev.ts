@@ -15,8 +15,11 @@ import {
   getProfileOrAuto,
   getProjectRef,
   getProfileForBranch,
+  getEnvironmentForBranch,
+  AuthRequiredError,
   type Profile,
 } from "@/lib/config.js";
+import { loadEffectiveConfig, sanitizeBranchName } from "@/lib/config-overlay.js";
 import { getCurrentBranch } from "@/lib/git.js";
 import {
   diffSchemaWithPgDelta,
@@ -40,16 +43,16 @@ import {
   type ProjectConfig,
   type ConfigDiff,
 } from "@/lib/sync.js";
-import { resolveBranchAndWriteEnv, writeProjectEnv } from "@/lib/env-file.js";
+import { writeProjectEnv } from "@/lib/env-file.js";
 import { isBranchingProfile } from "@/lib/workflow-profiles.js";
 import { getWorkflowProfile } from "@/lib/config.js";
 import { checkEnvMatchesBranch, runCodegenIfStale, refreshTypesAndCodegen } from "@/lib/precheck.js";
 import { runHooks, runHooksAsync, getHookWatchSources } from "@/lib/hooks.js";
 import { createFileWatcher, type WatchSource } from "@/lib/file-watcher.js";
 import type { HooksConfig } from "@supabase-dx/config";
-import { getEnvRefs, getSecretRefs } from "@/lib/config-ref.js";
+import { getEnvRefs, getSecretRefs, detectHardcodedSecrets, stripHardcodedSecrets } from "@/lib/config-ref.js";
 import { listRemoteVariables } from "@/lib/env-api-bridge.js";
-import { resolveEnvScope } from "@/lib/resolve-project.js";
+import { BranchResolutionError, resolveBranchContext, resolveEnvScope } from "@/lib/resolve-project.js";
 
 function watchGitBranch(cwd: string, onChange: () => void): () => void {
   const gitHeadPath = join(cwd, ".git", "HEAD");
@@ -189,9 +192,10 @@ export async function devCommand(options: DevOptions): Promise<void> {
     }
   }
 
-  // Load config (mutable so it stays current after reloads)
-  let config = loadProjectConfig(cwd);
-  if (!config) {
+  // Two-step config load: base first (to derive env), then effective (with overlays).
+  // currentBranch is resolved just before the config load so both use the same value.
+  const _baseForEnv = loadProjectConfig(cwd);
+  if (!_baseForEnv) {
     if (options.json) {
       console.log(
         JSON.stringify({ status: "error", message: "No config found" }),
@@ -205,6 +209,13 @@ export async function devCommand(options: DevOptions): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  // currentBranch is declared later in this function (line ~253); we peek at it
+  // here by calling getCurrentBranch directly so we can derive the env.
+  const _startupBranch = getCurrentBranch(cwd) || "unknown";
+  const _startupEnv = getEnvironmentForBranch(_baseForEnv, _startupBranch);
+  const { config: _initialConfig, layers: _initialLayers } = loadEffectiveConfig(cwd, _startupEnv, _startupBranch);
+  // Load config (mutable so it stays current after reloads)
+  let config = _initialConfig;
 
   // Get token
   const token = await requireAuth({ json: options.json });
@@ -436,6 +447,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
       } catch (error) {
+        if (error instanceof AuthRequiredError) throw error;
         if (options.json) {
           console.log(
             JSON.stringify({
@@ -542,6 +554,10 @@ export async function devCommand(options: DevOptions): Promise<void> {
       }
     }
   } catch (error) {
+    if (error instanceof AuthRequiredError) {
+      process.exitCode = 1;
+      return;
+    }
     if (options.json) {
       console.log(
         JSON.stringify({
@@ -576,85 +592,53 @@ export async function devCommand(options: DevOptions): Promise<void> {
   // copies the existing process.env password into .env.local (no API fetch).
   const workflowProfile = getWorkflowProfile(config);
 
+  let resolvedIsBranch = false;
+  let _startupOverlayCreated = false;
+
   if (isBranchingProfile(workflowProfile) && config.project_id) {
     const productionBranch = config.production_branch as string | undefined ?? "main";
     const isMainBranch = currentBranch === productionBranch || currentBranch === "master";
 
-    let branchResult = await resolveBranchAndWriteEnv({
-      cwd,
-      gitBranch: currentBranch,
-      mainProjectRef: config.project_id,
-      token,
-      productionBranch,
-    });
-
-    if (!branchResult && !isMainBranch) {
-      // No preview branch for this git branch — create one via API directly.
-      if (options.json) {
-        console.error(JSON.stringify({ status: "info", message: `Creating preview branch for "${currentBranch}"` }));
-      } else {
-        log.step(`Creating preview branch for "${currentBranch}"…`);
-      }
-
-      const newBranch = await client.createBranch(config.project_id, {
-        branch_name: currentBranch,
-        git_branch: currentBranch,
-      });
-
-      // Poll until the preview project is healthy (up to 5 min)
-      const BRANCH_POLL_MS = 5000;
-      const BRANCH_MAX_POLLS = 60;
-      const BRANCH_FAILED = new Set(["INIT_FAILED", "REMOVED", "RESTORE_FAILED", "PAUSE_FAILED"]);
-      let branchHealthy = false;
-      let branchPollFrame = 0;
-      for (let i = 0; i < BRANCH_MAX_POLLS; i++) {
-        await new Promise((r) => setTimeout(r, BRANCH_POLL_MS));
-        const branches = await client.listBranches(config.project_id);
-        const b = branches.find((x) => x.id === newBranch.id);
-        if (!b) break;
-        if (isInteractive && !options.json) {
-          const char = SPINNER_FRAMES[branchPollFrame % SPINNER_FRAMES.length];
-          process.stdout.write(`\r${char}  Waiting for preview branch… (${b.preview_project_status ?? "provisioning"})\x1b[K`);
-          branchPollFrame++;
-        }
-        if (b.preview_project_status === "ACTIVE_HEALTHY") { branchHealthy = true; break; }
-        if (b.preview_project_status && BRANCH_FAILED.has(b.preview_project_status)) break;
-      }
-      if (isInteractive && !options.json) process.stdout.write("\r\x1b[K");
-
-      if (!branchHealthy) {
-        if (options.json) {
-          console.error(JSON.stringify({ status: "error", message: "Preview branch not healthy", exitCode: 1 }));
-        } else {
-          log.error(`Preview branch created but not yet healthy. Try again in a moment.`);
-        }
-        process.exitCode = 1;
-        return;
-      }
-
-      // Grace period for the project record to fully propagate
-      await new Promise((r) => setTimeout(r, 5000));
-
-      branchResult = await resolveBranchAndWriteEnv({
+    try {
+      const branchResult = await resolveBranchContext({
         cwd,
         gitBranch: currentBranch,
-        mainProjectRef: config.project_id,
+        parentProjectRef: config.project_id,
         token,
+        client,
+        pollForHealth: !isMainBranch,
+        json: options.json,
+        verbose: options.verbose,
         productionBranch,
       });
+
       if (!branchResult) {
         if (options.json) {
           console.error(JSON.stringify({ status: "error", message: "Preview branch credentials unavailable", exitCode: 1 }));
         } else {
-          log.error(`Preview branch created but credentials not available. Try again in a moment.`);
+          log.error("Preview branch credentials unavailable. Try again in a moment.");
         }
         process.exitCode = 1;
         return;
       }
-    }
 
-    if (branchResult) {
       projectRef = branchResult.projectRef;
+      resolvedIsBranch = branchResult.isBranch;
+      _startupOverlayCreated = branchResult.overlayCreated;
+      if (branchResult.overlayCreated && options.json) {
+        console.log(JSON.stringify({ event: "overlay_created", file: "supabase/config.preview.json" }));
+      }
+    } catch (error) {
+      if (error instanceof BranchResolutionError) {
+        if (options.json) {
+          console.error(JSON.stringify({ status: "error", message: "Preview branch not healthy", exitCode: 1 }));
+        } else {
+          log.error("Preview branch created but not yet healthy. Try again in a moment.");
+        }
+        process.exitCode = 1;
+        return;
+      }
+      throw error;
     }
   } else if (config.project_id) {
     // Non-branching profile — write main project credentials (fire-and-forget,
@@ -700,19 +684,32 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
   // Config file path
   const configPath = join(cwd, "supabase", "config.json");
+  const supabaseDir = join(cwd, "supabase");
+
+  /** Return the candidate overlay file paths for the current branch (whether or not they exist). */
+  const getOverlayPaths = (): string[] => {
+    const env = getEnvironmentForBranch(config as Parameters<typeof getEnvironmentForBranch>[0], currentBranch);
+    const paths: string[] = [];
+    if (env && env !== "development") {
+      paths.push(join(supabaseDir, `config.${env}.json`));
+    }
+    if (env === "preview") {
+      paths.push(join(supabaseDir, `config.${sanitizeBranchName(currentBranch)}.json`));
+    }
+    return paths;
+  };
 
   // Get seed configuration
   const seedConfig = getSeedConfig(config, options);
   const seedEnabled = seedConfig.enabled;
   const seedPaths = seedConfig.paths;
-  const supabaseDir = join(cwd, "supabase");
   const seedDir = join(supabaseDir, "seeds");
 
   // State
   const state: DevState = {
     profile,
     projectRef,
-    isBranch: false, // updated when branch resolution runs
+    isBranch: resolvedIsBranch,
     connectionString,
     pendingSchemaChanges: new Set(),
     pendingConfigChange: false,
@@ -770,12 +767,18 @@ export async function devCommand(options: DevOptions): Promise<void> {
         if (isBranchingProfile(workflowProfile) && config.project_id) {
           if (!isResolvingBranchJson) {
             isResolvingBranchJson = true;
-            resolveBranchAndWriteEnv({
+            resolveBranchContext({
               cwd,
               gitBranch: newBranch,
-              mainProjectRef: config.project_id,
+              parentProjectRef: config.project_id,
               token,
+              client,
+              pollForHealth: false,
+              json: true,
               productionBranch: config.production_branch as string | undefined,
+            }).catch((err) => {
+              if (err instanceof BranchResolutionError) return null;
+              throw err;
             }).then(async (result) => {
               if (result) {
                 state.projectRef = result.projectRef;
@@ -790,6 +793,9 @@ export async function devCommand(options: DevOptions): Promise<void> {
                   if (cs) state.connectionString = cs;
                 } catch {
                   // Non-fatal — keep existing connection string
+                }
+                if (result.overlayCreated) {
+                  console.log(JSON.stringify({ event: "overlay_created", file: "supabase/config.preview.json" }));
                 }
                 console.log(
                   JSON.stringify({
@@ -858,6 +864,14 @@ export async function devCommand(options: DevOptions): Promise<void> {
           scheduleDebounce();
         },
       },
+      ...getOverlayPaths().map((overlayPath) => ({
+        path: overlayPath,
+        onChange: async (event: string, _filePath: string) => {
+          console.log(JSON.stringify({ event: "config_changed", type: event }));
+          state.pendingConfigChange = true;
+          scheduleDebounce();
+        },
+      })),
       ...jsonHookSources.map((src) => ({
         path: src.dir,
         filter: src.filter,
@@ -906,7 +920,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
         if (configChanged) {
           console.log(JSON.stringify({ event: "config_sync_start" }));
           try {
-            const freshConfig = loadProjectConfig(cwd) as ProjectConfig;
+            const freshConfig = loadEffectiveConfig(cwd, undefined, currentBranch).config as ProjectConfig;
             if (freshConfig) {
               let appliedCount = 0;
 
@@ -1026,7 +1040,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
         }
 
         // Warn about missing env vars after every change cycle
-        const currentConfig = (loadProjectConfig(cwd) ?? config) as ProjectConfig;
+        const currentConfig = (loadEffectiveConfig(cwd, undefined, currentBranch).config ?? config) as ProjectConfig;
         const missingVarsJson = getMissingEnvVars(currentConfig);
         if (missingVarsJson.length > 0) {
           console.log(
@@ -1357,8 +1371,16 @@ export async function devCommand(options: DevOptions): Promise<void> {
     gitBranch: currentBranch,
     profileName: profile?.name,
     dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${parentProjectRef}`,
+    configLayers: _initialLayers,
     extra,
   });
+
+  if (_startupOverlayCreated) {
+    console.log(S_BAR);
+    console.log(`${S_BAR}  ${C.success}+${C.reset}  Created ${C.fileName}supabase/config.preview.json${C.reset}`);
+    console.log(`${S_BAR}     ${C.secondary}Add preview-specific config overrides here.${C.reset}`);
+    console.log(S_BAR);
+  }
 
   // Run codegen at startup in case database.ts is newer than generated files
   runCodegenIfStale(
@@ -1393,12 +1415,19 @@ export async function devCommand(options: DevOptions): Promise<void> {
           if (!isResolvingBranch) {
             isResolvingBranch = true;
             logVerbose(`branch: resolving project ref for "${newBranch}"…`);
-            resolveBranchAndWriteEnv({
+            resolveBranchContext({
               cwd,
               gitBranch: newBranch,
-              mainProjectRef: config.project_id,
+              parentProjectRef: config.project_id,
               token,
+              client,
+              pollForHealth: false,
+              json: options.json,
+              verbose: options.verbose,
               productionBranch: config.production_branch as string | undefined,
+            }).catch((err) => {
+              if (err instanceof BranchResolutionError) return null;
+              throw err;
             }).then(async (result) => {
               if (result) {
                 state.projectRef = result.projectRef;
@@ -1418,6 +1447,10 @@ export async function devCommand(options: DevOptions): Promise<void> {
                   }
                 } catch {
                   // Non-fatal — keep existing connection string
+                }
+                if (result.overlayCreated) {
+                  logRail(`${C.success}+${C.reset} Created ${C.fileName}supabase/config.preview.json${C.reset}`);
+                  logRail(`  ${C.secondary}Add preview-specific config overrides here.${C.reset}`);
                 }
                 logRail(`Updated .env.local → ${result.isBranch ? "branch" : "main"} (${result.projectRef})`);
               } else {
@@ -1439,11 +1472,15 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
   // Compare local config against remote and apply any differences.
   // Returns the list of changes (empty = already in sync). Throws on API error.
-  const syncConfig = async (freshConfig: ProjectConfig): Promise<{ changes: ConfigChange[]; lookupEnvVar: (key: string) => string | undefined }> => {
+  const syncConfig = async (freshConfig: ProjectConfig): Promise<{ changes: ConfigChange[]; lookupEnvVar: (key: string) => string | undefined; strippedSecrets: ReturnType<typeof detectHardcodedSecrets> }> => {
     const allChanges: ConfigChange[] = [];
 
+    // Strip hardcoded secrets before building any payload — never send them to the API
+    const strippedSecrets = detectHardcodedSecrets(freshConfig);
+    const safeConfig = strippedSecrets.length > 0 ? stripHardcodedSecrets(freshConfig) : freshConfig;
+
     // Fetch env-server vars for the current scope (same as push.ts)
-    const scope = resolveEnvScope({ isBranch: state.isBranch, config: freshConfig });
+    const scope = resolveEnvScope({ isBranch: state.isBranch, config: safeConfig });
     let envServerVars: Record<string, string> = {};
     try {
       const vars = await listRemoteVariables(parentProjectRef, scope);
@@ -1453,7 +1490,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
     }
     const lookupEnvVar = (key: string): string | undefined => envServerVars[key] ?? process.env[key];
 
-    const postgrestPayload = buildPostgrestPayload(freshConfig);
+    const postgrestPayload = buildPostgrestPayload(safeConfig);
     if (postgrestPayload && Object.keys(postgrestPayload).length > 0) {
       logVerbose(`GET /v1/projects/${state.projectRef}/config/postgrest`);
       const remoteConfig = await client.getPostgrestConfig(state.projectRef!);
@@ -1476,7 +1513,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
       }
     }
 
-    const authPayload = buildAuthPayload(freshConfig, lookupEnvVar);
+    const authPayload = buildAuthPayload(safeConfig, lookupEnvVar);
     if (authPayload && Object.keys(authPayload).length > 0) {
       logVerbose(`GET /v1/projects/${state.projectRef}/config/auth`);
       const remoteConfig = await client.getAuthConfig(state.projectRef!);
@@ -1499,7 +1536,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
       }
     }
 
-    return { changes: allChanges, lookupEnvVar };
+    return { changes: allChanges, lookupEnvVar, strippedSecrets };
   };
 
   // Show config change details under the rail
@@ -1531,16 +1568,34 @@ export async function devCommand(options: DevOptions): Promise<void> {
     lastActivity = Date.now();
   };
 
+  // Error: hardcoded secrets stripped from payload — these fields were NOT pushed
+  const logHardcodedSecretsWarning = (cfg: ProjectConfig) => {
+    const found = detectHardcodedSecrets(cfg);
+    if (found.length === 0) return;
+    clearLine();
+    console.log(S_BAR);
+    console.log(`${S_BAR}  ${C.bgError} SECRET DETECTED ${C.reset}  ${found.length} field${found.length === 1 ? "" : "s"} not pushed — remove from config and set via CLI`);
+    for (const { path, setCommand } of found) {
+      console.log(`${S_BAR}    ${C.secondary}•${C.reset}  ${path}`);
+      console.log(`${S_BAR}       ${C.secondary}→${C.reset}  ${C.warning}${setCommand}${C.reset}`);
+    }
+    console.log(S_BAR);
+    lastActivity = Date.now();
+  };
+
   // Apply config changes (called from file watcher)
   const applyConfigChanges = async (): Promise<((key: string) => string | undefined) | undefined> => {
     startStep("Comparing config with remote");
     try {
-      const freshConfig = loadProjectConfig(cwd) as ProjectConfig;
+      const freshConfig = loadEffectiveConfig(cwd, undefined, currentBranch).config as ProjectConfig;
       if (!freshConfig) {
         completeStep("Config push failed", "could not reload config.json", "error");
         return undefined;
       }
-      const { changes: allChanges, lookupEnvVar } = await syncConfig(freshConfig);
+      const { changes: allChanges, lookupEnvVar, strippedSecrets } = await syncConfig(freshConfig);
+      if (strippedSecrets.length > 0) {
+        logHardcodedSecretsWarning(freshConfig);
+      }
       if (allChanges.length === 0) {
         cancelStep();
       } else if (options.dryRun) {
@@ -1702,7 +1757,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
     if (configChanged) {
       lookupEnvVar = await applyConfigChanges();
       // Re-run codegen in case codegen settings (e.g. client_path) changed
-      const freshConfig = loadProjectConfig(cwd);
+      const freshConfig = loadEffectiveConfig(cwd, undefined, currentBranch).config;
       if (freshConfig) {
         config = freshConfig;
         runCodegenIfStale(
@@ -1727,8 +1782,9 @@ export async function devCommand(options: DevOptions): Promise<void> {
     state.isApplying = false;
     state.lastPush = Date.now();
 
-    // Warn about missing env vars after every change cycle
+    // Warn about missing env vars and hardcoded secrets after every change cycle
     logMissingEnvVarsWarning(getMissingEnvVars(config as ProjectConfig, lookupEnvVar));
+    logHardcodedSecretsWarning(config as ProjectConfig);
 
     // If changes accumulated during apply (e.g. hook-generated SQL picked up by watcher), re-schedule
     if (state.pendingSchemaChanges.size > 0 || state.pendingConfigChange || state.pendingSeedChange) {
@@ -1784,6 +1840,15 @@ export async function devCommand(options: DevOptions): Promise<void> {
         scheduleChange("config.json", event, () => { state.pendingConfigChange = true; });
       },
     },
+    ...getOverlayPaths().map((overlayPath) => {
+      const overlayName = basename(overlayPath);
+      return {
+        path: overlayPath,
+        onChange: (event: string, _filePath: string) => {
+          scheduleChange(overlayName, event, () => { state.pendingConfigChange = true; });
+        },
+      };
+    }),
     ...(seedEnabled && existsSync(seedDir)
       ? [{
           path: seedDir,
@@ -1865,10 +1930,12 @@ export async function devCommand(options: DevOptions): Promise<void> {
       logVerbose(`config: syncing…`);
       let configChanges: ConfigChange[] = [];
       let startupLookupEnvVar: ((key: string) => string | undefined) | undefined;
-      const freshConfig = loadProjectConfig(cwd) as ProjectConfig;
+      const freshConfig = loadEffectiveConfig(cwd, undefined, currentBranch).config as ProjectConfig;
       if (freshConfig) {
         try {
-          ({ changes: configChanges, lookupEnvVar: startupLookupEnvVar } = await syncConfig(freshConfig));
+          let strippedSecrets: ReturnType<typeof detectHardcodedSecrets>;
+          ({ changes: configChanges, lookupEnvVar: startupLookupEnvVar, strippedSecrets } = await syncConfig(freshConfig));
+          if (strippedSecrets.length > 0) logHardcodedSecretsWarning(freshConfig);
           logVerbose(`config: ${configChanges.length} change(s)`);
           config = freshConfig;
         } catch (error) {

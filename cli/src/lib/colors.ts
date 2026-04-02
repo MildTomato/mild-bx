@@ -14,4 +14,8 @@ export const C = {
   warning: "\x1b[33m", // Warnings (yellow)
   magenta: "\x1b[35m", // Spinner/active (magenta)
   bold: "\x1b[1m",
+  // Background labels — use sparingly for high-signal callouts
+  bgError: "\x1b[41m\x1b[97m\x1b[1m",   // Red bg, bright white bold
+  bgWarning: "\x1b[43m\x1b[30m\x1b[1m", // Yellow bg, black bold
+  bgSuccess: "\x1b[42m\x1b[30m\x1b[1m", // Green bg, black bold
 } as const;

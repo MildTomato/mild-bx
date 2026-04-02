@@ -246,11 +246,46 @@ const extendedSchema = {
   },
 };
 
-// Write the extended schema
-const outputPath = join(__dirname, "config-schema", "config.schema.json");
-writeFileSync(outputPath, JSON.stringify(extendedSchema, null, 2));
+// ---------------------------------------------------------------------------
+// Schema split: platform (full) vs repo (no secret fields)
+// ---------------------------------------------------------------------------
 
-console.log(`Extended schema written to ${outputPath}`);
+/**
+ * Recursively strip all properties marked `secret: true` from a schema node.
+ * Used to produce the repo schema — the user-facing schema that lives in version
+ * control and never contains secret field definitions.
+ */
+function stripSecretFields(node: any): any {
+  if (!node || typeof node !== "object") return node;
+
+  const result = { ...node };
+
+  if (result.properties) {
+    const stripped: Record<string, any> = {};
+    for (const [key, value] of Object.entries<any>(result.properties)) {
+      if (value.secret === true) continue; // drop secret fields entirely
+      stripped[key] = stripSecretFields(value);
+    }
+    result.properties = stripped;
+  }
+
+  if (result.additionalProperties && typeof result.additionalProperties === "object") {
+    result.additionalProperties = stripSecretFields(result.additionalProperties);
+  }
+
+  return result;
+}
+
+// Platform schema — full, including secret fields. Used by backend only.
+const platformOutputPath = join(__dirname, "config-schema", "config.platform.schema.json");
+writeFileSync(platformOutputPath, JSON.stringify(extendedSchema, null, 2));
+console.log(`Platform schema written to ${platformOutputPath}`);
+
+// Repo schema — secret fields stripped. This is what users commit to version control.
+const repoSchema = stripSecretFields(extendedSchema);
+const repoOutputPath = join(__dirname, "config-schema", "config.schema.json");
+writeFileSync(repoOutputPath, JSON.stringify(repoSchema, null, 2));
+console.log(`Repo schema written to ${repoOutputPath}`);
 
 // ---------------------------------------------------------------------------
 // TypeScript interface generation from the extended schema

@@ -41,7 +41,7 @@ import {
   formatDiagnostics,
 } from "@supabase-dx/config";
 import { providerPayloadToEnvVars } from "@/lib/auth-providers.js";
-import { getEnvRefs, getSecretRefs } from "@/lib/config-ref.js";
+import { getEnvRefs, getSecretRefs, detectHardcodedSecrets } from "@/lib/config-ref.js";
 
 export interface PushOptions {
   profile?: string;
@@ -294,7 +294,7 @@ export async function pushCommand(options: PushOptions) {
 
   setVerbose(options.verbose ?? false);
 
-  const { cwd, config, branch: currentBranch, profile, projectRef, parentProjectRef, token, isBranch } =
+  const { cwd, config, configLayers, branch: currentBranch, profile, projectRef, parentProjectRef, token, isBranch } =
     await resolveProjectContext(options);
 
   // Inject local env vars so implicit binding can resolve canonical names
@@ -347,7 +347,24 @@ export async function pushCommand(options: PushOptions) {
     }
   }
 
-  if (!options.json) {
+  // Warn about hardcoded secrets in config
+  if (!migrationsOnly) {
+    const hardcodedSecrets = detectHardcodedSecrets(projectConfig);
+    if (hardcodedSecrets.length > 0) {
+      if (options.json) {
+        console.error(JSON.stringify({
+          status: "warning",
+          message: "Hardcoded secrets detected in config — fields not pushed, remove from config and set via CLI",
+          fields: hardcodedSecrets.map(({ path, setCommand }) => ({ path, setCommand })),
+        }));
+      } else {
+        console.error(chalk.bgRed.white.bold(" SECRET DETECTED ") + chalk.red(`  ${hardcodedSecrets.length} field${hardcodedSecrets.length === 1 ? "" : "s"} not pushed — remove from config and set via CLI\n`));
+        for (const { path, setCommand } of hardcodedSecrets) {
+          console.error(`  ${chalk.dim("•")}  ${path}`);
+          console.error(`     ${chalk.dim("→")}  ${chalk.yellow(setCommand)}\n`);
+        }
+      }
+    }
   }
 
   // JSON mode
@@ -527,6 +544,7 @@ export async function pushCommand(options: PushOptions) {
     gitBranch: currentBranch || undefined,
     profileName: profile?.name,
     dashboardUrl: `${SUPABASE_DASHBOARD_URL}/project/${parentProjectRef}`,
+    configLayers,
     extra: dryRun ? [["Mode", `${C.warning}plan (dry-run)${C.reset}`]] : undefined,
   });
 

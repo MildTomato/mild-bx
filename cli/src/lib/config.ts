@@ -531,22 +531,35 @@ export function getWorkflowProfile(config: ProjectConfig): WorkflowProfile {
 }
 
 /**
- * Get environment name for a branch using config.environments mapping.
- * Falls back to "development" if no match.
+ * Get environment name for a branch.
+ *
+ * Resolution order:
+ *   1. Explicit `environments` map in config (pattern → env name)
+ *   2. Branching profiles: any non-production branch → "preview"
+ *   3. Everything else → "development"
  */
 export function getEnvironmentForBranch(
   config: ProjectConfig,
   branch: string
 ): string {
-  const environments = config.environments as
-    | Record<string, string>
-    | undefined;
-  if (!environments) return "development";
+  const environments = config.environments as Record<string, string> | undefined;
 
-  for (const [pattern, envName] of Object.entries(environments)) {
-    if (matchBranchPattern(branch, pattern)) {
-      return envName;
+  if (environments) {
+    for (const [pattern, envName] of Object.entries(environments)) {
+      if (matchBranchPattern(branch, pattern)) {
+        return envName;
+      }
     }
+  }
+
+  const workflowProfile = getWorkflowProfile(config);
+  const productionBranch = (config.production_branch as string | undefined) ?? "main";
+  if (
+    (workflowProfile === "branching-remote" || workflowProfile === "branching-local") &&
+    branch !== productionBranch &&
+    branch !== "master"
+  ) {
+    return "preview";
   }
 
   return "development";

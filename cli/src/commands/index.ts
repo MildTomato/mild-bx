@@ -15,6 +15,7 @@ import login, { loginCommand } from "./login/index.js";
 import logout, { logoutCommand } from "./logout/index.js";
 import push, { pushSubcommand } from "./project/push/index.js";
 import pull, { pullSubcommand } from "./project/pull/index.js";
+import configCmd, { configCommand } from "./config/index.js";
 
 // Command entries with spec and handler
 interface CommandEntry {
@@ -34,6 +35,7 @@ const commandEntries: CommandEntry[] = [
   { spec: projectCommand, handler: project },
   { spec: { ...pushSubcommand, name: "push" }, handler: push },
   { spec: { ...pullSubcommand, name: "pull" }, handler: pull },
+  { spec: configCommand, handler: configCmd },
 ];
 
 // Build command map (name + aliases → handler)

@@ -34,14 +34,8 @@ import { generated as fmtGenerated, verboseLog } from "@/lib/styles.js";
 import { printWarning, createSpinner, printConfigDiffs } from "@/components/output.js";
 import { injectLocalEnvVars } from "@/lib/env-file.js";
 import { checkEnvMatchesBranch, refreshTypesAndCodegen, runCodegenIfStale } from "@/lib/precheck.js";
-import {
-  getEnabledFeatures,
-  resolveAllVariables,
-  diagnoseBindings,
-  formatDiagnostics,
-} from "@supabase-dx/config";
 import { providerPayloadToEnvVars } from "@/lib/auth-providers.js";
-import { getEnvRefs, getSecretRefs, detectHardcodedSecrets } from "@/lib/config-ref.js";
+import { getEnvRefs, getSecretRefs, detectHardcodedSecrets, stripHardcodedSecrets, detectMissingSecrets } from "@/lib/config-ref.js";
 
 export interface PushOptions {
   profile?: string;
@@ -319,51 +313,46 @@ export async function pushCommand(options: PushOptions) {
   const client = createClient(token);
   const projectConfig = config as ProjectConfig;
 
-  // Validate enabled features have required variables
-  if (!migrationsOnly) {
-    const enabledFeatures = getEnabledFeatures(projectConfig);
-    if (enabledFeatures.length > 0) {
-      const lookup = lookupEnvVar;
-      const resolved = resolveAllVariables(enabledFeatures, projectConfig, lookup);
-      const diagnostics = diagnoseBindings(resolved, enabledFeatures);
-      const errors = diagnostics.filter((d) => d.level === "error");
+  // Detect and strip hardcoded secrets first — safeConfig is used for all subsequent checks and API calls
+  const supabaseDir = join(cwd, "supabase");
+  const hardcodedSecrets = !migrationsOnly ? detectHardcodedSecrets(supabaseDir, configLayers) : [];
+  const safeConfig = hardcodedSecrets.length > 0 ? stripHardcodedSecrets(projectConfig) : projectConfig;
 
-      if (errors.length > 0) {
-        const formatted = formatDiagnostics(diagnostics);
-        if (options.json) {
-          console.log(
-            JSON.stringify({
-              status: "error",
-              message: "Missing required environment variables",
-              diagnostics,
-            })
-          );
-        } else {
-          console.error(chalk.red("\nMissing required environment variables:\n"));
-          console.error(formatted);
-        }
-        process.exit(1);
+  // Show SECRET DETECTED badge before any blocking checks
+  if (hardcodedSecrets.length > 0) {
+    if (options.json) {
+      console.error(JSON.stringify({
+        status: "warning",
+        message: "Hardcoded secrets detected in config — fields not pushed, remove from config and set via CLI",
+        fields: hardcodedSecrets.map(({ path, file, line, setCommand }) => ({ path, file, line, setCommand })),
+      }));
+    } else {
+      console.error(chalk.bgRed.white.bold(" SECRET DETECTED ") + chalk.red(`  ${hardcodedSecrets.length} field${hardcodedSecrets.length === 1 ? "" : "s"} not pushed — remove from config and set via CLI\n`));
+      for (const { path, file, line, setCommand } of hardcodedSecrets) {
+        console.error(`  ${chalk.dim("•")}  ${path}  ${chalk.dim(`(${file}:${line})`)}`);
+        console.error(`     ${chalk.dim("→")}  ${chalk.yellow(setCommand)}\n`);
       }
     }
   }
 
-  // Warn about hardcoded secrets in config
+  // Check for missing secrets on enabled features (blocks push — can't push half-configured providers)
   if (!migrationsOnly) {
-    const hardcodedSecrets = detectHardcodedSecrets(projectConfig);
-    if (hardcodedSecrets.length > 0) {
+    const missingSecrets = detectMissingSecrets(safeConfig, lookupEnvVar);
+    if (missingSecrets.length > 0) {
       if (options.json) {
-        console.error(JSON.stringify({
-          status: "warning",
-          message: "Hardcoded secrets detected in config — fields not pushed, remove from config and set via CLI",
-          fields: hardcodedSecrets.map(({ path, setCommand }) => ({ path, setCommand })),
+        console.log(JSON.stringify({
+          status: "error",
+          message: "Enabled features have unset secrets — push blocked",
+          fields: missingSecrets,
         }));
       } else {
-        console.error(chalk.bgRed.white.bold(" SECRET DETECTED ") + chalk.red(`  ${hardcodedSecrets.length} field${hardcodedSecrets.length === 1 ? "" : "s"} not pushed — remove from config and set via CLI\n`));
-        for (const { path, setCommand } of hardcodedSecrets) {
+        console.error(chalk.bgYellow.black.bold(" MISSING SECRET ") + chalk.yellow(`  ${missingSecrets.length} field${missingSecrets.length === 1 ? "" : "s"} required by an enabled feature — push blocked\n`));
+        for (const { path, envVarName } of missingSecrets) {
           console.error(`  ${chalk.dim("•")}  ${path}`);
-          console.error(`     ${chalk.dim("→")}  ${chalk.yellow(setCommand)}\n`);
+          if (envVarName) console.error(`     ${chalk.dim("→")}  ${chalk.cyan(`supa project env set ${envVarName}=<value>`)}\n`);
         }
       }
+      process.exit(1);
     }
   }
 
@@ -400,7 +389,7 @@ export async function pushCommand(options: PushOptions) {
         cwd,
         migrationsOnly,
         configOnly,
-        config: projectConfig,
+        config: safeConfig,
         client,
         projectRef,
         verbose: options.verbose,
@@ -408,10 +397,10 @@ export async function pushCommand(options: PushOptions) {
       });
 
       // Scan for missing env/secret refs and append to plan warnings
-      if (projectConfig) {
+      if (safeConfig) {
         const missingEnvWarnings: string[] = [];
-        const envRefs = getEnvRefs(projectConfig);
-        const secretRefs = getSecretRefs(projectConfig);
+        const envRefs = getEnvRefs(safeConfig);
+        const secretRefs = getSecretRefs(safeConfig);
         for (const [varName] of envRefs) {
           if (!lookupEnvVar(varName)) missingEnvWarnings.push(varName);
         }
@@ -470,12 +459,12 @@ export async function pushCommand(options: PushOptions) {
 
       // Apply config
       if (hasConfig) {
-        const postgrestPayload = buildPostgrestPayload(projectConfig);
+        const postgrestPayload = buildPostgrestPayload(safeConfig);
         if (postgrestPayload && plan.config.postgrest.keys.length > 0) {
           await client.updatePostgrestConfig(projectRef, postgrestPayload);
         }
 
-        const authPayload = buildAuthPayload(projectConfig, lookupEnvVar);
+        const authPayload = buildAuthPayload(safeConfig, lookupEnvVar);
         if (authPayload && plan.config.auth.keys.length > 0) {
           await client.updateAuthConfig(projectRef, authPayload);
         }
@@ -575,7 +564,7 @@ export async function pushCommand(options: PushOptions) {
       cwd,
       migrationsOnly,
       configOnly,
-      config: projectConfig,
+      config: safeConfig,
       client,
       projectRef,
       verbose: options.verbose,
@@ -583,10 +572,10 @@ export async function pushCommand(options: PushOptions) {
     });
 
     // Scan for missing env/secret refs and warn
-    if (projectConfig) {
+    if (safeConfig) {
       const missingEnvVars: { varName: string; isSecret: boolean }[] = [];
-      const envRefs = getEnvRefs(projectConfig);
-      const secretRefs = getSecretRefs(projectConfig);
+      const envRefs = getEnvRefs(safeConfig);
+      const secretRefs = getSecretRefs(safeConfig);
       for (const [varName] of envRefs) {
         if (!lookupEnvVar(varName)) missingEnvVars.push({ varName, isSecret: false });
       }
@@ -686,14 +675,14 @@ export async function pushCommand(options: PushOptions) {
 
     // Apply config changes
     if (hasConfigChanges) {
-      const postgrestPayload = buildPostgrestPayload(projectConfig);
+      const postgrestPayload = buildPostgrestPayload(safeConfig);
       if (postgrestPayload && plan.config.postgrest.keys.length > 0) {
         applySpinner.message("Updating API config...");
         await client.updatePostgrestConfig(projectRef, postgrestPayload);
         configChangesApplied += plan.config.postgrest.diffs.filter((d) => d.changed).length;
       }
 
-      const authPayload = buildAuthPayload(projectConfig, lookupEnvVar);
+      const authPayload = buildAuthPayload(safeConfig, lookupEnvVar);
       if (authPayload && plan.config.auth.keys.length > 0) {
         applySpinner.message("Updating Auth config...");
         await client.updateAuthConfig(projectRef, authPayload);

@@ -87,6 +87,17 @@ export async function replaceRemoteVariables(
   await setRemoteVariable(projectRef, vars);
 }
 
+export async function clearRemoteScope(
+  projectRef: string,
+  scope: EnvScope
+): Promise<void> {
+  log(`CLEAR ${projectRef} scope=${scope}`);
+  const vars = await listRemoteVariables(projectRef, scope);
+  await Promise.allSettled(
+    vars.map((v) => deleteRemoteVariable(projectRef, v.key, scope))
+  );
+}
+
 export async function bulkPushVariables(
   projectRef: string,
   variables: EnvVariable[],

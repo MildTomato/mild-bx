@@ -70,6 +70,11 @@ export interface ProjectContextOptions {
   gitBranch?: string;
   profileName?: string;
   dashboardUrl?: string;
+  /**
+   * Ordered list of config files that were merged to produce the effective
+   * config. When more than one file is present the "Config:" line is rendered.
+   */
+  configLayers?: string[];
   /** Additional context lines rendered after Branch */
   extra?: [label: string, value: string][];
 }
@@ -79,7 +84,7 @@ export interface ProjectContextOptions {
  * Call after printCommandHeader (without context) to render project-level details.
  */
 export function printProjectContextLines(opts: ProjectContextOptions): void {
-  const { parentRef, branchRef, gitBranch, profileName, dashboardUrl, extra } = opts;
+  const { parentRef, branchRef, gitBranch, profileName, dashboardUrl, configLayers, extra } = opts;
 
   console.log(bar);
   console.log(`${bar}  ${secondary("Project:".padEnd(10))} ${parentRef}`);
@@ -92,6 +97,9 @@ export function printProjectContextLines(opts: ProjectContextOptions): void {
     if (branchRef && branchRef !== parentRef) {
       console.log(`${bar}  ${secondary("  └ ref:".padEnd(10))} ${secondary(branchRef)}`);
     }
+  }
+  if (configLayers && configLayers.length > 1) {
+    console.log(`${bar}  ${secondary("Config:".padEnd(10))} ${configLayers.join(" + ")}`);
   }
   for (const [label, value] of extra ?? []) {
     console.log(`${bar}  ${secondary((label + ":").padEnd(10))} ${value}`);

@@ -50,7 +50,7 @@ import { checkEnvMatchesBranch, runCodegenIfStale, refreshTypesAndCodegen } from
 import { runHooks, runHooksAsync, getHookWatchSources } from "@/lib/hooks.js";
 import { createFileWatcher, type WatchSource } from "@/lib/file-watcher.js";
 import type { HooksConfig } from "@supabase-dx/config";
-import { getEnvRefs, getSecretRefs, detectHardcodedSecrets, stripHardcodedSecrets } from "@/lib/config-ref.js";
+import { getEnvRefs, getSecretRefs, detectHardcodedSecrets, stripHardcodedSecrets, detectMissingSecrets } from "@/lib/config-ref.js";
 import { listRemoteVariables } from "@/lib/env-api-bridge.js";
 import { BranchResolutionError, resolveBranchContext, resolveEnvScope } from "@/lib/resolve-project.js";
 
@@ -216,6 +216,8 @@ export async function devCommand(options: DevOptions): Promise<void> {
   const { config: _initialConfig, layers: _initialLayers } = loadEffectiveConfig(cwd, _startupEnv, _startupBranch);
   // Load config (mutable so it stays current after reloads)
   let config = _initialConfig;
+  // Track config layers (mutable, updated on config reload)
+  let currentLayers = _initialLayers;
 
   // Get token
   const token = await requireAuth({ json: options.json });
@@ -1476,7 +1478,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
     const allChanges: ConfigChange[] = [];
 
     // Strip hardcoded secrets before building any payload — never send them to the API
-    const strippedSecrets = detectHardcodedSecrets(freshConfig);
+    const strippedSecrets = detectHardcodedSecrets(join(cwd, "supabase"), currentLayers);
     const safeConfig = strippedSecrets.length > 0 ? stripHardcodedSecrets(freshConfig) : freshConfig;
 
     // Fetch env-server vars for the current scope (same as push.ts)
@@ -1561,7 +1563,24 @@ export async function devCommand(options: DevOptions): Promise<void> {
         console.log(`${S_BAR}       ${C.secondary}export ${name}=<value>${C.reset}`);
       } else {
         console.log(`${S_BAR}    ${C.secondary}•${C.reset}  ${C.fileName}${name}${C.reset}`);
-        console.log(`${S_BAR}       ${C.value}supa env set ${name} <value>${C.reset}`);
+        console.log(`${S_BAR}       ${C.value}supa project env set ${name}=<value>${C.reset}`);
+      }
+    }
+    console.log(S_BAR);
+    lastActivity = Date.now();
+  };
+
+  // Warn about enabled providers/features whose secrets are missing from env-server
+  const logMissingSecretsWarning = (cfg: ProjectConfig, lookup: (key: string) => string | undefined) => {
+    const found = detectMissingSecrets(cfg, lookup);
+    if (found.length === 0) return;
+    clearLine();
+    console.log(S_BAR);
+    console.log(`${S_BAR}  ${C.bgWarning} MISSING SECRET ${C.reset}  ${found.length} field${found.length === 1 ? "" : "s"} required by an enabled feature`);
+    for (const { path, envVarName } of found) {
+      console.log(`${S_BAR}    ${C.secondary}•${C.reset}  ${path}`);
+      if (envVarName) {
+        console.log(`${S_BAR}       ${C.secondary}→${C.reset}  ${C.value}supa env set ${envVarName}=<value>${C.reset}`);
       }
     }
     console.log(S_BAR);
@@ -1569,14 +1588,14 @@ export async function devCommand(options: DevOptions): Promise<void> {
   };
 
   // Error: hardcoded secrets stripped from payload — these fields were NOT pushed
-  const logHardcodedSecretsWarning = (cfg: ProjectConfig) => {
-    const found = detectHardcodedSecrets(cfg);
+  const logHardcodedSecretsWarning = () => {
+    const found = detectHardcodedSecrets(join(cwd, "supabase"), currentLayers);
     if (found.length === 0) return;
     clearLine();
     console.log(S_BAR);
     console.log(`${S_BAR}  ${C.bgError} SECRET DETECTED ${C.reset}  ${found.length} field${found.length === 1 ? "" : "s"} not pushed — remove from config and set via CLI`);
-    for (const { path, setCommand } of found) {
-      console.log(`${S_BAR}    ${C.secondary}•${C.reset}  ${path}`);
+    for (const { path, file, line, setCommand } of found) {
+      console.log(`${S_BAR}    ${C.secondary}•${C.reset}  ${path}  ${C.secondary}(${file}:${line})${C.reset}`);
       console.log(`${S_BAR}       ${C.secondary}→${C.reset}  ${C.warning}${setCommand}${C.reset}`);
     }
     console.log(S_BAR);
@@ -1587,14 +1606,15 @@ export async function devCommand(options: DevOptions): Promise<void> {
   const applyConfigChanges = async (): Promise<((key: string) => string | undefined) | undefined> => {
     startStep("Comparing config with remote");
     try {
-      const freshConfig = loadEffectiveConfig(cwd, undefined, currentBranch).config as ProjectConfig;
+      const { config: freshConfig, layers: freshLayers } = loadEffectiveConfig(cwd, undefined, currentBranch);
       if (!freshConfig) {
         completeStep("Config push failed", "could not reload config.json", "error");
         return undefined;
       }
-      const { changes: allChanges, lookupEnvVar, strippedSecrets } = await syncConfig(freshConfig);
+      currentLayers = freshLayers;
+      const { changes: allChanges, lookupEnvVar, strippedSecrets } = await syncConfig(freshConfig as ProjectConfig);
       if (strippedSecrets.length > 0) {
-        logHardcodedSecretsWarning(freshConfig);
+        logHardcodedSecretsWarning();
       }
       if (allChanges.length === 0) {
         cancelStep();
@@ -1784,7 +1804,8 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
     // Warn about missing env vars and hardcoded secrets after every change cycle
     logMissingEnvVarsWarning(getMissingEnvVars(config as ProjectConfig, lookupEnvVar));
-    logHardcodedSecretsWarning(config as ProjectConfig);
+    logHardcodedSecretsWarning();
+    logMissingSecretsWarning(config as ProjectConfig, lookupEnvVar);
 
     // If changes accumulated during apply (e.g. hook-generated SQL picked up by watcher), re-schedule
     if (state.pendingSchemaChanges.size > 0 || state.pendingConfigChange || state.pendingSeedChange) {
@@ -1930,14 +1951,15 @@ export async function devCommand(options: DevOptions): Promise<void> {
       logVerbose(`config: syncing…`);
       let configChanges: ConfigChange[] = [];
       let startupLookupEnvVar: ((key: string) => string | undefined) | undefined;
-      const freshConfig = loadEffectiveConfig(cwd, undefined, currentBranch).config as ProjectConfig;
+      const { config: freshConfig, layers: freshStartupLayers } = loadEffectiveConfig(cwd, undefined, currentBranch);
       if (freshConfig) {
         try {
+          currentLayers = freshStartupLayers;
           let strippedSecrets: ReturnType<typeof detectHardcodedSecrets>;
-          ({ changes: configChanges, lookupEnvVar: startupLookupEnvVar, strippedSecrets } = await syncConfig(freshConfig));
-          if (strippedSecrets.length > 0) logHardcodedSecretsWarning(freshConfig);
+          ({ changes: configChanges, lookupEnvVar: startupLookupEnvVar, strippedSecrets } = await syncConfig(freshConfig as ProjectConfig));
+          if (strippedSecrets.length > 0) logHardcodedSecretsWarning();
           logVerbose(`config: ${configChanges.length} change(s)`);
-          config = freshConfig;
+          config = freshConfig as ProjectConfig;
         } catch (error) {
           logNested(`${C.warning}⚠${C.reset} Config sync failed: ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -1978,6 +2000,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
       // Warn about any unresolved env() / secret() refs at startup
       logMissingEnvVarsWarning(getMissingEnvVars(config as ProjectConfig, startupLookupEnvVar));
+      if (startupLookupEnvVar) logMissingSecretsWarning(config as ProjectConfig, startupLookupEnvVar);
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

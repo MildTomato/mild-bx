@@ -900,8 +900,8 @@ function filterStatements(statements: string[]): string[] {
       return false;
     }
 
-    // Filter out role alterations (we can't modify roles)
-    if (upper.startsWith("ALTER ROLE")) {
+    // Filter out role DDL (roles are platform-managed on Supabase)
+    if (upper.startsWith("ALTER ROLE") || upper.startsWith("DROP ROLE") || upper.startsWith("CREATE ROLE")) {
       log(`[pg-delta] Filtered: ${stmt.slice(0, 60)}...`);
       return false;
     }

@@ -44,6 +44,8 @@ export function makeSecretRef(varName: string): string {
 // Config scanning
 // ---------------------------------------------------------------------------
 
+import { readFileSync } from "node:fs";
+import { join as pathJoin } from "node:path";
 import type { ProjectConfig } from "./config-types.js";
 
 function collectRefs(
@@ -169,8 +171,6 @@ export function detectHardcodedSecrets(
   supabaseDir: string,
   layers: string[]
 ): HardcodedSecret[] {
-  const { readFileSync } = require("node:fs") as typeof import("node:fs");
-  const { join: pathJoin } = require("node:path") as typeof import("node:path");
   const results: HardcodedSecret[] = [];
 
   for (const layer of layers) {

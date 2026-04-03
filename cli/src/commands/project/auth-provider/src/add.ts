@@ -258,8 +258,8 @@ export async function addAuthProvider(
   }
   // else: non-TTY with no secret — continue, write config + env vars, then prompt
 
-  // Warn about short secrets and ask for confirmation
-  if (secretValue.length < 16 && isTTY) {
+  // Warn about short secrets and ask for confirmation (skip if no secret yet — user will set it later)
+  if (secretValue !== undefined && secretValue.length < 16 && isTTY) {
     p.log.warn("Client secret seems unusually short. Most OAuth secrets are 32+ characters.");
 
     const shouldContinue = await p.confirm({

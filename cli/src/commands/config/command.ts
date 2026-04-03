@@ -4,6 +4,7 @@
 
 import type { Command } from "@/util/commands/types.js";
 import { showSubcommand } from "./show/command.js";
+import { diffSubcommand } from "./diff/command.js";
 
 export const configCommand = {
   name: "config",
@@ -11,11 +12,15 @@ export const configCommand = {
   description: "Manage project config",
   arguments: [],
   options: [],
-  subcommands: [showSubcommand],
+  subcommands: [showSubcommand, diffSubcommand],
   examples: [
     {
       name: "Show effective config",
       value: "supa config show",
+    },
+    {
+      name: "Diff config between branches",
+      value: "supa config diff main feat/my-feature",
     },
   ],
 } as const satisfies Command;

@@ -52,6 +52,7 @@ import { createFileWatcher, type WatchSource } from "@/lib/file-watcher.js";
 import type { HooksConfig } from "@supabase-dx/config";
 import { getEnvRefs, getSecretRefs, detectHardcodedSecrets, stripHardcodedSecrets, detectMissingSecrets } from "@/lib/config-ref.js";
 import { listRemoteVariables } from "@/lib/env-api-bridge.js";
+import { commitAllConfigSnapshots } from "@/lib/config-storage-bridge.js";
 import { BranchResolutionError, resolveBranchContext, resolveEnvScope } from "@/lib/resolve-project.js";
 
 function watchGitBranch(cwd: string, onChange: () => void): () => void {
@@ -1538,7 +1539,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
       }
     }
 
-    return { changes: allChanges, lookupEnvVar, strippedSecrets };
+    return { changes: allChanges, lookupEnvVar, strippedSecrets, safeConfig };
   };
 
   // Show config change details under the rail
@@ -1612,7 +1613,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
         return undefined;
       }
       currentLayers = freshLayers;
-      const { changes: allChanges, lookupEnvVar, strippedSecrets } = await syncConfig(freshConfig as ProjectConfig);
+      const { changes: allChanges, lookupEnvVar, strippedSecrets, safeConfig } = await syncConfig(freshConfig as ProjectConfig);
       if (strippedSecrets.length > 0) {
         logHardcodedSecretsWarning();
       }
@@ -1624,6 +1625,9 @@ export async function devCommand(options: DevOptions): Promise<void> {
       } else {
         completeStep("Pushed config to remote", `${allChanges.length} change${allChanges.length === 1 ? "" : "s"}`);
         logConfigChanges(allChanges);
+      }
+      if (!options.dryRun) {
+        await commitAllConfigSnapshots(cwd, parentProjectRef, state.gitBranch ?? "main");
       }
       return lookupEnvVar;
     } catch (error) {
@@ -1956,10 +1960,12 @@ export async function devCommand(options: DevOptions): Promise<void> {
         try {
           currentLayers = freshStartupLayers;
           let strippedSecrets: ReturnType<typeof detectHardcodedSecrets>;
-          ({ changes: configChanges, lookupEnvVar: startupLookupEnvVar, strippedSecrets } = await syncConfig(freshConfig as ProjectConfig));
+          let safeConfig: ProjectConfig;
+          ({ changes: configChanges, lookupEnvVar: startupLookupEnvVar, strippedSecrets, safeConfig } = await syncConfig(freshConfig as ProjectConfig));
           if (strippedSecrets.length > 0) logHardcodedSecretsWarning();
           logVerbose(`config: ${configChanges.length} change(s)`);
           config = freshConfig as ProjectConfig;
+          await commitAllConfigSnapshots(cwd, parentProjectRef, currentBranch ?? "main");
         } catch (error) {
           logNested(`${C.warning}⚠${C.reset} Config sync failed: ${error instanceof Error ? error.message : String(error)}`);
         }

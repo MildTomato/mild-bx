@@ -1,0 +1,166 @@
+---
+title: Config Storage
+description: How the Supabase CLI stores and diffs project config across branches.
+---
+
+## Overview
+
+When you run `supa push`, the CLI doesn't just apply your config to the Supabase
+API — it also commits a snapshot of the resolved config to the **config storage
+service**. This gives you a Git-like history of config changes per branch, and
+lets you see exactly what will change in production before you merge.
+
+This is the foundation of **code as config**: your `config.json` files are the
+source of truth, and config storage keeps a versioned record of what was actually
+pushed.
+
+## How it works
+
+Config storage is built into the local `env-server` (port 3457). It stores config
+snapshots in SQLite alongside your environment variables.
+
+```
+supa push (on feature branch)
+  → applies config to Supabase API
+  → commits resolved config snapshot to config storage under branch "my-feature"
+
+supa push (on main)
+  → applies config to Supabase API
+  → commits resolved config snapshot to config storage under branch "main"
+```
+
+When you open a PR, you can diff the two snapshots to see what config changes are
+headed to production.
+
+## Secrets are never stored
+
+Config snapshots contain only non-sensitive fields. Secrets (fields marked
+`secret: true` in the platform schema) are stripped before the snapshot is
+committed. They live exclusively in the env-server under their own secret
+variables — never in config files or config snapshots.
+
+## API reference
+
+The config storage endpoints are served by the env-server at `http://localhost:3457`.
+
+### Commit a config snapshot
+
+```http
+PUT /projects/:ref/config/:branch
+Content-Type: application/json
+
+{ ...resolvedConfig }
+```
+
+Called automatically by `supa push`. The `branch` is the current git branch name.
+
+### Get latest config for a branch
+
+```http
+GET /projects/:ref/config/:branch
+```
+
+Returns the most recently committed config snapshot for that branch, plus metadata:
+
+```json
+{
+  "id": 42,
+  "branch": "my-feature",
+  "committed_at": "2026-04-03T12:00:00",
+  "config": { "auth": { "site_url": "https://example.com", ... } }
+}
+```
+
+### List branches with config snapshots
+
+```http
+GET /projects/:ref/config
+```
+
+Returns all branches that have at least one committed snapshot:
+
+```json
+[
+  { "branch": "main", "last_committed_at": "2026-04-03T11:00:00", "commit_count": 5 },
+  { "branch": "my-feature", "last_committed_at": "2026-04-03T12:00:00", "commit_count": 2 }
+]
+```
+
+### Get commit history for a branch
+
+```http
+GET /projects/:ref/config/:branch/history?limit=20
+```
+
+Returns the commit log (metadata only, no config bodies):
+
+```json
+[
+  { "id": 42, "branch": "my-feature", "committed_at": "2026-04-03T12:00:00" },
+  { "id": 38, "branch": "my-feature", "committed_at": "2026-04-02T09:30:00" }
+]
+```
+
+### Diff two branches
+
+```http
+GET /projects/:ref/config/diff?from=main&to=my-feature
+```
+
+Returns a field-level diff between the latest config snapshots on two branches:
+
+```json
+{
+  "from": "main",
+  "to": "my-feature",
+  "hasChanges": true,
+  "added": [
+    { "path": "auth.external.github.enabled", "value": true }
+  ],
+  "changed": [
+    { "path": "auth.site_url", "from": "https://example.com", "to": "https://staging.example.com" }
+  ],
+  "removed": []
+}
+```
+
+Each entry in `added`, `changed`, and `removed` uses dot-path notation matching
+the structure of `config.json`.
+
+## TypeScript client
+
+The CLI exposes a typed client in `@/lib/config-storage-bridge.ts`:
+
+```ts
+import {
+  commitConfig,
+  getConfigSnapshot,
+  listConfigBranches,
+  getConfigHistory,
+  diffConfig,
+} from "@/lib/config-storage-bridge.js";
+
+// Commit after push
+await commitConfig(projectRef, branch, resolvedConfig);
+
+// Diff before merge
+const diff = await diffConfig(projectRef, "main", "my-feature");
+if (diff.hasChanges) {
+  console.log(`${diff.changed.length} config fields will change in production`);
+}
+```
+
+## Storage model
+
+Config commits are stored in the `config_commits` table in `env-server/env.db`:
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | INTEGER | Auto-increment commit ID |
+| `project_ref` | TEXT | Parent project ref (never the branch ref) |
+| `branch` | TEXT | Git branch name, e.g. `"main"` or `"my-feature"` |
+| `committed_at` | TEXT | ISO 8601 timestamp (UTC) |
+| `config_json` | TEXT | Full resolved config as JSON |
+
+The latest snapshot for a branch is always `ORDER BY committed_at DESC LIMIT 1`.
+History is preserved — nothing is overwritten on new commits.

@@ -31,13 +31,20 @@ export async function syncEnvServer(options: SyncOptions = {}): Promise<void> {
 
   const spinner = !options.json ? p.spinner() : null;
 
-  // Step 1: clear all existing entries
-  spinner?.start("Clearing existing env-server entries…");
-  const existing = await listRemoteVariables(parentProjectRef);
-  await Promise.allSettled(
-    existing.map((v) => deleteRemoteVariable(parentProjectRef, v.key, (v.scope ?? "production") as EnvScope))
+  // Step 1: clear only auth-provider entries for this scope — do not delete
+  // manually-set vars or config-scope entries (those are not reconstructed below).
+  spinner?.start("Clearing existing auth provider entries…");
+  const existing = await listRemoteVariables(parentProjectRef, scope);
+  const authKeys = new Set(
+    PROVIDER_DEFINITIONS.flatMap((def) =>
+      providerPayloadToEnvVars(buildProviderPayload(def, {} as Record<string, unknown>)).map((v) => v.key)
+    )
   );
-  spinner?.stop(`Cleared ${existing.length} existing entries`);
+  const authEntries = existing.filter((v) => authKeys.has(v.key));
+  await Promise.allSettled(
+    authEntries.map((v) => deleteRemoteVariable(parentProjectRef, v.key, (v.scope ?? "production") as EnvScope))
+  );
+  spinner?.stop(`Cleared ${authEntries.length} existing auth entries`);
 
   // Step 2: fetch remote auth config
   spinner?.start("Fetching remote auth config…");

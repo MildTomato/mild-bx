@@ -26,6 +26,7 @@ import { checkEnvMatchesBranch, refreshTypesAndCodegen } from "@/lib/precheck.js
 import { createSpinner } from "@/components/output.js";
 import { runHooks } from "@/lib/hooks.js";
 import type { HooksConfig } from "@supabase-dx/config";
+import { commitAllConfigSnapshots } from "@/lib/config-storage-bridge.js";
 
 interface PullOptions {
   profile?: string;
@@ -304,6 +305,9 @@ export async function pullCommand(options: PullOptions) {
 
         writeFileSync(configPath, JSON.stringify(updatedConfig, null, 2) + "\n");
         configUpdated = true;
+
+        // Snapshot all config layers so diffs are available at merge time.
+        await commitAllConfigSnapshots(cwd, parentProjectRef, currentBranch ?? "main");
       } catch (error) {
         // Non-fatal: config update failed (e.g. read/write error or API error).
         // Surface as a warning so the user knows it was skipped.

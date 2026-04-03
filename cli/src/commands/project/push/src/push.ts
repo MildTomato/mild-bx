@@ -35,7 +35,8 @@ import { printWarning, createSpinner, printConfigDiffs } from "@/components/outp
 import { injectLocalEnvVars } from "@/lib/env-file.js";
 import { checkEnvMatchesBranch, refreshTypesAndCodegen, runCodegenIfStale } from "@/lib/precheck.js";
 import { providerPayloadToEnvVars } from "@/lib/auth-providers.js";
-import { getEnvRefs, getSecretRefs, detectHardcodedSecrets, stripHardcodedSecrets, detectMissingSecrets } from "@/lib/config-ref.js";
+import { getEnvRefs, getSecretRefs, detectHardcodedSecrets, stripHardcodedSecrets, detectMissingSecrets, type HardcodedSecret } from "@/lib/config-ref.js";
+import { commitAllConfigSnapshots } from "@/lib/config-storage-bridge.js";
 
 export interface PushOptions {
   profile?: string;
@@ -280,6 +281,29 @@ async function getProjectWithRetry(
   throw lastError;
 }
 
+function emitHardcodedSecretsWarning(secrets: HardcodedSecret[], json: boolean): void {
+  if (secrets.length === 0) return;
+  const count = secrets.length;
+  const fieldWord = count === 1 ? "field" : "fields";
+  if (json) {
+    console.error(JSON.stringify({
+      status: "warning",
+      type: "hardcoded_secrets",
+      message: `${count} ${fieldWord} not pushed — remove from config and set via CLI`,
+      fields: secrets.map(({ path, file, line, setCommand }) => ({ path, file, line, setCommand })),
+    }));
+    return;
+  }
+  const items = secrets
+    .map(({ path, file, line, setCommand }) =>
+      `  ${chalk.dim("•")}  ${path}  ${chalk.dim(`(${file}:${line})`)}\n     ${chalk.dim("→")}  ${chalk.yellow(setCommand)}`
+    )
+    .join("\n");
+  p.log.warn(
+    `${C.bgError} SECRET DETECTED ${C.reset}  ${count} ${fieldWord} not pushed — remove from config and set via CLI\n\n${items}`
+  );
+}
+
 export async function pushCommand(options: PushOptions) {
   const dryRun = options.plan ?? false;
   const yes = options.yes ?? false;
@@ -318,26 +342,14 @@ export async function pushCommand(options: PushOptions) {
   const hardcodedSecrets = !migrationsOnly ? detectHardcodedSecrets(supabaseDir, configLayers) : [];
   const safeConfig = hardcodedSecrets.length > 0 ? stripHardcodedSecrets(projectConfig) : projectConfig;
 
-  // Show SECRET DETECTED badge before any blocking checks
-  if (hardcodedSecrets.length > 0) {
-    if (options.json) {
-      console.error(JSON.stringify({
-        status: "warning",
-        message: "Hardcoded secrets detected in config — fields not pushed, remove from config and set via CLI",
-        fields: hardcodedSecrets.map(({ path, file, line, setCommand }) => ({ path, file, line, setCommand })),
-      }));
-    } else {
-      console.error(chalk.bgRed.white.bold(" SECRET DETECTED ") + chalk.red(`  ${hardcodedSecrets.length} field${hardcodedSecrets.length === 1 ? "" : "s"} not pushed — remove from config and set via CLI\n`));
-      for (const { path, file, line, setCommand } of hardcodedSecrets) {
-        console.error(`  ${chalk.dim("•")}  ${path}  ${chalk.dim(`(${file}:${line})`)}`);
-        console.error(`     ${chalk.dim("→")}  ${chalk.yellow(setCommand)}\n`);
-      }
-    }
-  }
+  // Secret warning is shown after the command header (see below)
 
   // Check for missing secrets on enabled features (blocks push — can't push half-configured providers)
+  // Exclude paths already caught by detectHardcodedSecrets — those get stripped (not absent) and
+  // will be flagged above. Double-flagging the same field is confusing and blocks push unnecessarily.
   if (!migrationsOnly) {
-    const missingSecrets = detectMissingSecrets(safeConfig, lookupEnvVar);
+    const hardcodedPaths = new Set(hardcodedSecrets.map((s) => s.path));
+    const missingSecrets = detectMissingSecrets(safeConfig, lookupEnvVar).filter((s) => !hardcodedPaths.has(s.path));
     if (missingSecrets.length > 0) {
       if (options.json) {
         console.log(JSON.stringify({
@@ -500,6 +512,7 @@ export async function pushCommand(options: PushOptions) {
         appliedCount++;
       }
 
+      emitHardcodedSecretsWarning(hardcodedSecrets, true);
       console.log(
         JSON.stringify({
           status: "success",
@@ -536,6 +549,8 @@ export async function pushCommand(options: PushOptions) {
     configLayers,
     extra: dryRun ? [["Mode", `${C.warning}plan (dry-run)${C.reset}`]] : undefined,
   });
+
+  emitHardcodedSecretsWarning(hardcodedSecrets, false);
 
   const spinner = createSpinner(options);
   spinner.start("Connecting...");
@@ -701,6 +716,9 @@ export async function pushCommand(options: PushOptions) {
           setRemoteVariable(parentProjectRef, envVars).catch(() => {});
         }
       }
+
+      // Snapshot all config layers so diffs are available at merge time.
+      await commitAllConfigSnapshots(cwd, parentProjectRef, currentBranch ?? "main");
     }
 
     // Apply schema changes

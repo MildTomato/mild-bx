@@ -86,7 +86,7 @@ function ensurePreviewOverlay(cwd: string): boolean {
       const baseConfigPath = join(cwd, "supabase", "config.json");
       if (existsSync(baseConfigPath)) {
         try {
-          const base = JSON.parse(require("node:fs").readFileSync(baseConfigPath, "utf-8"));
+          const base = JSON.parse(readFileSync(baseConfigPath, "utf-8"));
           if (typeof base.$schema === "string") {
             schemaRef = base.$schema.replace("config.schema.json", "config.overlay.schema.json");
           }

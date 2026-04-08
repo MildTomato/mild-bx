@@ -28,3 +28,6 @@
 [submodule "external/dx-lab"]
 	path = external/dx-lab
 	url = https://github.com/supabase/dx-lab.git
+[submodule "external/v0-config-storage"]
+	path = external/v0-config-storage
+	url = https://github.com/MildTomato/v0-config-storage.git

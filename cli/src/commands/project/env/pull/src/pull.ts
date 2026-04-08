@@ -15,7 +15,7 @@ import {
   SENTINEL_KEYS,
   type EnvironmentContext,
 } from "@supabase-dx/env-vars";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 export interface PullOptions {
   environment?: "production" | "preview" | "development";
@@ -25,6 +25,7 @@ export interface PullOptions {
 }
 
 export async function pullCommand(options: PullOptions): Promise<void> {
+  setOutputMode(options);
   const environment = options.environment ?? "production";
 
   const ctx = await setupEnvCommand({
@@ -42,7 +43,7 @@ export async function pullCommand(options: PullOptions): Promise<void> {
       : { type: environment };
 
   const client = createClient(ctx.token);
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
   spinner.start("Fetching remote variables...");
 
   let raw: Array<{ key: string; value: string; secret: boolean }>;

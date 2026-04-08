@@ -17,7 +17,7 @@ import {
   type EnvironmentContext,
 } from "@supabase-dx/env-vars";
 import { S_BAR } from "@/components/command-header.js";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 const PRODUCTION_BRANCHES = new Set(["main", "master", "production"]);
 
@@ -92,7 +92,7 @@ export async function listCommand(options: ListOptions): Promise<void> {
   if (!ctx) return;
 
   const client = createClient(ctx.token);
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
   spinner.start("Fetching variables...");
 
   let raw: Array<{ key: string; value: string; secret: boolean }>;

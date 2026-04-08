@@ -23,7 +23,7 @@ import { printCommandHeader, printProjectContextLines } from "@/components/comma
 import { C } from "@/lib/colors.js";
 import { generated as fmtGenerated, verboseLog } from "@/lib/styles.js";
 import { checkEnvMatchesBranch, refreshTypesAndCodegen } from "@/lib/precheck.js";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 import { runHooks } from "@/lib/hooks.js";
 import type { HooksConfig } from "@supabase-dx/config";
 import { commitAllConfigSnapshots } from "@/lib/config-storage-bridge.js";
@@ -49,6 +49,7 @@ function printConfigDiffs(diffs: ConfigDiff[], label: string) {
 }
 
 export async function pullCommand(options: PullOptions) {
+  setOutputMode(options);
   const dryRun = options.plan ?? false;
   const typesOnly = options.typesOnly ?? false;
   const schemas = options.schemas ?? "public";
@@ -163,7 +164,7 @@ export async function pullCommand(options: PullOptions) {
     extra: extra.length ? extra : undefined,
   });
 
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
   spinner.start("Fetching remote state...");
 
   try {
@@ -279,7 +280,7 @@ export async function pullCommand(options: PullOptions) {
     }
 
     // Apply changes
-    const applySpinner = createSpinner(options);
+    const applySpinner = createSpinner();
     applySpinner.start("Writing files...");
 
     let configUpdated = false;

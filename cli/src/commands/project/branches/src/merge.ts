@@ -3,7 +3,7 @@ import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
 import { diffRemoteAuthConfig, diffRemotePostgrestConfig, buildAuthApiUpdatePayload, buildPostgrestApiUpdatePayload } from "@supabase-dx/config";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 export interface MergeOptions {
   yes?: boolean;
@@ -118,7 +118,7 @@ export async function mergeBranch(options: MergeOptions = {}): Promise<void> {
   }
 
   // Apply: schema merge + config promotion to production
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
   spinner.start("Merging to production...");
 
   try {

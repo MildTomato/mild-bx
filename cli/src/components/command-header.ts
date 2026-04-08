@@ -4,6 +4,7 @@
  */
 
 import { C } from "@/lib/colors.js";
+import { isJsonMode } from "@/components/output.js";
 
 const pipe = (s: string) => `${C.pipe}${s}${C.reset}`;
 const secondary = (s: string) => `${C.secondary}${s}${C.reset}`;
@@ -23,6 +24,7 @@ export interface CommandHeaderOptions {
 }
 
 export function printCommandHeader(options: CommandHeaderOptions): void {
+  if (isJsonMode()) return;
   const { command, description, showBranding, context } = options;
 
   console.log();
@@ -80,10 +82,34 @@ export interface ProjectContextOptions {
 }
 
 /**
+ * Print only extra key-value context lines (no Project/Branch preamble).
+ * Use when the header was already printed and you have late-resolved values.
+ */
+export function printContextExtra(extra: [label: string, value: string][]): void {
+  if (isJsonMode() || extra.length === 0) return;
+  for (const [label, value] of extra) {
+    console.log(`${bar}  ${secondary((label + ":").padEnd(10))} ${value}`);
+  }
+  console.log(bar);
+}
+
+/**
+ * Print the "overlay file created" banner below the header rail.
+ */
+export function printOverlayCreatedBanner(): void {
+  if (isJsonMode()) return;
+  console.log(bar);
+  console.log(`${bar}  \x1b[32m+\x1b[0m  Created \x1b[36msupabase/config.preview.json\x1b[0m`);
+  console.log(`${bar}     \x1b[2mAdd preview-specific config overrides here.\x1b[0m`);
+  console.log(bar);
+}
+
+/**
  * Print the standard Project / Dashboard / Profile / Branch / └ ref context block.
  * Call after printCommandHeader (without context) to render project-level details.
  */
 export function printProjectContextLines(opts: ProjectContextOptions): void {
+  if (isJsonMode()) return;
   const { parentRef, branchRef, gitBranch, profileName, dashboardUrl, configLayers, extra } = opts;
 
   console.log(bar);

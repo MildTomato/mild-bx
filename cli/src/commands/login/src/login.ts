@@ -17,7 +17,7 @@ import {
 import { generateKeyPair, decryptToken } from "./encryption.js";
 
 import { SUPABASE_API_URL, SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 const DASHBOARD_URL = SUPABASE_DASHBOARD_URL;
 const API_URL = SUPABASE_API_URL;
@@ -116,7 +116,7 @@ export async function loginCommand(options: LoginOptions): Promise<void> {
     }
 
     // Verify token by making API call
-    const spinner = createSpinner(options);
+    const spinner = createSpinner();
     spinner.start("Verifying token...");
 
     try {

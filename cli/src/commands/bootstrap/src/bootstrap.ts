@@ -34,7 +34,7 @@ import {
 import { writeSmartEnv, resolveProjectEnv } from "@/lib/dotenv.js";
 import { waitForProjectReady } from "@/lib/project-health.js";
 import { pushMigrations } from "@/lib/migrations.js";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -71,6 +71,7 @@ const SCRATCH_TEMPLATE: StarterTemplate = {
 export async function bootstrapHandler(
   options: BootstrapOptions,
 ): Promise<void> {
+  setOutputMode(options);
   const isInteractive = !options.json && process.stdin.isTTY;
 
   // 0. Resolve working directory
@@ -102,7 +103,7 @@ export async function bootstrapHandler(
   }
 
   // 1. Template selection
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
 
   spinner.start("Fetching templates...");
   let templates: StarterTemplate[];
@@ -260,7 +261,7 @@ export async function bootstrapHandler(
 
   // 2. Download template
   if (selectedTemplate.url) {
-    const dlSpinner = createSpinner(options);
+    const dlSpinner = createSpinner();
     dlSpinner.start(`Downloading "${selectedTemplate.name}" template...`);
 
     try {
@@ -360,7 +361,7 @@ export async function bootstrapHandler(
   const client = createClient(token);
 
   // Wait for project to be healthy
-  const waitSpinner = createSpinner(options);
+  const waitSpinner = createSpinner();
   waitSpinner.start("Waiting for project to be ready...");
   try {
     await waitForProjectReady(client, projectRef, {
@@ -382,7 +383,7 @@ export async function bootstrapHandler(
 
   // Push migrations
   const migrationsDir = join(workdir, "supabase", "migrations");
-  const migSpinner = createSpinner(options);
+  const migSpinner = createSpinner();
 
   if (existsSync(migrationsDir)) {
     const sqlFiles = readdirSync(migrationsDir).filter((f) => f.endsWith(".sql"));

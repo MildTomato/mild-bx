@@ -1,0 +1,1034 @@
+---
+title: Examples
+description: Learn through practical examples of using Clack
+---
+
+import WebContainer from '/src/components/WebContainer/WebContainer.astro';
+
+This guide provides practical examples of using Clack in different scenarios.
+
+## Basic Examples
+
+### Container
+
+<WebContainer name="container">
+```ts
+import { text, isCancel } from '@clack/prompts';
+
+const name = await text({
+  message: "What is your name?",
+  placeholder: "Jane Doe"
+})
+```
+</WebContainer>
+
+### Simple Text Input
+
+<WebContainer name="simple-text">
+```ts twoslash
+import { text, isCancel } from '@clack/prompts';
+
+const name = await text({
+  message: 'What is your name?',
+  placeholder: 'John Doe',
+});
+
+// isCancel is a TypeScript type guard that checks if the result is a symbol
+// If true, TypeScript knows name is a symbol in this block
+if (isCancel(name)) {
+  console.log('Operation cancelled');
+  process.exit(0);
+}
+
+console.log(`Hello, ${name}!`);
+```
+</WebContainer>
+
+### Selection Menu
+
+<WebContainer name="selection-menu">
+```ts twoslash
+import { select, isCancel } from '@clack/prompts';
+
+const framework = await select({
+  message: 'Choose a framework:',
+  options: [
+    { value: 'react', label: 'React', hint: 'A JavaScript library for building user interfaces' },
+    { value: 'vue', label: 'Vue', hint: 'The Progressive JavaScript Framework' },
+    { value: 'svelte', label: 'Svelte', hint: 'Cybernetically enhanced web apps' },
+  ],
+});
+
+if (isCancel(framework)) {
+  console.log('Operation cancelled');
+  process.exit(0);
+}
+
+console.log(`You selected ${framework}`);
+```
+</WebContainer>
+
+### Autocomplete Selection
+
+<WebContainer name="autocomplete-selection">
+```ts twoslash
+import { autocomplete, isCancel } from '@clack/prompts';
+
+const selectedPackage = await autocomplete({
+  message: 'Search for a package:',
+  options: [
+    { value: 'astro', label: 'Astro', hint: 'The web framework for content-based sites' },
+    { value: 'react', label: 'React', hint: 'A JavaScript library for building user interfaces' },
+    { value: 'vue', label: 'Vue', hint: 'The Progressive JavaScript Framework' },
+    { value: 'svelte', label: 'Svelte', hint: 'Cybernetically enhanced web apps' },
+    { value: 'angular', label: 'Angular', hint: 'Platform for building mobile & desktop web apps' },
+  ],
+  placeholder: 'Type to search...',
+  maxItems: 5,
+});
+
+if (isCancel(selectedPackage)) {
+  console.log('Operation cancelled');
+  process.exit(0);
+}
+
+console.log(`Selected package: ${selectedPackage}`);
+```
+</WebContainer>
+
+### Multi-select with Groups
+
+<WebContainer name="multiselect-group">
+```ts twoslash
+import { groupMultiselect, isCancel } from '@clack/prompts';
+
+const tools = await groupMultiselect({
+  message: 'Select development tools:',
+  options: {
+    'Frontend': [
+      { value: 'typescript', label: 'TypeScript', hint: 'JavaScript with syntax for types' },
+      { value: 'eslint', label: 'ESLint', hint: 'Find and fix problems in your JavaScript code' },
+      { value: 'prettier', label: 'Prettier', hint: 'Code formatter' },
+    ],
+    'Backend': [
+      { value: 'node', label: 'Node.js', hint: 'JavaScript runtime' },
+      { value: 'express', label: 'Express', hint: 'Web framework for Node.js' },
+      { value: 'prisma', label: 'Prisma', hint: 'Next-generation ORM' },
+    ],
+    'Testing': [
+      { value: 'jest', label: 'Jest', hint: 'JavaScript testing framework' },
+      { value: 'cypress', label: 'Cypress', hint: 'End-to-end testing framework' },
+      { value: 'vitest', label: 'Vitest', hint: 'Vite-native testing framework' },
+    ],
+  },
+});
+
+if (isCancel(tools)) {
+  console.log('Operation cancelled');
+  process.exit(0);
+}
+
+console.log('Selected tools:', tools);
+```
+</WebContainer>
+
+### Confirmation Dialog
+
+<WebContainer name="confirmation-dialog">
+```ts twoslash
+import { confirm, isCancel } from '@clack/prompts';
+
+const shouldProceed = await confirm({
+  message: 'Do you want to continue?',
+});
+
+if (isCancel(shouldProceed)) {
+  console.log('Operation cancelled');
+  process.exit(0);
+}
+
+if (shouldProceed) {
+  console.log('Proceeding...');
+} else {
+  console.log('Operation cancelled');
+}
+```
+</WebContainer>
+
+## Advanced Examples
+
+### Project Setup Wizard
+
+```ts twoslash
+import { text, select, confirm, groupMultiselect, isCancel } from '@clack/prompts';
+
+async function setupProject() {
+  // Get project details
+  const name = await text({
+    message: 'Project name:',
+    validate: (value) => {
+      if (!value || value.length === 0) return 'Name is required';
+      if (!/^[a-z0-9-]+$/.test(value)) return 'Name can only contain lowercase letters, numbers, and hyphens';
+      return undefined;
+    },
+  });
+
+  if (isCancel(name)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+  }
+
+  const type = await select({
+    message: 'Project type:',
+    options: [
+      { value: 'web', label: 'Web Application', hint: 'Full-stack web application' },
+      { value: 'cli', label: 'CLI Tool', hint: 'Command-line interface tool' },
+      { value: 'api', label: 'API Server', hint: 'REST/GraphQL API server' },
+    ],
+  });
+
+  if (isCancel(type)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+  }
+
+  // Get additional details based on project type
+  let framework;
+  if (type === 'web') {
+    framework = await select({
+      message: 'Choose a framework:',
+      options: [
+        { value: 'next', label: 'Next.js', hint: 'React framework for production' },
+        { value: 'nuxt', label: 'Nuxt', hint: 'Vue framework for production' },
+        { value: 'sveltekit', label: 'SvelteKit', hint: 'Svelte framework for production' },
+      ],
+    });
+
+    if (isCancel(framework)) {
+      console.log('Operation cancelled');
+      process.exit(0);
+    }
+  }
+
+  // Select features
+  const features = await groupMultiselect({
+    message: 'Select features:',
+    options: {
+      'Development': [
+        { value: 'typescript', label: 'TypeScript', hint: 'Type safety' },
+        { value: 'eslint', label: 'ESLint', hint: 'Code linting' },
+        { value: 'prettier', label: 'Prettier', hint: 'Code formatting' },
+      ],
+      'Testing': [
+        { value: 'jest', label: 'Jest', hint: 'Unit testing' },
+        { value: 'cypress', label: 'Cypress', hint: 'E2E testing' },
+      ],
+      'Deployment': [
+        { value: 'docker', label: 'Docker', hint: 'Containerization' },
+        { value: 'ci', label: 'CI/CD', hint: 'Continuous integration' },
+      ],
+    },
+  });
+
+  if (isCancel(features)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+  }
+
+  // Confirm setup
+  const shouldProceed = await confirm({
+    message: `Create ${type} project "${name}"${framework ? ` with ${framework}` : ''}?`,
+  });
+
+  if (isCancel(shouldProceed)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+  }
+
+  if (shouldProceed) {
+    // Project creation logic here
+    console.log('Creating project...');
+  }
+}
+```
+
+### Configuration Setup with Validation
+
+```ts twoslash
+import { text, select, groupMultiselect, isCancel } from '@clack/prompts';
+
+interface Config {
+  port: number;
+  host: string;
+  mode: 'development' | 'production';
+  features: string[];
+  database: {
+    type: 'postgres' | 'mysql' | 'mongodb';
+    url: string;
+  };
+}
+
+async function setupConfig(): Promise<Config | null> {
+  const port = await text({
+    message: 'Enter port number:',
+    placeholder: '3000',
+    validate: (value) => {
+      if (!value) return 'Please enter a value';
+      const num = parseInt(value);
+      if (isNaN(num)) return 'Please enter a valid number';
+      if (num < 1 || num > 65535) return 'Port must be between 1 and 65535';
+      return undefined;
+    },
+  });
+
+  if (isCancel(port)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+    return null;
+  }
+
+  const host = await text({
+    message: 'Enter host:',
+    placeholder: 'localhost',
+    validate: (value) => {
+      if (!value) return 'Host is required';
+      if (!/^[a-zA-Z0-9.-]+$/.test(value)) return 'Invalid host format';
+      return undefined;
+    },
+  });
+
+  if (isCancel(host)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+    return null;
+  }
+
+  const mode = await select({
+    message: 'Select mode:',
+    options: [
+      { value: 'development', label: 'Development', hint: 'For local development' },
+      { value: 'production', label: 'Production', hint: 'For production deployment' },
+    ],
+  });
+
+  if (isCancel(mode)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+    return null;
+  }
+
+  const database = await select({
+    message: 'Select database:',
+    options: [
+      { value: 'postgres', label: 'PostgreSQL', hint: 'Advanced open source database' },
+      { value: 'mysql', label: 'MySQL', hint: 'Most popular open source database' },
+      { value: 'mongodb', label: 'MongoDB', hint: 'Document-oriented database' },
+    ],
+  });
+
+  if (isCancel(database)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+    return null;
+  }
+
+  const dbUrl = await text({
+    message: 'Enter database URL:',
+    placeholder: `postgresql://user:pass@localhost:5432/db`,
+    validate: (value) => {
+      if (!value) return 'Database URL is required';
+      try {
+        new URL(value);
+        return undefined;
+      } catch {
+        return 'Invalid URL format';
+      }
+    },
+  });
+
+  if (isCancel(dbUrl)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+    return null;
+  }
+
+  const features = await groupMultiselect({
+    message: 'Select features:',
+    options: {
+      'Security': [
+        { value: 'auth', label: 'Authentication', hint: 'User authentication' },
+        { value: 'cors', label: 'CORS', hint: 'Cross-origin resource sharing' },
+      ],
+      'Monitoring': [
+        { value: 'logging', label: 'Logging', hint: 'Application logging' },
+        { value: 'metrics', label: 'Metrics', hint: 'Performance metrics' },
+      ],
+      'Development': [
+        { value: 'swagger', label: 'Swagger', hint: 'API documentation' },
+        { value: 'debug', label: 'Debug', hint: 'Debugging tools' },
+      ],
+    },
+  });
+
+  if (isCancel(features)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+    return null;
+  }
+
+  return {
+    port: Number(port),
+    host,
+    mode: mode as 'development' | 'production',
+    features,
+    database: {
+      type: database as 'postgres' | 'mysql' | 'mongodb',
+      url: dbUrl,
+    },
+  };
+}
+```
+
+### Interactive CLI Tool with Tasks
+
+```ts twoslash
+import { text, select, confirm, tasks, spinner, isCancel } from '@clack/prompts';
+
+async function cliTool() {
+  while (true) {
+    const action = await select({
+      message: 'What would you like to do?',
+      options: [
+        { value: 'create', label: 'Create new item', hint: 'Create a new resource' },
+        { value: 'list', label: 'List items', hint: 'View all resources' },
+        { value: 'delete', label: 'Delete item', hint: 'Remove a resource' },
+        { value: 'update', label: 'Update item', hint: 'Modify a resource' },
+        { value: 'exit', label: 'Exit', hint: 'Close the application' },
+      ],
+    });
+
+    if (isCancel(action)) {
+      console.log('Operation cancelled');
+      process.exit(0);
+    }
+
+    if (action === 'exit') break;
+
+    switch (action) {
+      case 'create': {
+        const name = await text({
+          message: 'Enter item name:',
+          validate: (value) => {
+            if (!value) return 'Name is required';
+            return undefined;
+          },
+        });
+        
+        if (isCancel(name)) {
+          console.log('Operation cancelled');
+          break;
+        }
+
+        const spin = spinner();
+        spin.start('Creating item...');
+        
+        await tasks([
+          {
+            title: 'Validating input',
+            task: async () => {
+              // Validation logic
+              return 'Input validated';
+            },
+          },
+          {
+            title: 'Creating resource',
+            task: async () => {
+              // Creation logic
+              return 'Resource created';
+            },
+          },
+          {
+            title: 'Setting up permissions',
+            task: async () => {
+              // Permission setup
+              return 'Permissions configured';
+            },
+          },
+        ]);
+        
+        spin.stop('Item created successfully');
+        break;
+      }
+      case 'list': {
+        const spin = spinner();
+        spin.start('Fetching items...');
+        
+        // Simulate API call
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        spin.stop('Items fetched successfully');
+        console.log('Listing items...');
+        break;
+      }
+      case 'delete': {
+        const item = await text({
+          message: 'Enter item to delete:',
+          validate: (value) => {
+            if (!value) return 'Item name is required';
+            return undefined;
+          },
+        });
+        
+        if (isCancel(item)) {
+          console.log('Operation cancelled');
+          break;
+        }
+        
+        const shouldDelete = await confirm({
+          message: `Are you sure you want to delete ${item}?`,
+        });
+        
+        if (isCancel(shouldDelete)) {
+          console.log('Operation cancelled');
+          break;
+        }
+        
+        if (shouldDelete) {
+          const spin = spinner();
+          spin.start('Deleting item...');
+          
+          await tasks([
+            {
+              title: 'Checking dependencies',
+              task: async () => {
+                // Check dependencies
+                return 'Dependencies checked';
+              },
+            },
+            {
+              title: 'Removing item',
+              task: async () => {
+                // Delete logic
+                return 'Item removed';
+              },
+            },
+            {
+              title: 'Cleaning up',
+              task: async () => {
+                // Cleanup logic
+                return 'Cleanup completed';
+              },
+            },
+          ]);
+          
+          spin.stop('Item deleted successfully');
+        }
+        break;
+      }
+      case 'update': {
+        const item = await text({
+          message: 'Enter item to update:',
+          validate: (value) => {
+            if (!value) return 'Item name is required';
+            return undefined;
+          },
+        });
+        
+        if (isCancel(item)) {
+          console.log('Operation cancelled');
+          break;
+        }
+        
+        const spin = spinner();
+        spin.start('Updating item...');
+        
+        await tasks([
+          {
+            title: 'Fetching current state',
+            task: async () => {
+              // Fetch current state
+              return 'Current state fetched';
+            },
+          },
+          {
+            title: 'Applying updates',
+            task: async () => {
+              // Update logic
+              return 'Updates applied';
+            },
+          },
+          {
+            title: 'Verifying changes',
+            task: async () => {
+              // Verification logic
+              return 'Changes verified';
+            },
+          },
+        ]);
+        
+        spin.stop('Item updated successfully');
+        break;
+      }
+    }
+  }
+}
+```
+
+### Form Validation with Complex Types
+
+```ts twoslash
+import { text, select, groupMultiselect, isCancel } from '@clack/prompts';
+
+interface UserData {
+  name: string;
+  email: string;
+  age: number;
+  role: string;
+  skills: string[];
+  preferences: {
+    theme: 'light' | 'dark' | 'system';
+    notifications: boolean;
+    language: string;
+  };
+}
+
+async function collectUserData(): Promise<UserData | null> {
+  const name = await text({
+    message: 'Full name:',
+    validate: (value) => {
+      if (!value || value.length < 2) return 'Name must be at least 2 characters';
+      if (!/^[a-zA-Z\s]*$/.test(value)) return 'Name can only contain letters and spaces';
+      return undefined;
+    },
+  });
+
+  if (isCancel(name)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+    return null;
+  }
+
+  const email = await text({
+    message: 'Email address:',
+    validate: (value) => {
+      if (!value) return 'Email is required';
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(value)) return 'Please enter a valid email address';
+      return undefined;
+    },
+  });
+
+  if (isCancel(email)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+    return null;
+  }
+
+  const ageInput = await text({
+    message: 'Age:',
+    validate: (value) => {
+      if (!value) return 'Age is required';
+      const num = parseInt(value);
+      if (isNaN(num)) return 'Please enter a valid number';
+      if (num < 18 || num > 100) return 'Age must be between 18 and 100';
+      return undefined;
+    },
+  });
+
+  if (isCancel(ageInput)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+    return null;
+  }
+
+  const role = await select({
+    message: 'Select role:',
+    options: [
+      { value: 'admin', label: 'Administrator', hint: 'Full system access' },
+      { value: 'user', label: 'User', hint: 'Standard user access' },
+      { value: 'guest', label: 'Guest', hint: 'Limited access' },
+    ],
+  });
+
+  if (isCancel(role)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+    return null;
+  }
+
+  const skills = await groupMultiselect({
+    message: 'Select skills:',
+    options: {
+      'Frontend': [
+        { value: 'react', label: 'React', hint: 'UI library' },
+        { value: 'vue', label: 'Vue', hint: 'Progressive framework' },
+        { value: 'angular', label: 'Angular', hint: 'Platform' },
+      ],
+      'Backend': [
+        { value: 'node', label: 'Node.js', hint: 'Runtime' },
+        { value: 'python', label: 'Python', hint: 'Language' },
+        { value: 'java', label: 'Java', hint: 'Language' },
+      ],
+      'Database': [
+        { value: 'sql', label: 'SQL', hint: 'Query language' },
+        { value: 'mongodb', label: 'MongoDB', hint: 'NoSQL database' },
+        { value: 'redis', label: 'Redis', hint: 'Cache' },
+      ],
+    },
+  });
+
+  if (isCancel(skills)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+    return null;
+  }
+
+  const theme = await select({
+    message: 'Select theme:',
+    options: [
+      { value: 'light', label: 'Light', hint: 'Light mode' },
+      { value: 'dark', label: 'Dark', hint: 'Dark mode' },
+      { value: 'system', label: 'System', hint: 'Follow system preference' },
+    ],
+  });
+
+  if (isCancel(theme)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+    return null;
+  }
+
+  const notifications = await select({
+    message: 'Enable notifications?',
+    options: [
+      { value: true, label: 'Yes', hint: 'Receive notifications' },
+      { value: false, label: 'No', hint: 'No notifications' },
+    ],
+  });
+
+  if (isCancel(notifications)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+    return null;
+  }
+
+  const language = await select({
+    message: 'Select language:',
+    options: [
+      { value: 'en', label: 'English', hint: 'English' },
+      { value: 'es', label: 'Spanish', hint: 'Español' },
+      { value: 'fr', label: 'French', hint: 'Français' },
+      { value: 'de', label: 'German', hint: 'Deutsch' },
+    ],
+  });
+
+  if (isCancel(language)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+    return null;
+  }
+
+  return {
+    name,
+    email,
+    age: parseInt(ageInput),
+    role,
+    skills,
+    preferences: {
+      theme: theme as 'light' | 'dark' | 'system',
+      notifications: notifications as boolean,
+      language,
+    },
+  };
+}
+```
+
+## New Features Examples
+
+### Date picker
+
+Use `date` with `format` (`YMD`, `MDY`, or `DMY`) and optional bounds:
+
+```ts twoslash
+import { date, isCancel, cancel, outro } from '@clack/prompts';
+
+async function pickReleaseDate() {
+  const result = await date({
+    message: 'Pick a release date',
+    format: 'YMD',
+    minDate: new Date('2026-01-01'),
+    maxDate: new Date('2026-12-31'),
+  });
+
+  if (isCancel(result)) {
+    cancel('Operation cancelled.');
+    process.exit(0);
+  }
+
+  outro(`Selected: ${result.toISOString().slice(0, 10)}`);
+}
+```
+
+### Select by key
+
+Compact menus where each choice is bound to a key:
+
+```ts twoslash
+import { selectKey, isCancel } from '@clack/prompts';
+
+async function confirmDestructive() {
+  const choice = await selectKey({
+    message: 'Delete all cache?',
+    options: [
+      { value: 'y', label: 'Yes, delete' },
+      { value: 'n', label: 'No, keep' },
+    ],
+  });
+
+  if (isCancel(choice) || choice === 'n') {
+    return false;
+  }
+  return choice === 'y';
+}
+```
+
+### Path Selection
+
+The `path` prompt provides file system navigation with autocomplete:
+
+```ts twoslash
+import { path, isCancel } from '@clack/prompts';
+
+async function selectConfigFile() {
+  const configPath = await path({
+    message: 'Select a configuration file:',
+    root: process.cwd(),
+    directory: false,
+    validate: (value) => {
+      if (!value?.endsWith('.json') && !value?.endsWith('.yaml')) {
+        return 'Please select a .json or .yaml file';
+      }
+      return undefined;
+    },
+  });
+
+  if (isCancel(configPath)) {
+    console.log('Operation cancelled');
+    process.exit(0);
+  }
+
+  console.log(`Selected config: ${configPath}`);
+}
+```
+
+With `directory: true`, only folders appear in suggestions; with an existing directory as `initialValue`, **Enter** submits that folder directly (v1.2.0).
+
+### Autocomplete Tab and placeholder
+
+When the search box is empty and `placeholder` is set, **Tab** inserts the placeholder string—useful for default tokens:
+
+```ts twoslash
+import { autocomplete, isCancel } from '@clack/prompts';
+
+async function pickWithDefaultQuery() {
+  const tag = await autocomplete({
+    message: 'Filter by tag:',
+    placeholder: 'latest',
+    options: [
+      { value: 'latest', label: 'latest' },
+      { value: 'stable', label: 'stable' },
+      { value: 'canary', label: 'canary' },
+    ],
+  });
+
+  if (isCancel(tag)) {
+    return null;
+  }
+  return tag;
+}
+```
+
+### Progress Bar
+
+Display progress for long-running operations:
+
+```ts twoslash
+import { progress, intro, outro } from '@clack/prompts';
+
+async function downloadFiles() {
+  intro('File Downloader');
+
+  const files = ['package.json', 'README.md', 'src/index.ts', 'tsconfig.json', 'LICENSE'];
+  
+  const prog = progress({
+    style: 'heavy',
+    max: files.length,
+    size: 30,
+  });
+
+  prog.start('Downloading files');
+
+  for (let i = 0; i < files.length; i++) {
+    // Simulate download
+    await new Promise(resolve => setTimeout(resolve, 500));
+    prog.advance(1, `Downloaded ${files[i]}`);
+  }
+
+  prog.stop('All files downloaded');
+  outro('Download complete!');
+}
+```
+
+### Spinner with Cancellation Handling
+
+Handle graceful cancellation with the new spinner API:
+
+```ts twoslash
+import { spinner, confirm, isCancel } from '@clack/prompts';
+
+async function longRunningTask() {
+  const shouldStart = await confirm({
+    message: 'Start the long-running task?',
+  });
+
+  if (isCancel(shouldStart) || !shouldStart) {
+    console.log('Task not started');
+    return;
+  }
+
+  const spin = spinner({
+    onCancel: () => {
+      console.log('\nCleaning up resources...');
+    },
+    cancelMessage: 'Task was cancelled by user',
+    errorMessage: 'Task failed unexpectedly',
+  });
+
+  spin.start('Processing data');
+
+  try {
+    // Simulate work in stages
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    spin.message('Analyzing results');
+    
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    spin.message('Generating report');
+    
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Check if cancelled during processing
+    if (spin.isCancelled) {
+      return;
+    }
+
+    spin.stop('Task completed successfully');
+  } catch (error) {
+    spin.error('An error occurred during processing');
+  }
+}
+```
+
+### Task Log with Groups
+
+Organize complex operations into groups:
+
+```ts twoslash
+// @errors: 2345
+import { taskLog, intro, outro } from '@clack/prompts';
+
+async function buildProject() {
+  intro('Project Builder');
+
+  const log = taskLog({
+    title: 'Building project',
+    limit: 5,  // Show last 5 lines per section
+  });
+
+  // TypeScript compilation group
+  const tsGroup = log.group('TypeScript Compilation');
+  tsGroup.message('Checking types...');
+  await new Promise(resolve => setTimeout(resolve, 500));
+  tsGroup.message('Compiling src/index.ts');
+  await new Promise(resolve => setTimeout(resolve, 300));
+  tsGroup.message('Compiling src/utils.ts');
+  await new Promise(resolve => setTimeout(resolve, 300));
+  tsGroup.success('TypeScript compiled successfully');
+
+  // Bundling group
+  const bundleGroup = log.group('Bundling');
+  bundleGroup.message('Reading entry points...');
+  await new Promise(resolve => setTimeout(resolve, 400));
+  bundleGroup.message('Resolving dependencies...');
+  await new Promise(resolve => setTimeout(resolve, 600));
+  bundleGroup.message('Creating bundle...');
+  await new Promise(resolve => setTimeout(resolve, 500));
+  bundleGroup.message('Minifying output...');
+  await new Promise(resolve => setTimeout(resolve, 400));
+  bundleGroup.success('Bundle created: dist/index.js (45kb)');
+
+  // Final success
+  log.success('Build completed in 2.5s');
+  
+  outro('Ready to deploy!');
+}
+```
+
+### Programmatic Cancellation with AbortController
+
+Cancel prompts after a timeout or from external events:
+
+```ts twoslash
+import { text, select, isCancel } from '@clack/prompts';
+
+async function timedPrompt() {
+  // Auto-cancel after 30 seconds
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const name = await text({
+      message: 'Quick! Enter your name (30 second limit):',
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (isCancel(name)) {
+      console.log('Time ran out or cancelled');
+      return;
+    }
+
+    console.log(`Hello, ${name}!`);
+  } catch (error) {
+    console.log('Prompt was aborted');
+  }
+}
+
+// Racing prompts - first response wins
+async function racePrompts() {
+  const controller = new AbortController();
+
+  const result = await Promise.race([
+    // Option 1: Manual selection
+    select({
+      message: 'Choose a framework:',
+      options: [
+        { value: 'react', label: 'React' },
+        { value: 'vue', label: 'Vue' },
+      ],
+      signal: controller.signal,
+    }),
+    // Option 2: Auto-detect (simulated)
+    new Promise<string>(resolve => {
+      setTimeout(() => {
+        resolve('detected-framework');
+        controller.abort();
+      }, 5000);
+    }),
+  ]);
+
+  console.log(`Using: ${String(result)}`);
+}
+```
+
+For more examples and best practices, check out our [GitHub repository](https://github.com/bombshell-dev/clack/tree/main/examples/basic).

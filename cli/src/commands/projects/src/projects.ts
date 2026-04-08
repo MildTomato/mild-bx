@@ -11,7 +11,7 @@ import { createProject as createProjectOp } from "@/lib/operations.js";
 import { searchSelect } from "@/components/search-select.js";
 import { printCommandHeader } from "@/components/command-header.js";
 import { printTable } from "@/components/table.js";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 interface ProjectsOptions {
   action: "list" | "new" | "delete";

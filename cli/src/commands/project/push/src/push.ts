@@ -14,7 +14,7 @@ import {
 import { dirname, join } from "node:path";
 import { createClient, type Project } from "@/lib/api.js";
 import { SUPABASE_DASHBOARD_URL } from "@/lib/env.js";
-import { resolveProjectContext, resolveEnvScope } from "@/lib/resolve-project.js";
+import { resolveProjectContext, resolveConfig, resolveEnvScope } from "@/lib/resolve-project.js";
 import { listRemoteVariables, setRemoteVariable } from "@/lib/env-api-bridge.js";
 import {
   buildPostgrestPayload,
@@ -31,7 +31,7 @@ import {
 import { printCommandHeader, printProjectContextLines, S_BAR } from "@/components/command-header.js";
 import { C } from "@/lib/colors.js";
 import { generated as fmtGenerated, verboseLog } from "@/lib/styles.js";
-import { printWarning, createSpinner, printConfigDiffs } from "@/components/output.js";
+import { printWarning, createSpinner, printConfigDiffs, setOutputMode } from "@/components/output.js";
 import { injectLocalEnvVars } from "@/lib/env-file.js";
 import { checkEnvMatchesBranch, refreshTypesAndCodegen, runCodegenIfStale } from "@/lib/precheck.js";
 import { providerPayloadToEnvVars } from "@/lib/auth-providers.js";
@@ -312,7 +312,14 @@ export async function pushCommand(options: PushOptions) {
 
   setVerbose(options.verbose ?? false);
 
-  const { cwd, config, configLayers, branch: currentBranch, profile, projectRef, parentProjectRef, token, isBranch } =
+  if (!options.json) {
+    printCommandHeader({
+      command: "supa project push",
+      description: ["Push local changes to remote."],
+    });
+  }
+
+  const { cwd, config, configLayers, branch: currentBranch, profile, projectRef, parentProjectRef, token, isBranch, branchCreated } =
     await resolveProjectContext(options);
 
   // Inject local env vars so implicit binding can resolve canonical names
@@ -536,10 +543,6 @@ export async function pushCommand(options: PushOptions) {
   }
 
   // Interactive mode
-  printCommandHeader({
-    command: "supa project push",
-    description: ["Push local changes to remote."],
-  });
   printProjectContextLines({
     parentRef: parentProjectRef,
     branchRef: isBranch ? projectRef : undefined,
@@ -552,7 +555,7 @@ export async function pushCommand(options: PushOptions) {
 
   emitHardcodedSecretsWarning(hardcodedSecrets, false);
 
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
   spinner.start("Connecting...");
 
   try {
@@ -667,7 +670,9 @@ export async function pushCommand(options: PushOptions) {
     }
 
     // Confirm unless --yes or non-TTY (can't prompt without a terminal)
-    if (!yes && process.stdin.isTTY) {
+    // If `push` had to create the preview branch during project resolution,
+    // treat that as user intent to continue the push instead of prompting again.
+    if (!yes && !branchCreated && process.stdin.isTTY) {
       const proceed = await p.confirm({
         message: "Push these changes?",
       });
@@ -679,7 +684,7 @@ export async function pushCommand(options: PushOptions) {
     }
 
     // Apply changes
-    const applySpinner = createSpinner(options);
+    const applySpinner = createSpinner();
     applySpinner.start("Applying changes...");
 
     let appliedCount = 0;
@@ -777,8 +782,8 @@ export async function pushCommand(options: PushOptions) {
     for (const f of codegenFiles) console.log(chalk.dim(`  ${fmtGenerated(f)}`));
     for (const w of applyWarnings) printWarning(w);
   } catch (error) {
-    spinner.stop(chalk.red("Push failed"));
-    console.error(chalk.red(error instanceof Error ? error.message : "Unknown error"));
+    spinner.stop("Push failed");
+    p.log.error(error instanceof Error ? error.message : "Unknown error");
     process.exit(1);
   }
 }

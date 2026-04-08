@@ -10,7 +10,7 @@ import { handleCommandError } from "@/lib/command-error.js";
 import { listRemoteVariables } from "@/lib/env-api-bridge.js";
 import { executePropagationPlan } from "@/lib/env-propagate.js";
 import { buildPropagationPlan } from "@supabase-dx/env-vars";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 const HEALTHY_STATUS = "ACTIVE_HEALTHY";
 
@@ -23,6 +23,7 @@ export interface PropagateOptions {
 }
 
 export async function propagateCommand(options: PropagateOptions): Promise<void> {
+  setOutputMode(options);
   const context: [string, string][] = [];
   if (options.branch) {
     context.push(["Branch", options.branch]);
@@ -41,7 +42,7 @@ export async function propagateCommand(options: PropagateOptions): Promise<void>
   if (!ctx) return;
 
   const client = createClient(ctx.token);
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
   spinner.start("Fetching variables and branches...");
 
   let allVars;
@@ -126,7 +127,7 @@ export async function propagateCommand(options: PropagateOptions): Promise<void>
   }
 
   // Execute propagation
-  const pushSpinner = createSpinner(options);
+  const pushSpinner = createSpinner();
   pushSpinner.start("Propagating...");
 
   try {

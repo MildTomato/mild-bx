@@ -1,0 +1,1095 @@
+---
+title: Prompts
+description: Learn about the prompts package and its capabilities
+---
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+The `@clack/prompts` package provides a collection of pre-built, high-level prompts that make it easy to create interactive command-line interfaces. It builds on top of the core package to provide a more developer-friendly experience.
+
+## Key Features
+
+- **Pre-built prompts**: Ready-to-use prompt components
+- **Consistent styling**: Unified look and feel across all prompts
+- **Type-safe**: Full TypeScript support
+- **Customizable**: Easy to extend and modify
+- **AbortController support**: Cancel prompts programmatically
+- **Custom I/O streams**: Use custom input/output streams
+
+## Installation
+
+
+<Tabs>
+	<TabItem label="npm" icon="seti:npm">
+		```bash
+		npm install @clack/prompts
+		```
+	</TabItem>
+	<TabItem label="pnpm" icon="pnpm">
+		```bash
+		pnpm add @clack/prompts
+		```
+	</TabItem>
+	<TabItem label="Yarn" icon="seti:yarn">
+		```bash
+		yarn add @clack/prompts
+		```
+	</TabItem>
+</Tabs>
+
+## Usage
+
+The prompts package is designed to be intuitive and easy to use. Each prompt function returns a Promise that resolves to the user's input.
+
+For more detailed examples and advanced usage patterns, check out our [examples guide](/docs/clack/guides/examples) and [best practices](/docs/clack/guides/best-practices).
+
+## Common Options
+
+All prompts share these common options:
+
+### Guide Lines
+
+The `withGuide` option (boolean **option**, not a separate API) turns Clack’s border/guide lines on or off. Every prompt accepts it alongside `message` and friends. You can set it globally with `updateSettings` or override it per call.
+
+```ts twoslash
+import { text, updateSettings } from '@clack/prompts';
+
+// Disable globally
+updateSettings({ withGuide: false });
+
+// Or per-prompt
+const name = await text({
+  message: 'What is your name?',
+  withGuide: false,  // Disable guide lines for this prompt
+});
+```
+
+Session helpers use the same option on their **second argument**: `intro(title, { withGuide: false })`, `outro(message, { withGuide: false })`, and `cancel(message, { withGuide: false })`.
+
+`autocomplete` and `multiselect` respect `withGuide: false` per prompt (as of v1.2.0), matching other prompts.
+
+### AbortController Support
+
+All prompts accept a `signal` option for programmatic cancellation:
+
+```ts twoslash
+import { confirm } from '@clack/prompts';
+
+// Auto-cancel after 10 seconds
+const shouldContinue = await confirm({
+  message: 'This will self-destruct in 10 seconds',
+  signal: AbortSignal.timeout(10000),
+});
+```
+
+### Custom I/O Streams
+
+You can provide custom input and output streams for all prompts:
+
+```ts twoslash
+import { Writable, Readable } from 'node:stream';
+import { text } from '@clack/prompts';
+
+declare const customInput: Readable;
+declare const customOutput: Writable;
+
+const name = await text({
+  message: 'What is your name?',
+  input: customInput,
+  output: customOutput,
+});
+```
+
+## Available Prompts
+
+### Text Input
+
+```ts twoslash
+// @errors: 2339 18048
+import { text } from '@clack/prompts';
+
+const name = await text({
+  message: 'What is your name?',
+  placeholder: 'John Doe',
+  validate: (value) => {
+    if (!value || value.length < 2) return 'Name must be at least 2 characters';
+    return undefined;
+  },
+});
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#06989A">◆</font>  What is your name?
+<font color="#06989A">│</font>  <span style="background-color:#FFFFFF"><font color="#181818">J</font></span><font color="#AAAAAA">ohn Doe</font>
+<font color="#06989A">└</font></pre>
+
+### Password Input
+
+```ts twoslash
+import { password } from '@clack/prompts';
+
+const secret = await password({
+  message: 'What is your password?',
+  mask: '*',
+  clearOnError: true,  // Clear input when validation fails
+  validate: (value) => {
+    if (!value || value.length < 8) return 'Your password must be at least 8 characters';
+    if (!/[A-Z]/.test(value)) return 'Your password must be least contain 1 uppercase letter';
+    if (!/[0-9]/.test(value)) return 'Your password must be least contain 1 number';
+    if (!/[*?!@&]/.test(value)) return 'Your password must be least contain 1 special characters (*?!@&)';
+    return undefined;
+  },
+});
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#06989A">◆</font>  What is your password?
+<font color="#06989A">│</font>  *****<span style="background-color:#FFFFFF"><font color="#FFFFFF">_</font></span>
+<font color="#06989A">└</font></pre>
+
+Options:
+- `message`: The prompt message to display
+- `mask`: Character used to mask input (default: `'▪'`)
+- `clearOnError`: When `true`, clears the input field when validation fails (useful for security)
+
+### Selection
+
+#### Simple value
+
+```ts twoslash
+import { select } from '@clack/prompts';
+
+const framework = await select({
+  message: 'Pick a framework',
+  options: [
+    { value: 'next', label: 'Next.js', hint: 'React framework' },
+    { value: 'astro', label: 'Astro', hint: 'Content-focused' },
+    { value: 'svelte', label: 'SvelteKit', hint: 'Compile-time framework' },
+  ],
+  maxItems: 5, // Maximum number of items to display at once
+});
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#06989A">◆</font>  Pick a framework
+<font color="#06989A">│</font>  <font color="#4E9A06">●</font> Next.js (React framework)
+<font color="#06989A">│</font>  ○ Astro (Content-focused)
+<font color="#06989A">│</font>  ○ SvelteKit (Compile-time framework)
+<font color="#06989A">└</font></pre>
+
+#### Complex value
+
+```ts twoslash
+import { select } from '@clack/prompts';
+
+const framework = await select({
+  message: 'Pick a framework',
+  options: [
+    { value: { framework: 'Next', language: 'React' }, label: 'Next.js', hint: 'React framework' },
+    { value: { framework: null, language: 'Astro' }, label: 'Astro', hint: 'Content-focused' },
+    { value: { framework: 'Sveltekit', language: 'Svelte' }, label: 'SvelteKit', hint: 'Compile-time framework' },
+  ],
+});
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#555753">│</font>  Pick a framework
+<font color="#555753">│</font>  <font color="#4E9A06">●</font> Next.js (React framework)
+<font color="#555753">│</font>  ○ Astro (Content-focused)
+<font color="#555753">│</font>  ○ SvelteKit (Compile-time framework)
+<font color="#555753">└</font></pre>
+
+#### Disabled options
+
+You can disable specific options to prevent selection:
+
+```ts twoslash
+import { select } from '@clack/prompts';
+
+const database = await select({
+  message: 'Select a database',
+  options: [
+    { value: 'postgres', label: 'PostgreSQL', hint: 'Recommended' },
+    { value: 'mysql', label: 'MySQL' },
+    { value: 'mongodb', label: 'MongoDB', disabled: true, hint: 'Coming soon' },
+    { value: 'sqlite', label: 'SQLite' },
+  ],
+});
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#06989A">◆</font>  Select a database
+<font color="#06989A">│</font>  <font color="#4E9A06">●</font> PostgreSQL (Recommended)
+<font color="#06989A">│</font>  ○ MySQL
+<font color="#06989A">│</font>  <font color="#555753">○ <s>MongoDB</s> (Coming soon)</font>
+<font color="#06989A">│</font>  ○ SQLite
+<font color="#06989A">└</font></pre>
+
+Disabled options are displayed with strikethrough styling and cannot be selected.
+
+#### Multiple values
+
+```ts twoslash
+import { multiselect } from '@clack/prompts';
+
+const framework = await multiselect({
+  message: 'Pick a framework',
+  options: [
+    { value: { framework: 'Next', language: 'React' }, label: 'Next.js', hint: 'React framework' },
+    { value: { framework: null, language: 'Astro' }, label: 'Astro', hint: 'Content-focused' },
+    { value: { framework: 'Sveltekit', language: 'Svelte' }, label: 'SvelteKit', hint: 'Compile-time framework' },
+  ],
+  maxItems: 5, // Maximum number of items to display at once
+});
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#06989A">◆</font>  Pick a framework
+<font color="#06989A">│</font>  <font color="#4E9A06">◼</font> Next.js (React framework)
+<font color="#06989A">│</font>  <font color="#06989A">◻</font> Astro (Content-focused)
+<font color="#06989A">│</font>  ◻ SvelteKit (Compile-time framework)
+<font color="#06989A">└</font></pre>
+
+### Select by key
+
+`selectKey` shows each option with a visible key (the option `value`, typically one character). The user presses that key instead of moving a cursor with arrows—useful for compact yes/no/maybe menus or vim-style shortcuts.
+
+```ts twoslash
+import { selectKey, isCancel } from '@clack/prompts';
+
+const action = await selectKey({
+  message: 'What next?',
+  options: [
+    { value: 'y', label: 'Continue' },
+    { value: 'n', label: 'Stop' },
+    { value: 's', label: 'Skip', hint: 'optional' },
+  ],
+  caseSensitive: false,
+});
+
+if (isCancel(action)) {
+  process.exit(0);
+}
+```
+
+### Autocomplete
+
+The `autocomplete` prompt combines text input with a searchable list of options. It's perfect for when you have a large list of options and want to help users find what they're looking for quickly.
+
+```ts twoslash
+import { autocomplete } from '@clack/prompts';
+
+const framework = await autocomplete({
+  message: 'Search for a framework',
+  options: [
+    { value: 'next', label: 'Next.js', hint: 'React framework' },
+    { value: 'astro', label: 'Astro', hint: 'Content-focused' },
+    { value: 'svelte', label: 'SvelteKit', hint: 'Compile-time framework' },
+    { value: 'remix', label: 'Remix', hint: 'Full stack framework' },
+    { value: 'nuxt', label: 'Nuxt', hint: 'Vue framework' },
+  ],
+  placeholder: 'Type to search...',
+  maxItems: 5, // Maximum number of items to display at once
+});
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#06989A">◆</font>  Search for a framework
+<font color="#06989A">│</font>  Search: <span style="background-color:#FFFFFF"><font color="#181818">n</font></span>
+<font color="#06989A">│</font>  (2 matches)
+<font color="#06989A">│</font>  ● Next.js (React framework)
+<font color="#06989A">│</font>  ○ Nuxt (Vue framework)
+<font color="#06989A">└</font></pre>
+
+If you set `placeholder` and the search field is **empty**, pressing **Tab** copies the placeholder string into the input (v1.2.0)—handy for default search tokens or quick acceptance of a suggested value.
+
+#### Dynamic options (getter)
+
+Instead of a static array, `options` can be a **function** whose `this` is the underlying [`AutocompletePrompt`](https://github.com/bombshell-dev/clack/blob/main/packages/core/src/prompts/autocomplete.ts) from `@clack/core`. The function runs again whenever the search text changes, so you can read **`this.userInput`** and return a **new array in display order**—for example closest / highest-score matches first (similar to [fzf](https://github.com/junegunn/fzf)-style UIs). This pattern is what [issue #467](https://github.com/bombshell-dev/clack/issues/467) discusses for custom ranking and libraries like [Fuse.js](https://fusejs.io/).
+
+The high-level `autocomplete` wrapper still applies its **default `filter`** (substring match on label, hint, and value) to whatever your getter returns. If you already narrow or rank items in the getter, disable that second pass with **`filter: (_search, _option) => true`**, or pass a custom `(search, option) => boolean` aligned with your getter.
+
+`options` as a getter must be **synchronous**; there is no async API here—preload or sync work inside the function.
+
+The same `options` shape is supported on **`autocompleteMultiselect`**.
+
+```ts twoslash
+import { autocomplete } from '@clack/prompts';
+import type { AutocompletePrompt } from '@clack/core';
+import type { Option } from '@clack/prompts';
+
+const pool: Option<string>[] = [
+  { value: 'next', label: 'Next.js', hint: 'React' },
+  { value: 'nuxt', label: 'Nuxt', hint: 'Vue' },
+  { value: 'nest', label: 'NestJS', hint: 'Node' },
+];
+
+function rankByQuery(query: string, items: Option<string>[]): Option<string>[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [...items];
+  return [...items]
+    .filter((o) => {
+      const t = `${o.label ?? ''} ${o.hint ?? ''} ${o.value}`.toLowerCase();
+      return t.includes(q);
+    })
+    .sort((a, b) => {
+      const la = (a.label ?? '').toLowerCase();
+      const lb = (b.label ?? '').toLowerCase();
+      const sa = la.startsWith(q) ? 0 : 1;
+      const sb = lb.startsWith(q) ? 0 : 1;
+      return sa - sb || la.localeCompare(lb);
+    });
+}
+
+const picked = await autocomplete({
+  message: 'Pick a framework',
+  options(this: AutocompletePrompt<Option<string>>) {
+    return rankByQuery(this.userInput, pool);
+  },
+  filter: (_search, _option) => true,
+});
+```
+
+### Autocomplete Multiselect
+
+The `autocompleteMultiselect` combines the search functionality of autocomplete with the ability to select multiple options.
+
+```ts twoslash
+import { autocompleteMultiselect } from '@clack/prompts';
+
+const frameworks = await autocompleteMultiselect({
+  message: 'Select frameworks',
+  options: [
+    { value: 'next', label: 'Next.js', hint: 'React framework' },
+    { value: 'astro', label: 'Astro', hint: 'Content-focused' },
+    { value: 'svelte', label: 'SvelteKit', hint: 'Compile-time framework' },
+    { value: 'remix', label: 'Remix', hint: 'Full stack framework' },
+    { value: 'nuxt', label: 'Nuxt', hint: 'Vue framework' },
+  ],
+  placeholder: 'Type to search...',
+  maxItems: 5, // Maximum number of items to display at once
+});
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#06989A">◆</font>  Select frameworks
+<font color="#06989A">│</font>  Search: <span style="background-color:#FFFFFF"><font color="#181818">n</font></span>
+<font color="#06989A">│</font>  (2 matches)
+<font color="#06989A">│</font>  ◼ Next.js (React framework)
+<font color="#06989A">│</font>  ◻ Nuxt (Vue framework)
+<font color="#06989A">└</font></pre>
+
+### Path Selection
+
+The `path` prompt provides an autocomplete-based file and directory path selection. It automatically suggests files and directories as the user types.
+
+```ts twoslash
+import { path } from '@clack/prompts';
+
+const selectedPath = await path({
+  message: 'Select a file:',
+  root: process.cwd(), // Starting directory
+  directory: false, // Set to true to only show directories
+});
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#06989A">◆</font>  Select a file:
+<font color="#06989A">│</font>  Search: <span style="background-color:#FFFFFF"><font color="#181818">/</font></span>Users/project/
+<font color="#06989A">│</font>  (3 matches)
+<font color="#06989A">│</font>  ● /Users/project/src
+<font color="#06989A">│</font>  ○ /Users/project/package.json
+<font color="#06989A">│</font>  ○ /Users/project/tsconfig.json
+<font color="#06989A">└</font></pre>
+
+Options:
+- `message`: The prompt message to display
+- `root`: The starting directory for path suggestions (defaults to current working directory)
+- `directory`: When `true`, only **directories** appear in suggestions while you navigate; you still move through the tree normally (v1.2.0 fixes for directory-only mode).
+- `initialValue`: Pre-fill the path input. In **directory** mode, if `initialValue` already points at an existing directory, pressing **Enter** submits **that** directory immediately instead of jumping to the first child (v1.2.0).
+- `validate`: Custom validation function for the selected path
+
+### Date input
+
+`date` returns a `Date` on success or a cancel symbol. Use `format` to pick segment order: `YMD`, `MDY`, or `DMY`. Pass `locale` (BCP 47 string) to derive order and separators from `Intl`, or rely on the format alone.
+
+```ts twoslash
+import { date, isCancel } from '@clack/prompts';
+
+const picked = await date({
+  message: 'Pick a date',
+  format: 'YMD',
+  minDate: new Date('2026-01-01'),
+  maxDate: new Date('2026-12-31'),
+});
+
+if (isCancel(picked)) {
+  process.exit(0);
+}
+
+// picked is a Date
+```
+
+Options include `defaultValue`, `initialValue`, `minDate`, `maxDate`, `validate`, and the usual `signal`, `input`, `output`, and `withGuide` settings.
+
+### Confirmation
+
+```ts twoslash
+import { confirm } from '@clack/prompts';
+
+const shouldProceed = await confirm({
+  message: 'Do you want to continue?',
+});
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#06989A">◆</font>  Do you want to continue?
+<font color="#06989A">│</font>  <font color="#4E9A06">●</font> Yes / ○ No
+<font color="#06989A">└</font></pre>
+
+Options:
+- `vertical: true`: Stack Yes / No vertically instead of inline (v1.0.1+).
+- Multi-line `message` strings wrap correctly; guide lines apply to wrapped confirmation text (v1.2.0).
+
+## Grouping
+
+### Group Multiselect
+
+```ts twoslash
+// @errors: 2353
+import { groupMultiselect } from '@clack/prompts';
+
+const projectOptions = await groupMultiselect({
+    message: 'Define your project',
+    options: {
+        'Testing': [
+            { value: 'Jest', hint: 'JavaScript testing framework' },
+            { value: 'Playwright', hint: 'End-to-end testing' },
+            { value: 'Vitest', hint: 'Vite-native testing' },
+        ],
+        'Language': [{
+            label: "Javascript",
+            value: 'js',
+            hint: 'Dynamic typing'
+        }, {
+            label: 'TypeScript',
+            value: 'ts',
+            hint: 'Static typing'
+        }, {
+            label: "CoffeeScript",
+            value: 'coffee',
+            hint: 'JavaScript with Ruby-like syntax'
+        }],
+        'Code quality': [
+            { value: 'Prettier', hint: 'Code formatter' },
+            { value: 'ESLint', hint: 'Linter' },
+            { value: 'Biome.js', hint: 'Formatter and linter' },
+        ],
+    },
+    groupSpacing: 1, // Add one new line between each group
+    selectableGroups: false, // Disable selection of top-level groups
+});
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#06989A">◆</font>  Define your project
+<font color="#06989A">│</font>  <font color="#4E9A06">◼</font> Testing
+<font color="#06989A">│</font>  │ <font color="#4E9A06">◼</font> Jest (JavaScript testing framework)
+<font color="#06989A">│</font>  │ <font color="#4E9A06">◼</font> Playwright (End-to-end testing)
+<font color="#06989A">│</font>  └ <font color="#4E9A06">◼</font> Vitest (Vite-native testing)
+<font color="#06989A">│</font>
+<font color="#06989A">│</font>  <font color="#06989A">◻</font> Language
+<font color="#06989A">│</font>  │ <font color="#4E9A06">◼</font> Javascript (Dynamic typing)
+<font color="#06989A">│</font>  │ <font color="#06989A">◻</font> TypeScript (Static typing)
+<font color="#06989A">│</font>  └ <font color="#06989A">◻</font> CoffeeScript (JavaScript with Ruby-like syntax)
+<font color="#06989A">│</font>
+<font color="#06989A">│</font>  ◻ Code quality
+<font color="#06989A">│</font>  │ ◻ Prettier (Code formatter)
+<font color="#06989A">│</font>  │ ◻ ESLint (Linter)
+<font color="#06989A">│</font>  └ <font color="#4E9A06">◼</font> Biome.js (Formatter and linter)
+<font color="#06989A">└</font></pre>
+
+The `groupMultiselect` prompt supports two additional options:
+- `groupSpacing`: An integer that specifies how many new lines to add between each group. This helps improve readability when you have many groups.
+- `selectableGroups`: A boolean that determines whether top-level groups can be selected. When set to `false`, only individual items within groups can be selected.
+
+### Group
+
+The `group` function provides a convenient API for combining a series of questions.
+Each question receives the `results` of previous answers.
+The `group` function returns an object containing the result of every question.
+
+```ts twoslash
+import { group, text, password } from '@clack/prompts';
+
+const account = await group({
+    email: () => text({
+        message: 'What is your email address?',
+        validate: (value) => {
+            if (!value || !/^[a-z0-9_.-]+@[a-z0-9_.-]+\.[a-z]{2,}$/i.test(value)) return 'Please enter a valid email'
+        }
+    }),
+    username: ({results}) => text({
+        message: 'What is your username?',
+        placeholder: results.email?.replace(/@.+$/, '').toLowerCase() ?? '',
+        validate: (value) => {
+            // FOR DEMO PURPOSES ONLY! Use a robust validation library in production
+            if (!value || value.length < 2) return 'Please enter at least 2 characters'
+        }
+    }),
+    password: () => password({
+        message: 'Define your password'
+    }),
+});
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#4E9A06">◇</font>  What is your email address?
+<font color="#555753">│</font>  user.name@example.com
+<font color="#555753">│</font>
+<font color="#4E9A06">◇</font>  What is your username?
+<font color="#555753">│</font>  bomb_sh
+<font color="#555753">│</font>
+<font color="#06989A">◆</font>  Define your password
+<font color="#06989A">│</font>  ▪▪▪▪▪▪▪▪▪▪▪▪<span style="background-color:#FFFFFF"><font color="#FFFFFF">_</font></span>
+<font color="#06989A">└</font></pre>
+
+### Tasks
+
+The `tasks` function provides a convenient API for sequencing several asynchronous actions one after the other.
+
+```ts twoslash
+import { tasks } from "@clack/prompts";
+
+await tasks([
+    {
+        title: 'Downloading package',
+        task: async () => {
+            // Do a fetch
+            return 'Download completed';
+        },
+    },
+    {
+        title: "Un-archiving",
+        task: async (message) => {
+            const parts: Array<string> = [/* ... */];
+            for (let index = 0; index < parts.length; index++) {
+                const type = parts[index];
+                // Update the message to indicate what is done
+                message(`Un-archiving ${type} (${index + 1}/${parts.length})`);
+                // Do the un-archiving task
+            }
+            return 'Un-archiving completed';
+        },
+    },
+    {
+        title: 'Linking',
+        task: async () => {
+            // Do work
+            return 'Package linked';
+        },
+    },
+]);
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#4E9A06">◇</font>  Download completed
+<font color="#555753">│</font>
+<font color="#75507B">◐</font>  Un-archiving lib (2/3)..</pre>
+
+## Support functions
+
+### Intro
+
+The `intro` function defines the beginning of an interaction.
+It accepts an optional string parameter which is displayed as a title for the interaction.
+
+<Aside type="tip">Feel free to use ANSI escape sequences to add colors and a more branded feel to your intro message!</Aside>
+
+```ts twoslash
+import { intro } from '@clack/prompts';
+
+intro('Welcome to clack');
+```
+
+<pre class="cli-preview"><font color="#555753">┌</font>  Welcome to clack</pre>
+
+### Outro
+
+The `outro` function defines the end of an interaction.
+It accepts an optional string parameter which is displayed as a concluding message.
+
+```ts twoslash
+import { outro } from '@clack/prompts';
+
+outro('All operations are finished');
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#555753">└</font>  All operations are finished
+&nbsp;</pre>
+
+### Cancel
+
+The `cancel` function defines an interruption of an interaction and therefore its end.
+It accepts an optional string parameter which is displayed as a cancellation message.
+
+```ts twoslash
+import { cancel } from '@clack/prompts';
+
+cancel('Installation canceled');
+```
+
+<pre class="cli-preview"><font color="#555753">└</font>  <font color="#CC0000">Installation canceled</font>
+&nbsp;</pre>
+
+### Spinner
+
+The `spinner` function provides a loading indicator for long-running operations.
+
+```ts twoslash
+import { spinner } from '@clack/prompts';
+
+const spin = spinner();
+spin.start('Loading');
+// Do something
+spin.message('Finishing');
+// Do more things
+spin.stop('Done');
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#AD7FA8">◒</font>  Loading{`...`}</pre>
+
+#### Spinner Methods
+
+The spinner provides multiple methods to indicate different completion states:
+
+```ts twoslash
+import { spinner } from '@clack/prompts';
+
+const spin = spinner();
+spin.start('Processing');
+
+// Success - shows green checkmark
+spin.stop('Completed successfully');
+
+// Or cancel - shows red square
+// spin.cancel('Operation cancelled');
+
+// Or error - shows yellow triangle
+// spin.error('An error occurred');
+
+// Or clear - stops without showing any message
+// spin.clear();
+```
+
+You can also check if the spinner was cancelled via SIGINT (Ctrl+C):
+
+```ts twoslash
+import { spinner } from '@clack/prompts';
+
+const spin = spinner({
+  onCancel: () => {
+    console.log('User pressed Ctrl+C');
+  }
+});
+
+spin.start('Long running task');
+// ... after some work
+if (spin.isCancelled) {
+  // Handle cancellation
+}
+```
+
+#### Customization Options
+
+```ts twoslash
+import { spinner, updateSettings } from '@clack/prompts';
+
+// Global customization for i18n
+updateSettings({
+  messages: {
+    cancel: "Operation cancelled",
+    error: "An error occurred",
+  },
+});
+
+// Per-instance customization
+const spin = spinner({
+  indicator: 'timer',        // 'dots' (default) or 'timer' for elapsed time display
+  cancelMessage: "Process cancelled",
+  errorMessage: "Process failed",
+  frames: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],  // Custom animation frames
+  delay: 80,                 // Animation delay in ms
+  styleFrame: (frame) => `\x1b[35m${frame}\x1b[0m`,  // Custom frame styling
+});
+
+spin.start('Loading');
+// Do something
+spin.stop('Done');
+```
+
+The `indicator` option supports two modes:
+- `'dots'`: Animated dots that cycle (default)
+- `'timer'`: Shows elapsed time like `[5s]` or `[1m 30s]`
+
+### Progress
+
+The `progress` function displays a progress bar for long-running operations with multiple visual styles.
+
+```ts twoslash
+import { progress } from '@clack/prompts';
+
+const prog = progress({
+  style: 'heavy',  // 'light', 'heavy', or 'block'
+  max: 100,        // Maximum value (default: 100)
+  size: 40,        // Width of the progress bar (default: 40)
+});
+
+prog.start('Processing files');
+
+// Advance the progress bar
+prog.advance(10);  // Advance by 10 steps
+prog.advance(25, 'Processing images...');  // Advance with a message update
+
+// Update just the message
+prog.message('Almost done...');
+
+// Complete the progress
+prog.stop('All files processed');
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#AD7FA8">━━━━━━━━━━━━━━━━━━━━</font><font color="#555753">━━━━━━━━━━━━━━━━━━━━</font> Processing images...</pre>
+
+The progress bar supports three visual styles:
+- `'light'`: Uses thin lines (`─`)
+- `'heavy'`: Uses thick lines (`━`) - default
+- `'block'`: Uses solid blocks (`█`)
+
+Additional methods:
+- `advance(step?, msg?)`: Advance the progress bar by `step` (default: 1) and optionally update the message
+- `message(msg)`: Update the displayed message without advancing
+- `stop(msg?)`: Complete the progress bar with a success message
+- `cancel(msg?)`: Stop with a cancellation indicator
+- `error(msg?)`: Stop with an error indicator
+- `clear()`: Stop and clear the progress bar without a message
+
+You can also use the timer indicator mode for time-based feedback:
+
+```ts twoslash
+import { progress } from '@clack/prompts';
+
+const prog = progress({
+  indicator: 'timer',  // Shows elapsed time instead of animated dots
+  style: 'block',
+  max: 50,
+});
+
+prog.start('Downloading');
+// Progress shows: ████████████░░░░░░░░ Downloading [5s]
+```
+
+### Note
+
+The `note` function renders a box around a message to draw a user's attention.
+This is useful for displaying next steps and linking to your documentation towards the end of an interaction.
+
+```ts twoslash
+import { note } from '@clack/prompts';
+
+note(
+  'You can edit the file src/index.jsx',
+  'Next steps.'
+);
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#4E9A06">◇</font>  Next steps. <font color="#555753">─────────────────────────╮</font>
+<font color="#555753">│</font>                                       <font color="#555753">│</font>
+<font color="#555753">│</font>  You can edit the file src/index.jsx  <font color="#555753">│</font>
+<font color="#555753">│</font>                                       <font color="#555753">│</font>
+<font color="#555753">├───────────────────────────────────────╯</font></pre>
+
+The second parameter (the title) is optional. You can also provide a format function to customize how each line is displayed:
+
+```ts twoslash
+// @errors: 2345 7006
+import { note } from '@clack/prompts';
+
+note(
+  'Line 1\nLine 2\nLine 3',
+  'Formatted steps',
+  {
+    format: (line: string) => `→ ${line}`
+  }
+);
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#4E9A06">◇</font>  Formatted steps
+<font color="#4E9A06">◇</font>   <font color="#555753">─────────────────────────────╮</font>
+<font color="#555753">│</font>                                <font color="#555753">│</font>
+<font color="#555753">│</font>  → Line 1                      <font color="#555753">│</font>
+<font color="#555753">│</font>  → Line 2                      <font color="#555753">│</font>
+<font color="#555753">│</font>  → Line 3                      <font color="#555753">│</font>
+<font color="#555753">│</font>                                <font color="#555753">│</font>
+<font color="#555753">├────────────────────────────────╯</font></pre>
+
+### Box
+
+The `box` function renders a customizable box around text content. It's similar to `note` but offers more styling options.
+
+```ts twoslash
+import { box } from '@clack/prompts';
+
+box('This is the content of the box', 'Box Title', {
+  contentAlign: 'center',
+  titleAlign: 'center',
+  width: 'auto',
+  rounded: true,
+});
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>  <font color="#555753">╭──────────Box Title───────────╮</font>
+<font color="#555753">│</font>  <font color="#555753">│</font>                              <font color="#555753">│</font>
+<font color="#555753">│</font>  <font color="#555753">│</font>  This is the content of the  <font color="#555753">│</font>
+<font color="#555753">│</font>  <font color="#555753">│</font>            box               <font color="#555753">│</font>
+<font color="#555753">│</font>  <font color="#555753">│</font>                              <font color="#555753">│</font>
+<font color="#555753">│</font>  <font color="#555753">╰──────────────────────────────╯</font></pre>
+
+Options:
+- `contentAlign`: Alignment of the content (`'left'`, `'center'`, or `'right'`)
+- `titleAlign`: Alignment of the title (`'left'`, `'center'`, or `'right'`)
+- `width`: Box width - use `'auto'` to fit content or a number for fixed width
+- `titlePadding`: Padding around the title
+- `contentPadding`: Padding around the content
+- `rounded`: Use rounded corners when `true` (default), square corners when `false`
+- `formatBorder`: Custom function to style the border characters
+
+### Task Log
+
+The `taskLog` prompt provides a way to display log output that is cleared on success. This is useful for showing progress or status updates that should be removed once the task is complete.
+
+```ts twoslash
+// @errors: 2345
+import { taskLog } from '@clack/prompts';
+
+const log = taskLog({
+  title: 'Installing dependencies',
+  limit: 10,        // Limit visible log lines (optional)
+  retainLog: false, // Keep full log history (optional)
+});
+log.message('Fetching package information...');
+// Do some work
+log.message('Installing packages...');
+// Do more work
+log.success('Installation complete');
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#06989A">◆</font>  Installing dependencies
+<font color="#555753">│</font>  Fetching package information...
+<font color="#555753">│</font>  Installing packages...
+<font color="#4E9A06">◆</font>  Installation complete</pre>
+
+#### Task Log Groups
+
+Task logs support named groups, which allow you to organize logs into separate sections with their own headers and completion states:
+
+```ts twoslash
+// @errors: 2345
+import { taskLog } from '@clack/prompts';
+
+const log = taskLog({
+  title: 'Building project'
+});
+
+// Create a group for TypeScript compilation
+const tsGroup = log.group('Compiling TypeScript');
+tsGroup.message('Processing src/index.ts...');
+tsGroup.message('Processing src/utils.ts...');
+tsGroup.success('TypeScript compiled');
+
+// Create another group for bundling
+const bundleGroup = log.group('Bundling');
+bundleGroup.message('Creating bundle...');
+bundleGroup.message('Minifying...');
+bundleGroup.success('Bundle created');
+
+// Complete the overall task
+log.success('Build complete');
+```
+
+Each group has its own `message()`, `success()`, and `error()` methods, allowing independent tracking of subtasks within a larger operation.
+
+### Logs
+
+The `log` utilities allow you to add semantic contextual information during an interaction.
+Each function renders with specific styling to communicate status.
+
+`log` is an object containing the following methods:
+ - `log.message` displays a message without any symbols to communicate state
+ - `log.info` displays a message with a neutral state
+ - `log.warn` (alias `log.warning`) displays a message with a caution state
+ - `log.error` displays a message with a danger state
+ - `log.success` displays a message with a success state
+ - `log.step` displays a message with a neutral, completed state
+
+```ts twoslash
+import { log } from '@clack/prompts';
+
+log.message('Entering directory "src"');
+log.info('No files to update');
+log.warn('Directory is empty, skipping');
+log.warning('Directory is empty, skipping');
+log.error('Permission denied on file src/secret.js');
+log.success('Installation complete');
+log.step('Check files');
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#555753">│</font>  Entering directory &quot;src&quot;
+<font color="#555753">│</font>
+<font color="#3465A4">●</font>  No files to update
+<font color="#555753">│</font>
+<font color="#C4A000">▲</font>  Directory is empty, skipping
+<font color="#555753">│</font>
+<font color="#C4A000">▲</font>  Directory is empty, skipping
+<font color="#555753">│</font>
+<font color="#CC0000">■</font>  Permission denied on file src/secret.js
+<font color="#555753">│</font>
+<font color="#4E9A06">◆</font>  Installation complete
+<font color="#555753">│</font>
+<font color="#4E9A06">◇</font>  Check files</pre>
+
+### Internationalization
+
+The prompts package supports internationalization through the `updateSettings` function. You can customize the messages used by various prompts to match your preferred language.
+
+```ts twoslash
+import { updateSettings, select, cancel } from '@clack/prompts';
+
+// Update global messages
+updateSettings({
+  messages: {
+    cancel: "Operación cancelada",
+    error: "Se ha producido un error",
+  },
+  date: {
+    monthNames: [
+      "enero", "febrero", "marzo", "abril", "mayo", "junio",
+      "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+    ],
+    messages: {
+      required: "Introduce una fecha válida",
+      invalidMonth: "Solo hay 12 meses",
+      invalidDay: (days, month) => `Solo hay ${days} días en ${month}`,
+      afterMin: (min) => `La fecha debe ser el ${min.toISOString().slice(0, 10)} o posterior`,
+      beforeMax: (max) => `La fecha debe ser el ${max.toISOString().slice(0, 10)} o anterior`,
+    },
+  },
+});
+
+// Use the select prompt with translated content
+const framework = await select({
+  message: 'Selecciona un framework',
+  options: [
+    { value: 'next', label: 'Next.js', hint: 'Framework de React' },
+    { value: 'astro', label: 'Astro', hint: 'Enfocado en contenido' },
+    { value: 'svelte', label: 'SvelteKit', hint: 'Framework de compilación' },
+  ]
+});
+
+// If the user cancels, they'll see the translated message
+if (!framework) {
+  cancel();
+}
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#06989A">◆</font>  Selecciona un framework
+<font color="#06989A">│</font>  <font color="#4E9A06">●</font> Next.js (Framework de React)
+<font color="#06989A">│</font>  ○ Astro (Enfocado en contenido)
+<font color="#06989A">│</font>  ○ SvelteKit (Framework de compilación)
+<font color="#06989A">└</font>
+<font color="#555753">└</font>  <font color="#CC0000">Operación cancelada</font>
+&nbsp;</pre>
+
+### Stream
+
+The `stream` utilities allow you, like the `log` utilities, to add semantic contextual information during an interaction,
+except that the message contains an unknown number of lines.
+Each function renders with specific styling to communicate status.
+
+<Aside type="tip">These utilities are useful to print content of [`node:stream`](https://nodejs.org/api/stream.html),
+like [file stream](https://nodejs.org/api/fs.html#fscreatereadstreampath-options)</Aside>
+
+```ts twoslash
+import { stream } from "@clack/prompts";
+import * as fs from "node:fs";
+
+await stream.message(fs.createReadStream('./banner.txt', { encoding: 'utf-8' }));
+await stream.info((async function*() {
+    yield 'Open file...';
+    // Open file
+    yield ' \x1b[32mOK\x1b[39m\n';
+
+    yield 'Parsing file...';
+    // Parse data
+    yield ' \x1b[32mOK\x1b[39m';
+    return;
+})());
+await stream.step([
+    'Job1...',
+    ' \x1b[32mdone\x1b[39m\n',
+    'Job2...',
+    ' \x1b[32mdone\x1b[39m\n',
+    'Job3...',
+    ' \x1b[32mdone\x1b[39m',
+]);
+```
+
+<pre class="cli-preview"><font color="#555753">│</font>
+<font color="#555753">│</font>
+<font color="#555753">│</font>  ⠀⠀⠀⠀⠀⠀⠀⠀⣀⣤⣶⣶⣿⣿⣿⣿⣿⣿⣶⣶⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+<font color="#555753">│</font>  ⠀⠀⠀⠀⠀⣠⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+<font color="#555753">│</font>  ⠀⠀⠀⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+<font color="#555753">│</font>  ⠀⠀⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+<font color="#555753">│</font>  ⠀⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣧ ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀
+<font color="#555753">│</font>  ⢰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⣀⠀⠀⠀⠀⣿⣿⣿⡿⠀⠀⠀⠀⣀⠀
+<font color="#555753">│</font>  ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⠀⠀⠀⠀⢠⣿⣿⣶⣤⣄⣻⣿⣿⣇⣠⣴⣶⣿⣿⡀
+<font color="#555753">│</font>  ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⢾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡧
+<font color="#555753">│</font>  ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠀⠀⠀⠀⠀⠀⠀⠉⢉⣿⣿⣿⣿⣿⣯⡉⠉⠀⠀⠀
+<font color="#555753">│</font>  ⠸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠇⠀⠀⠀⠀⠀⠀⢀⣴⣿⣿⣿⠟⢻⣿⣿⣿⣦⠀⠀⠀
+<font color="#555753">│</font>  ⠀⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠀⠀⠀⠀⠀⠀⠐⠿⣿⣿⣿⠏⠀⠀⢻⣿⣿⣿⠷⠀⠀
+<font color="#555753">│</font>  ⠀⠀⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠛⠏⠀⠀⠀⠀⠹⠋⠁⠀⠀⠀
+<font color="#555753">│</font>  ⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+<font color="#555753">│</font>  ⠀⠀⠀⠀⠀⠙⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+<font color="#555753">│</font>  ⠀⠀⠀⠀⠀⠀⠀⠀⠉⠛⠻⠿⢿⣿⣿⣿⣿⡿⠿⠟⠛⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+<font color="#555753">│</font>
+<font color="#555753">│</font>
+<font color="#3465A4">●</font>  Open file{`...`} <font color="#4E9A06">OK</font>
+<font color="#555753">│</font>  Parsing file{`...`} <font color="#4E9A06">OK</font>
+<font color="#555753">│</font>
+<font color="#4E9A06">◇</font>  Job1{`...`} <font color="#4E9A06">done</font>
+<font color="#555753">│</font>  Job2{`...`} <font color="#4E9A06">done</font>
+<font color="#555753">│</font>  Job3{`...`} <font color="#4E9A06">done</font></pre>
+
+### limitOptions
+
+`limitOptions` trims a long option list to what fits the terminal, returning the lines to render and keeping the active index visible—intended for **custom** prompts that mirror Clack’s sliding window (see `@clack/prompts` source). Pass `options`, `cursor`, a `style` callback, optional `maxItems`, `columnPadding`, `rowPadding`, and `output` if not using `stdout`.
+
+```ts twoslash
+import { limitOptions } from '@clack/prompts';
+import { styleText } from 'node:util';
+
+const options = ['apple', 'banana', 'cherry', 'date'];
+const lines = limitOptions({
+  options,
+  cursor: 2,
+  style: (opt, active) =>
+    active ? styleText('cyan', opt) : styleText('dim', opt),
+  maxItems: 8,
+});
+```

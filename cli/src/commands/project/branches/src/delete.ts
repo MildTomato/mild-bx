@@ -5,7 +5,7 @@ import { resolveProjectContext } from "@/lib/resolve-project.js";
 import { printCommandHeader, S_BAR } from "@/components/command-header.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
 import { searchSelect, cancelSymbol } from "@/components/search-select.js";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 export interface DeleteBranchOptions {
   force?: boolean;
@@ -19,7 +19,7 @@ export async function deleteBranch(
   options: DeleteBranchOptions = {}
 ): Promise<void> {
   const isTTY = process.stdout.isTTY && !options.json;
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
   const force = options.force ?? true;
 
   if (isTTY) {

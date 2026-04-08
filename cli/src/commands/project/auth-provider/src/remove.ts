@@ -9,7 +9,7 @@ import { findProvider, buildProviderPayload, PROVIDER_DEFINITIONS } from "@/lib/
 import { writeJsonAtomic } from "@/lib/fs-atomic.js";
 import { findSimilar } from "@/lib/string-similarity.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 export interface RemoveOptions {
   yes?: boolean;
@@ -22,9 +22,10 @@ export async function removeAuthProvider(
   providerArg: string,
   options: RemoveOptions = {}
 ): Promise<void> {
+  setOutputMode(options);
   const isTTY = process.stdout.isTTY && !options.json;
   const isDryRun = options["dry-run"] || false;
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
 
   if (isTTY) {
     printCommandHeader({

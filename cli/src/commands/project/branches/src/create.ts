@@ -7,7 +7,7 @@ import { getCurrentBranch } from "@/lib/git.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
 import { writeBranchEnv } from "@/lib/env-file.js";
 import type { CreateBranchBody } from "@/lib/api.js";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 export interface CreateBranchOptions {
   persistent?: boolean;
@@ -83,7 +83,7 @@ export async function createBranch(
   options: CreateBranchOptions = {}
 ): Promise<void> {
   const isTTY = process.stdout.isTTY && !options.json && !options.subOperation;
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
 
   if (isTTY) {
     printCommandHeader({

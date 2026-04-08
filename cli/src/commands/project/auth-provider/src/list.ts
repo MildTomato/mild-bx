@@ -10,7 +10,7 @@ import {
   parseProviderFromRemote,
   maskSecret,
 } from "@/lib/auth-providers.js";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 export interface ListOptions {
   json?: boolean;
@@ -18,6 +18,7 @@ export interface ListOptions {
 }
 
 export async function listAuthProviders(options: ListOptions = {}): Promise<void> {
+  setOutputMode(options);
   const { projectRef, token: authToken } = await resolveProjectContext(options);
 
   if (!options.json) {
@@ -29,7 +30,7 @@ export async function listAuthProviders(options: ListOptions = {}): Promise<void
   }
 
   // Fetch remote auth config
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
   spinner.start("Fetching providers...");
 
   let remoteConfig: Record<string, unknown>;

@@ -9,7 +9,7 @@ import { createClient } from "@/lib/api.js";
 import { handleCommandError } from "@/lib/command-error.js";
 import { deleteRemoteVariable } from "@/lib/env-api-bridge.js";
 import { scopedVarName, type Scope } from "@supabase-dx/env-vars";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 export interface UnsetOptions {
   key: string;
@@ -21,6 +21,7 @@ export interface UnsetOptions {
 }
 
 export async function unsetCommand(options: UnsetOptions): Promise<void> {
+  setOutputMode(options);
   const scope = options.scope ?? "production";
 
   if (scope === "branch" && !options.branch) {
@@ -59,7 +60,7 @@ export async function unsetCommand(options: UnsetOptions): Promise<void> {
 
   // Delete from remote
   const client = createClient(ctx.token);
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
   spinner.start(`Deleting ${storedKey}...`);
 
   try {

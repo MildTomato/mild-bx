@@ -10,7 +10,7 @@ import { findProvider, buildProviderPayload, parseProviderFromRemote, PROVIDER_D
 import { writeJsonAtomic } from "@/lib/fs-atomic.js";
 import { findSimilar } from "@/lib/string-similarity.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 export interface ToggleOptions {
   "dry-run"?: boolean;
@@ -23,10 +23,11 @@ export async function toggleAuthProvider(
   enable: boolean,
   options: ToggleOptions = {}
 ): Promise<void> {
+  setOutputMode(options);
   const isTTY = process.stdout.isTTY && !options.json;
   const action = enable ? "enable" : "disable";
   const isDryRun = options["dry-run"] || false;
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
 
   if (isTTY) {
     printCommandHeader({

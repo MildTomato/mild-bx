@@ -4,7 +4,7 @@ import { createClient } from "@/lib/api.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
 import { printCommandHeader, S_BAR } from "@/components/command-header.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 export interface UpdateBranchOptions {
   name?: string;
@@ -19,7 +19,7 @@ export async function updateBranch(
   options: UpdateBranchOptions = {}
 ): Promise<void> {
   const isTTY = process.stdout.isTTY && !options.json;
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
 
   if (isTTY) {
     printCommandHeader({

@@ -7,13 +7,14 @@ import chalk from "chalk";
 import { createClient } from "@/lib/api.js";
 import { requireAuth } from "@/lib/config.js";
 import { searchSelect } from "@/components/search-select.js";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 interface OrgsOptions {
   json?: boolean;
 }
 
 export async function orgsCommand(options: OrgsOptions): Promise<void> {
+  setOutputMode(options);
   const token = await requireAuth({ json: options.json });
 
   const client = createClient(token);
@@ -46,7 +47,7 @@ export async function orgsCommand(options: OrgsOptions): Promise<void> {
   }
 
   // Interactive mode - fetch and display
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
   spinner.start("Fetching organizations...");
 
   try {

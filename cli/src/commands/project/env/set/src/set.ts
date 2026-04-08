@@ -10,7 +10,7 @@ import { handleCommandError } from "@/lib/command-error.js";
 import { isSensitiveKey } from "@/lib/env-file.js";
 import { setRemoteVariable, warnIfUnrecognisedPlatformVar } from "@/lib/env-api-bridge.js";
 import { scopedVarName, type Scope } from "@supabase-dx/env-vars";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 import { getSecretRefs } from "@/lib/config-ref.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
 
@@ -138,7 +138,7 @@ export async function setCommand(options: SetOptions): Promise<void> {
 
   // Push to remote with the scoped key
   const client = createClient(ctx.token);
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
   spinner.start(`Setting ${storedKey}...`);
 
   try {

@@ -12,7 +12,7 @@ import { listRemoteVariables, bulkPushVariables, setRemoteVariable } from "@/lib
 import { getSecretRefs } from "@/lib/config-ref.js";
 import { computeEnvDiff, formatEnvDiff, hasChanges, getDiffSummary } from "@/lib/env-diff.js";
 import { SENTINEL_CONFIG_SOURCE } from "@supabase-dx/env-vars";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 export interface PushOptions {
   environment?: string;
@@ -24,6 +24,7 @@ export interface PushOptions {
 }
 
 export async function pushCommand(options: PushOptions): Promise<void> {
+  setOutputMode(options);
   const environment = options.environment || "development";
 
   const context: [string, string][] = [["Env", environment]];
@@ -54,7 +55,7 @@ export async function pushCommand(options: PushOptions): Promise<void> {
 
   // 2. Load remote variables
   const client = createClient(ctx.token);
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
   spinner.start("Comparing local and remote...");
 
   let remoteVars;
@@ -114,7 +115,7 @@ export async function pushCommand(options: PushOptions): Promise<void> {
   }
 
   // 6. Push
-  const pushSpinner = createSpinner(options);
+  const pushSpinner = createSpinner();
   pushSpinner.start("Pushing...");
 
   try {

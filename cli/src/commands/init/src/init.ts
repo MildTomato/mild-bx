@@ -29,7 +29,7 @@ import { writeProjectEnv } from "@/lib/env-file.js";
 import type { WorkflowProfile, SchemaManagement, ConfigSource } from "@/lib/config-types.js";
 import { runInitWizard, type InitResult } from "@/components/InitWizard.js";
 import { S_BAR } from "@/components/command-header.js";
-import { printKeyValue, printNextSteps, printWarning, printSectionHeader, createSpinner } from "@/components/output.js";
+import { printKeyValue, printNextSteps, printWarning, printSectionHeader, createSpinner, setOutputMode } from "@/components/output.js";
 
 interface InitOptions {
   yes?: boolean;
@@ -82,6 +82,7 @@ function buildConfigJson(data: ConfigData): string {
 }
 
 export async function initCommand(options: InitOptions): Promise<void> {
+  setOutputMode(options);
   const cwd = process.cwd();
   const supabaseDir = join(cwd, "supabase");
 
@@ -439,7 +440,7 @@ async function writePlatformProject(
   const { ref: projectRef, name: projectName, schemaManagement = "declarative", configSource = "code", workflowProfile = DEFAULT_WORKFLOW_PROFILE } = project;
 
   // Fetch project config
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
   spinner.start("Fetching project config...");
 
   const client = createClient(token);

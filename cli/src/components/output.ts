@@ -159,23 +159,100 @@ export function printConfigDiffs(diffs: ConfigDiff[], label: string): void {
   }
 }
 
+// ── Output mode ─────────────────────────────────────────────────────────────
+
+let _outputJson = false;
+let _outputVerbose = false;
+
+/**
+ * Set once at command startup. Controls spinner and verbose log behaviour
+ * globally so callers don't need to thread options through every helper.
+ */
+export function setOutputMode(opts: { json?: boolean; verbose?: boolean }): void {
+  _outputJson = opts.json ?? false;
+  _outputVerbose = opts.verbose ?? false;
+}
+
+export function isJsonMode(): boolean { return _outputJson; }
+export function isVerboseMode(): boolean { return _outputVerbose; }
+
 // ── Spinner ─────────────────────────────────────────────────────────────────
 
-type Spinner = ReturnType<typeof p.spinner>;
+export interface Spinner {
+  start(msg?: string): void;
+  message(msg?: string): void;
+  stop(msg?: string): void;
+  cancel(msg?: string): void;
+  error(msg?: string): void;
+  clear(): void;
+  readonly isCancelled: boolean;
+}
 
 const noopSpinner: Spinner = {
   start: () => {},
   message: () => {},
   stop: () => {},
+  cancel: () => {},
+  error: () => {},
+  clear: () => {},
+  isCancelled: false,
 };
 
+function isInteractiveSpinnerMode(): boolean {
+  return Boolean(process.stderr.isTTY) && process.env.CI !== "true" && process.env.TERM !== "dumb";
+}
+
+function writeProgressLine(message?: string): void {
+  if (!message) return;
+  process.stderr.write(`${message}\n`);
+}
+
+function createStaticSpinner(): Spinner {
+  let lastMessage: string | undefined;
+  let isCancelled = false;
+
+  const logOnce = (message?: string) => {
+    if (!message || message === lastMessage) return;
+    writeProgressLine(message);
+    lastMessage = message;
+  };
+
+  return {
+    start: (message) => {
+      isCancelled = false;
+      logOnce(message);
+    },
+    message: (message) => {
+      logOnce(message);
+    },
+    stop: (message) => {
+      logOnce(message);
+    },
+    cancel: (message) => {
+      isCancelled = true;
+      logOnce(message);
+    },
+    error: (message) => {
+      logOnce(message);
+    },
+    clear: () => {},
+    get isCancelled() {
+      return isCancelled;
+    },
+  };
+}
+
 /**
- * Returns a real clack spinner in TTY, or a silent no-op stub otherwise.
- * Pass `{ json: true }` to suppress spinner in JSON mode.
+ * Returns a real clack spinner in interactive TTY mode, a static stderr logger
+ * in verbose/non-interactive environments, or a silent no-op stub in JSON mode.
+ * Call `setOutputMode` once at command startup.
  */
-export function createSpinner(options?: { json?: boolean }): Spinner {
-  if (options?.json || !process.stdout.isTTY) {
+export function createSpinner(): Spinner {
+  if (_outputJson) {
     return noopSpinner;
   }
-  return p.spinner();
+  if (isInteractiveSpinnerMode() && !_outputVerbose) {
+    return p.spinner({ output: process.stderr });
+  }
+  return createStaticSpinner();
 }

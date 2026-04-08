@@ -4,7 +4,7 @@ import { createClient } from "@/lib/api.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
 import { diffRemoteAuthConfig, diffRemotePostgrestConfig } from "@supabase-dx/config";
 import { printCommandHeader } from "@/components/command-header.js";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 
 export interface DiffOptions {
   json?: boolean;
@@ -36,7 +36,7 @@ export async function diffBranch(options: DiffOptions = {}): Promise<void> {
   }
 
   const client = createClient(token);
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
   spinner.start("Comparing branch with production...");
 
   const [schemaDiff, branchAuth, prodAuth, branchPostgrest, prodPostgrest] = await Promise.allSettled([

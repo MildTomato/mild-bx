@@ -332,32 +332,26 @@ async function upsertEnvLocal(
  */
 export async function writeBranchEnv(options: {
   cwd: string;
-  projectRef: string;
+  branchRef: string;
   branchId: string;
   token: string;
   anonKey?: string;
 }): Promise<string> {
-  const { cwd, projectRef, branchId, token } = options;
+  const { cwd, branchRef, branchId, token } = options;
 
   const client = await getApiClient(token);
 
-  // 1. Fetch branch config to get db_pass and db_host
+  // 1. Fetch branch config to get db_host
   const branchConfig = await client.getBranchConfig(branchId);
-  const supabaseUrl = projectUrlFromDbHost(branchConfig.db_host, projectRef);
-  let dbPass = branchConfig.db_pass;
+  const supabaseUrl = projectUrlFromDbHost(branchConfig.db_host, branchRef);
 
-  // 2. If the API did not return db_pass, generate a new one and rotate it.
-  //    After rotating we wait 2 s for Supabase to propagate the change —
-  //    without this delay the DB rejects the new password and the next
-  //    connection attempt fails with an auth error.
-  if (!dbPass) {
-    dbPass = crypto.randomBytes(16).toString("hex");
-    await client.updateDatabasePassword(projectRef, dbPass);
-    await new Promise((r) => setTimeout(r, 2000));
-  }
+  // 2. Always rotate the DB password — we have no JIT access so we own the
+  //    password. Generate a fresh one every time and update the DB.
+  const dbPass = crypto.randomBytes(16).toString("hex");
+  await client.updateDatabasePassword(branchRef, dbPass);
 
   // 3. Resolve anon key
-  const anonKey = options.anonKey ?? (await fetchAnonKey(client, projectRef));
+  const anonKey = options.anonKey ?? (await fetchAnonKey(client, branchRef));
 
   // 4. Build the upsert map
   const updates: Record<string, string> = {
@@ -373,6 +367,10 @@ export async function writeBranchEnv(options: {
 
   // 5. Upsert into .env.local
   await upsertEnvLocal(cwd, updates);
+
+  // 6. Wait for Supabase to propagate the new password — must be after both
+  //    the 200 from updateDatabasePassword and the .env.local write.
+  await new Promise((r) => setTimeout(r, 5000));
 
   return dbPass;
 }

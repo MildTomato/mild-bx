@@ -20,7 +20,7 @@ import {
 } from "@/lib/auth-providers.js";
 import type { ExternalProviderConfig } from "@/lib/config-types.js";
 import { replaceRemoteVariables } from "@/lib/env-api-bridge.js";
-import { createSpinner } from "@/components/output.js";
+import { createSpinner, setOutputMode } from "@/components/output.js";
 import { makeEnvRef, makeSecretRef, isConfigRef } from "@/lib/config-ref.js";
 
 export interface AddOptions {
@@ -40,6 +40,7 @@ export async function addAuthProvider(
   providerArg: string | undefined,
   options: AddOptions = {}
 ): Promise<void> {
+  setOutputMode(options);
   const isTTY = process.stdout.isTTY && !options.json;
   const isDryRun = options["dry-run"] || false;
 
@@ -56,7 +57,7 @@ export async function addAuthProvider(
     // Non-fatal — callback URL display will be empty if project fetch fails
   }
 
-  const spinner = createSpinner(options);
+  const spinner = createSpinner();
 
   if (isTTY) {
     printCommandHeader({

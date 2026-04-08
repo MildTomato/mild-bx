@@ -44,6 +44,10 @@ export interface ProjectContext {
   parentProjectRef: string;
   token: string;
   isBranch: boolean;
+  // True when branch resolution had to create the preview branch as part of
+  // fulfilling the parent command. Commands like `supa push` use this to avoid
+  // asking for a second confirmation immediately after implicit branch creation.
+  branchCreated: boolean;
 }
 
 export interface ConfigContext {
@@ -118,27 +122,30 @@ function raiseForBranchStatus(status: string, gitBranch: string): never {
 
 async function writeResolvedBranchEnv(options: {
   cwd: string;
-  projectRef: string;
+  branchRef: string;
   branchId: string;
   token: string;
   verbose?: boolean;
 }): Promise<void> {
   const { writeBranchEnv } = await import("./env-file.js");
-
+  const verbose = options.verbose || !!process.env.SUPA_VERBOSE;
+  if (verbose) process.stderr.write(`[branch] rotating password for ${options.branchRef}\n`);
   try {
+    const startedAt = Date.now();
     const dbPass = await writeBranchEnv({
       cwd: options.cwd,
-      projectRef: options.projectRef,
+      branchRef: options.branchRef,
       branchId: options.branchId,
       token: options.token,
     });
     process.env.SUPABASE_DB_PASSWORD = dbPass;
-  } catch (envErr) {
-    if (process.env.SUPA_VERBOSE || options.verbose) {
-      console.error(
-        `[resolve-project] writeBranchEnv failed: ${envErr instanceof Error ? envErr.message : String(envErr)}`
+    if (verbose) {
+      process.stderr.write(
+        `[branch] password rotated for ref=${options.branchRef} branchId=${options.branchId} in ${Date.now() - startedAt}ms\n`,
       );
     }
+  } catch (envErr) {
+    process.stderr.write(`[branch] password rotation failed: ${envErr instanceof Error ? envErr.message : String(envErr)}\n`);
   }
 }
 
@@ -197,7 +204,8 @@ async function finalizeBranchContext(options: {
   gitBranch: string;
   branch: Branch;
   verbose?: boolean;
-}): Promise<{ projectRef: string; isBranch: boolean; overlayCreated: boolean }> {
+  created: boolean;
+}): Promise<{ projectRef: string; isBranch: boolean; overlayCreated: boolean; created: boolean }> {
   const projectStatus = options.branch.preview_project_status;
   if (projectStatus && projectStatus !== HEALTHY_BRANCH) {
     raiseForBranchStatus(projectStatus, options.gitBranch);
@@ -205,14 +213,14 @@ async function finalizeBranchContext(options: {
 
   await writeResolvedBranchEnv({
     cwd: options.cwd,
-    projectRef: options.branch.project_ref,
+    branchRef: options.branch.project_ref,
     branchId: options.branch.id,
     token: options.token,
     verbose: options.verbose,
   });
 
   const overlayCreated = ensurePreviewOverlay(options.cwd);
-  return { projectRef: options.branch.project_ref, isBranch: true, overlayCreated };
+  return { projectRef: options.branch.project_ref, isBranch: true, overlayCreated, created: options.created };
 }
 
 export async function resolveBranchContext(options: {
@@ -227,7 +235,7 @@ export async function resolveBranchContext(options: {
   verbose?: boolean;
   profile?: string;
   productionBranch?: string;
-}): Promise<{ projectRef: string; isBranch: boolean; overlayCreated: boolean } | null> {
+}): Promise<{ projectRef: string; isBranch: boolean; overlayCreated: boolean; created: boolean } | null> {
   const {
     cwd,
     gitBranch,
@@ -241,27 +249,38 @@ export async function resolveBranchContext(options: {
     profile,
     productionBranch,
   } = options;
-  const branches = await client.listBranches(parentProjectRef);
-
   const isProductionBranch =
     gitBranch === (productionBranch ?? "main") ||
     (!productionBranch && gitBranch === "master");
 
   if (isProductionBranch) {
-    const defaultBranch = branches.find((branch) => branch.is_default);
-    if (defaultBranch) {
-      await writeResolvedBranchEnv({
-        cwd,
-        projectRef: parentProjectRef,
-        branchId: defaultBranch.id,
-        token,
-        verbose,
-      });
+    // Try to refresh production credentials via branch API. If listBranches
+    // fails (403 / network error) fall back to writeProjectEnv so .env.local
+    // gets the correct URL and anon key even when branch APIs are unavailable.
+    try {
+      const branches = await client.listBranches(parentProjectRef);
+      const defaultBranch = branches.find((branch) => branch.is_default);
+      if (defaultBranch) {
+        await writeResolvedBranchEnv({
+          cwd,
+          branchRef: defaultBranch.project_ref,
+          branchId: defaultBranch.id,
+          token,
+          verbose,
+        });
+      }
+    } catch {
+      const { writeProjectEnv } = await import("./env-file.js");
+      await writeProjectEnv({ cwd, projectRef: parentProjectRef, token }).catch(() => {});
+      if (verbose) process.stderr.write(`[branch] listBranches failed on production branch; wrote project env as fallback\n`);
     }
-    return { projectRef: parentProjectRef, isBranch: false, overlayCreated: false };
+    return { projectRef: parentProjectRef, isBranch: false, overlayCreated: false, created: false };
   }
 
+  const branches = await client.listBranches(parentProjectRef);
+
   let match = branches.find((branch) => branch.git_branch === gitBranch);
+  let created = false;
 
   if (!match) {
     if (!createIfMissing) {
@@ -271,20 +290,21 @@ export async function resolveBranchContext(options: {
       if (json) {
         console.error(JSON.stringify({ status: "info", message: `Creating preview branch for "${gitBranch}"` }));
       } else {
-        log.step(`Creating preview branch for "${gitBranch}"…`);
+        process.stderr.write(`  Creating preview branch for "${gitBranch}"\n`);
       }
 
-      const created = await client.createBranch(parentProjectRef, {
+      const createdBranch = await client.createBranch(parentProjectRef, {
         branch_name: gitBranch,
         git_branch: gitBranch,
       });
       match = await pollForHealthyBranch({
         client,
         parentProjectRef,
-        branchId: created.id,
+        branchId: createdBranch.id,
         gitBranch,
         json,
       });
+      created = true;
       await new Promise((resolve) => setTimeout(resolve, 5000));
     } else {
       const { createBranch } = await import("../commands/project/branches/src/create.js");
@@ -303,6 +323,7 @@ export async function resolveBranchContext(options: {
 
       const updatedBranches = await client.listBranches(parentProjectRef);
       match = updatedBranches.find((branch) => branch.git_branch === gitBranch);
+      created = !!match;
     }
   }
 
@@ -326,8 +347,8 @@ export async function resolveBranchContext(options: {
     token,
     gitBranch,
     branch: match,
-    json,
     verbose,
+    created,
   });
 }
 
@@ -377,6 +398,7 @@ function syncConfigToEnvServer(parentProjectRef: string, config: ProjectConfig):
  */
 export async function resolveProjectContext(options: {
   json?: boolean;
+  verbose?: boolean;
   profile?: string;
   skipBranchResolution?: boolean;
 }): Promise<ProjectContext> {
@@ -431,7 +453,15 @@ export async function resolveProjectContext(options: {
   // For branching profiles, resolve the Supabase branch ref matching the current git branch
   const workflowProfile = getWorkflowProfile(config);
 
-  if (isBranchingProfile(workflowProfile) && branch && branch !== "main" && branch !== "master" && !options.skipBranchResolution) {
+  // Include main/master — resolveBranchContext has an isProductionBranch path that
+  // calls writeResolvedBranchEnv for the parent project, keeping .env.local in sync
+  // when switching back from a feature branch. Without this, .env.local retains stale
+  // credentials from the last preview branch and schema diff auth fails.
+  if (isBranchingProfile(workflowProfile) && branch && !options.skipBranchResolution) {
+    const verbose = options.verbose || !!process.env.SUPA_VERBOSE;
+    if (verbose) {
+      process.stderr.write(`[resolve-project] resolveBranchContext: gitBranch=${branch} workflowProfile=${workflowProfile}\n`);
+    }
     try {
       const client = createClient(token);
       const branchContext = await resolveBranchContext({
@@ -442,7 +472,7 @@ export async function resolveProjectContext(options: {
         client,
         pollForHealth: false,
         json: options.json,
-        verbose: (options as { verbose?: boolean }).verbose,
+        verbose: options.verbose,
         profile: options.profile,
       });
 
@@ -465,6 +495,7 @@ export async function resolveProjectContext(options: {
           parentProjectRef: projectRef,
           token,
           isBranch: branchContext.isBranch,
+          branchCreated: branchContext.created,
         };
       }
     } catch (error) {
@@ -485,11 +516,11 @@ export async function resolveProjectContext(options: {
       // If branch lookup fails (e.g. network error, 403 if branching not enabled),
       // fall through to the main project ref rather than blocking the whole command.
       // Log to stderr when --verbose is set so it's visible for debugging.
-      if (process.env.SUPA_VERBOSE || (options as { verbose?: boolean }).verbose) {
-        console.error(
+      if (verbose) {
+        process.stderr.write(
           `[resolve-project] Branch lookup failed (falling through to main ref): ${
             error instanceof Error ? error.message : String(error)
-          }`
+          }\n`
         );
       }
     }
@@ -510,7 +541,7 @@ export async function resolveProjectContext(options: {
   }
 
   syncConfigToEnvServer(projectRef, config);
-  return { cwd, config, configLayers, branch, profile, projectRef, parentProjectRef: projectRef, token, isBranch: false };
+  return { cwd, config, configLayers, branch, profile, projectRef, parentProjectRef: projectRef, token, isBranch: false, branchCreated: false };
 }
 
 /**

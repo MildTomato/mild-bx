@@ -51,3 +51,4 @@ auth-rules-sql/spec.md
 
 .claude/worktrees/
 .context/
+.gstack/

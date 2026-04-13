@@ -5,6 +5,7 @@ import { resolveProjectContext } from "@/lib/resolve-project.js";
 import { diffRemoteAuthConfig, diffRemotePostgrestConfig, buildAuthApiUpdatePayload, buildPostgrestApiUpdatePayload } from "@supabase-dx/config";
 import { createSpinner, setOutputMode } from "@/components/output.js";
 import { reconcileConfigTargets } from "@/lib/config-reconciler.js";
+import { commitAllConfigSnapshots } from "@/lib/config-storage-bridge.js";
 import { deleteRemoteVariable, listRemoteVariables, setRemoteVariable } from "@/lib/env-api-bridge.js";
 import { isSchemaSecretEnvVar } from "@/lib/config-ref.js";
 import { branchToScope, parseScopedVarName, scopedVarName } from "@supabase-dx/env-vars";
@@ -198,6 +199,9 @@ export async function mergeBranch(options: MergeOptions = {}): Promise<void> {
       verbose: false,
       includePreviewBranches: "all",
     });
+
+    spinner.message("Syncing config...");
+    await commitAllConfigSnapshots(cwd, parentProjectRef, branch ?? "main");
 
     spinner.stop(chalk.green("Merged to production."));
 

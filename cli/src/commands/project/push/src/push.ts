@@ -98,30 +98,43 @@ async function buildPlan(options: {
 
   // Config settings
   if (config && !migrationsOnly) {
+    log("[config] building config payloads");
     const postgrestPayload = buildPostgrestPayload(config);
     if (postgrestPayload) {
       plan.config.postgrest.keys = Object.keys(postgrestPayload);
+      log(`[config] postgrest payload keys: ${plan.config.postgrest.keys.join(", ") || "(none)"}`);
 
       if (client && projectRef) {
+        log(`[config] GET /v1/projects/${projectRef}/config/postgrest`);
         const remoteConfig = await client.getPostgrestConfig(projectRef);
         plan.config.postgrest.diffs = compareConfigs(
           postgrestPayload as Record<string, unknown>,
           remoteConfig as Record<string, unknown>
         );
+        const changed = plan.config.postgrest.diffs.filter((d) => d.changed);
+        log(`[config] postgrest changed: ${changed.length}${changed.length > 0 ? ` (${changed.map((d) => d.key).join(", ")})` : ""}`);
       }
+    } else {
+      log("[config] postgrest payload: none");
     }
 
     const authPayload = buildAuthPayload(config, lookupEnvVar);
     if (authPayload) {
       plan.config.auth.keys = Object.keys(authPayload);
+      log(`[config] auth payload keys: ${plan.config.auth.keys.join(", ") || "(none)"}`);
 
       if (client && projectRef) {
+        log(`[config] GET /v1/projects/${projectRef}/config/auth`);
         const remoteConfig = await client.getAuthConfig(projectRef);
         plan.config.auth.diffs = compareConfigs(
           authPayload as Record<string, unknown>,
           remoteConfig as Record<string, unknown>
         );
+        const changed = plan.config.auth.diffs.filter((d) => d.changed);
+        log(`[config] auth changed: ${changed.length}${changed.length > 0 ? ` (${changed.map((d) => d.key).join(", ")})` : ""}`);
       }
+    } else {
+      log("[config] auth payload: none");
     }
   }
 
@@ -178,13 +191,13 @@ async function buildPlan(options: {
               break;
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
-              const isTenantError = /tenant or user not found|tenant/i.test(msg);
-              if (!isTenantError) {
+              const isRetryableDiffError = /tenant or user not found|tenant|password authentication failed/i.test(msg);
+              if (!isRetryableDiffError) {
                 // Non-tenant error — propagate immediately
                 throw new Error(`Schema diff failed: ${msg}`);
               }
               lastDiffError = err instanceof Error ? err : new Error(msg);
-              log(`[pg-delta] Pooler not ready (attempt ${attempt + 1}/${MAX_DIFF_RETRIES}): ${msg}`);
+              log(`[pg-delta] Pooler credentials not ready (attempt ${attempt + 1}/${MAX_DIFF_RETRIES}): ${msg}`);
               if (attempt < MAX_DIFF_RETRIES - 1) {
                 await new Promise((r) => setTimeout(r, DIFF_RETRY_DELAY_MS));
               }
@@ -194,7 +207,7 @@ async function buildPlan(options: {
           if (lastDiffError) {
             // Exhausted retries on a tenant/pooler error — skip diff and warn
             warnings.push(
-              "Schema diff skipped: pooler not ready yet (try again in a moment)"
+              "Schema diff skipped: pooler credentials not ready yet (try again in a moment)"
             );
             log(`[pg-delta] Skipping schema diff after ${MAX_DIFF_RETRIES} failed attempts`);
           } else if (diffResult) {
@@ -312,6 +325,7 @@ export async function pushCommand(options: PushOptions) {
   const configOnly = options.configOnly ?? false;
 
   setVerbose(options.verbose ?? false);
+  setOutputMode(options);
 
   if (!options.json) {
     printCommandHeader({
@@ -439,6 +453,9 @@ export async function pushCommand(options: PushOptions) {
         !plan.schema.hasChanges;
 
       if (isEmpty) {
+        if (!migrationsOnly) {
+          await commitAllConfigSnapshots(cwd, parentProjectRef, currentBranch ?? "main");
+        }
         console.log(
           JSON.stringify({
             status: "success",
@@ -518,6 +535,10 @@ export async function pushCommand(options: PushOptions) {
 
         await client.applyMigration(projectRef, content, name);
         appliedCount++;
+      }
+
+      if (!migrationsOnly) {
+        await commitAllConfigSnapshots(cwd, parentProjectRef, currentBranch ?? "main");
       }
 
       emitHardcodedSecretsWarning(hardcodedSecrets, true);
@@ -626,6 +647,10 @@ export async function pushCommand(options: PushOptions) {
     if (isEmpty) {
       // Still run codegen in case database.ts is newer than generated files
       runCodegenIfStale(cwd, projectConfig);
+      if (!migrationsOnly) {
+        spinner.message("Syncing config...");
+        await commitAllConfigSnapshots(cwd, parentProjectRef, currentBranch ?? "main");
+      }
       spinner.stop(chalk.green("Nothing to push - everything is up to date"));
       process.exit(0);
     }
@@ -722,10 +747,6 @@ export async function pushCommand(options: PushOptions) {
           setRemoteVariable(parentProjectRef, envVars).catch(() => {});
         }
       }
-
-      // Snapshot all config layers so diffs are available at merge time.
-      await commitAllConfigSnapshots(cwd, parentProjectRef, currentBranch ?? "main");
-
       applySpinner.message("Reconciling preview config...");
       const reconcileResults = await reconcileConfigTargets({
         cwd,
@@ -790,6 +811,11 @@ export async function pushCommand(options: PushOptions) {
 
       await client.applyMigration(projectRef, content, name);
       appliedCount++;
+    }
+
+    if (!migrationsOnly) {
+      applySpinner.message("Syncing config...");
+      await commitAllConfigSnapshots(cwd, parentProjectRef, currentBranch ?? "main");
     }
 
     const parts = [];

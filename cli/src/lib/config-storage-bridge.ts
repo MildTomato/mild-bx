@@ -1,20 +1,18 @@
 /**
  * Config storage bridge — talks to the local env-server config storage endpoints.
  *
- * Snapshots are keyed by (projectRef, gitBranch, envName):
- *   gitBranch  = the checked-out git branch when the snapshot was taken
- *   envName    = config layer derived from the filename
- *                "production" → config.production.json
- *                "preview"    → config.preview.json
- *                "feat-auth"  → config.feat-auth.json (branch overlay in preview)
- *
- * This lets Studio answer: "if I merge feat/my-feature into main, how does the
- * PRODUCTION config change?" — by diffing feat/my-feature/production vs main/production.
+ * The CLI owns file discovery and config resolution. env-server receives
+ * semantic config states, not filenames:
+ *   - environment/development
+ *   - environment/preview
+ *   - environment/production
+ *   - branch/<environment>/<git branch>
  */
 
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadEffectiveConfig } from "./config-overlay.js";
+import { getEnvironmentForBranch, loadProjectConfig } from "./config.js";
+import { sanitizeBranchName } from "./config-overlay.js";
 
 const ENV_SERVER_URL = process.env.ENV_SERVER_URL ?? "http://localhost:3457";
 
@@ -38,6 +36,8 @@ export interface EnvSnapshot {
   id: number;
   gitBranch: string;
   envName: string;
+  target?: ConfigStateTarget;
+  layers?: string[];
   committedAt: string;
   config: Record<string, unknown>;
 }
@@ -51,11 +51,28 @@ export interface BranchSummary {
 export interface ConfigDiffResult {
   from: string;
   to: string;
-  env: string;
+  env?: string;
+  targetKey?: string;
+  target?: ConfigStateTarget;
   hasChanges: boolean;
   added: Array<{ path: string; value: unknown }>;
   changed: Array<{ path: string; from: unknown; to: unknown }>;
   removed: Array<{ path: string; value: unknown }>;
+}
+
+export type ConfigStateTarget =
+  | { type: "environment"; environment: string }
+  | { type: "branch"; environment: string; branch: string };
+
+export interface ConfigStateCommit {
+  target: ConfigStateTarget;
+  sources: ConfigStateSource[];
+}
+
+export interface ConfigStateSource {
+  name: string;
+  path: string;
+  config: Record<string, unknown>;
 }
 
 /**
@@ -80,8 +97,25 @@ export async function getBranchSnapshots(
   projectRef: string,
   gitBranch: string
 ): Promise<EnvSnapshot[]> {
-  const res = await configFetch(`/projects/${projectRef}/config/${encSegment(gitBranch)}`);
-  return res.json() as Promise<EnvSnapshot[]>;
+  const res = await configFetch(`/projects/${projectRef}/config-state/${encSegment(gitBranch)}`);
+  const states = await res.json() as Array<{
+    id: number;
+    gitBranch: string;
+    targetKey: string;
+    target: ConfigStateTarget;
+    sources: ConfigStateSource[];
+    committedAt: string;
+    resolved: Record<string, unknown>;
+  }>;
+  return states.map((state) => ({
+    id: state.id,
+    gitBranch: state.gitBranch,
+    envName: state.targetKey,
+    target: state.target,
+    layers: state.sources.map((source) => source.name),
+    committedAt: state.committedAt,
+    config: state.resolved,
+  }));
 }
 
 /**
@@ -99,24 +133,83 @@ export async function diffConfig(
   projectRef: string,
   from: string,
   to: string,
-  env: string
+  env = "production"
 ): Promise<ConfigDiffResult> {
   const res = await configFetch(
-    `/projects/${projectRef}/config/diff?from=${encSegment(from)}&to=${encSegment(to)}&env=${encSegment(env)}`
+    `/projects/${projectRef}/config-state/diff?from=${encSegment(from)}&to=${encSegment(to)}&type=environment&environment=${encSegment(env)}`
   );
   return res.json() as Promise<ConfigDiffResult>;
 }
 
+export async function commitConfigState(
+  projectRef: string,
+  gitBranch: string,
+  states: ConfigStateCommit[],
+): Promise<void> {
+  await configFetch(`/projects/${projectRef}/config-state`, {
+    method: "PUT",
+    body: JSON.stringify({ gitBranch, states }),
+  });
+}
+
+function loadJsonFile(path: string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(readFileSync(path, "utf-8")) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function configSourcesForTarget(options: {
+  cwd: string;
+  environment: string;
+  branch?: string;
+}): ConfigStateSource[] {
+  const { cwd, environment, branch } = options;
+  const supabaseDir = join(cwd, "supabase");
+  const sources: ConfigStateSource[] = [];
+
+  const basePath = join(supabaseDir, "config.json");
+  const base = loadJsonFile(basePath);
+  if (base) {
+    sources.push({ name: "base", path: "supabase/config.json", config: base });
+  }
+
+  const envPath = join(supabaseDir, `config.${environment}.json`);
+  if (environment !== "development" && existsSync(envPath)) {
+    const envConfig = loadJsonFile(envPath);
+    if (envConfig) {
+      sources.push({
+        name: environment,
+        path: `supabase/config.${environment}.json`,
+        config: envConfig,
+      });
+    }
+  }
+
+  if (branch && environment === "preview") {
+    const sanitized = sanitizeBranchName(branch);
+    const branchPath = join(supabaseDir, `config.${sanitized}.json`);
+    if (existsSync(branchPath)) {
+      const branchConfig = loadJsonFile(branchPath);
+      if (branchConfig) {
+        sources.push({
+          name: `branch:${branch}`,
+          path: `supabase/config.${sanitized}.json`,
+          config: branchConfig,
+        });
+      }
+    }
+  }
+
+  return sources;
+}
+
 /**
- * Commit config snapshots for every env layer found in supabase/ for the
- * given git branch.
+ * Commit semantic config states for the given git branch.
  *
- * For each config*.json file:
- *   config.json              → envName = "base"  (the unmerged base)
- *   config.<name>.json       → envName = "<name>" with merged effective config
- *
- * Called on `supa dev` startup so Studio always has fresh snapshots for every
- * env layer, not just the currently active one.
+ * The local file layout is translated into target semantics here. env-server
+ * stores the target identity and resolved config, never a config filename.
  */
 export async function commitAllConfigSnapshots(
   cwd: string,
@@ -124,6 +217,8 @@ export async function commitAllConfigSnapshots(
   gitBranch: string,
 ): Promise<void> {
   const supabaseDir = join(cwd, "supabase");
+  const base = loadProjectConfig(cwd);
+  if (!base) return;
 
   let files: string[];
   try {
@@ -134,19 +229,39 @@ export async function commitAllConfigSnapshots(
     return;
   }
 
-  for (const file of files) {
-    if (file === "config.json") {
-      // Base config — commit the unmerged base as envName "base"
-      const { config: base } = loadEffectiveConfig(cwd);
-      if (!base) continue;
-      await commitConfig(projectRef, gitBranch, "base", base as Record<string, unknown>);
+  const currentBranchFileSegment = sanitizeBranchName(gitBranch);
+  const overlayNames = files
+    .map((file) => /^config\.(.+)\.json$/.exec(file)?.[1])
+    .filter((name): name is string => !!name);
+
+  const states: ConfigStateCommit[] = [];
+
+  const baseSource = configSourcesForTarget({ cwd, environment: "development" })[0];
+  if (baseSource) {
+    states.push({
+      target: { type: "environment", environment: "base" },
+      sources: [baseSource],
+    });
+  }
+
+  const currentEnvironment = getEnvironmentForBranch(base, gitBranch);
+  for (const overlayName of overlayNames) {
+    if (overlayName === currentBranchFileSegment) {
+      const sources = configSourcesForTarget({ cwd, environment: currentEnvironment, branch: gitBranch });
+      if (sources.length === 0) continue;
+      states.push({
+        target: { type: "branch", environment: currentEnvironment, branch: gitBranch },
+        sources,
+      });
     } else {
-      // config.<name>.json — envName is the middle segment
-      const envName = file.slice("config.".length, -".json".length);
-      // Load the fully merged effective config for this env/branch layer
-      const { config: effective } = loadEffectiveConfig(cwd, envName, gitBranch);
-      if (!effective) continue;
-      await commitConfig(projectRef, gitBranch, envName, effective as Record<string, unknown>);
+      const sources = configSourcesForTarget({ cwd, environment: overlayName });
+      if (sources.length === 0) continue;
+      states.push({
+        target: { type: "environment", environment: overlayName },
+        sources,
+      });
     }
   }
+
+  if (states.length > 0) await commitConfigState(projectRef, gitBranch, states);
 }

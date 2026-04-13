@@ -6,6 +6,7 @@ import { createSpinner, setOutputMode } from "@/components/output.js";
 import { setRemoteVariable } from "@/lib/env-api-bridge.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
 import { reconcileConfigTargets } from "@/lib/config-reconciler.js";
+import { commitAllConfigSnapshots } from "@/lib/config-storage-bridge.js";
 import {
   configSecretScope,
   envServerScope,
@@ -104,6 +105,10 @@ export async function setConfigSecret(options: SetConfigSecretOptions): Promise<
   });
 
   const missing = reconcileResults.filter((r) => r.missing.length > 0);
+
+  spinner.message("Syncing config...");
+  await commitAllConfigSnapshots(ctx.cwd, ctx.parentProjectRef, ctx.branch ?? "main");
+
   if (missing.length > 0) {
     spinner.stop(chalk.yellow("Saved config secret with reconciliation warnings"));
   } else {

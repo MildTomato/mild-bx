@@ -44,6 +44,22 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_config_commits_lookup
     ON config_commits(project_ref, git_branch, env_name, committed_at DESC);
+
+  CREATE TABLE IF NOT EXISTS config_state_commits (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_ref   TEXT NOT NULL,
+    git_branch    TEXT NOT NULL,
+    target_key    TEXT NOT NULL,
+    target_type   TEXT NOT NULL,
+    environment   TEXT,
+    target_branch TEXT,
+    committed_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    config_json   TEXT NOT NULL,
+    metadata_json TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_config_state_commits_lookup
+    ON config_state_commits(project_ref, git_branch, target_key, committed_at DESC);
 `);
 
 
@@ -128,6 +144,48 @@ app.get("/scopes", (c) => {
 
 const CONFIG_HISTORY_LIMIT = 50;
 
+function configTargetKey(target) {
+  if (!target || typeof target !== "object") return null;
+  if (target.type === "environment" && typeof target.environment === "string" && target.environment.length > 0) {
+    return `environment:${target.environment}`;
+  }
+  if (
+    target.type === "branch" &&
+    typeof target.environment === "string" &&
+    target.environment.length > 0 &&
+    typeof target.branch === "string" &&
+    target.branch.length > 0
+  ) {
+    return `branch:${target.environment}:${target.branch}`;
+  }
+  return null;
+}
+
+function deepMergeConfig(base, overlay) {
+  const result = { ...base };
+  for (const [key, overlayValue] of Object.entries(overlay ?? {})) {
+    if (overlayValue === null) {
+      delete result[key];
+    } else if (
+      overlayValue &&
+      typeof overlayValue === "object" &&
+      !Array.isArray(overlayValue) &&
+      result[key] &&
+      typeof result[key] === "object" &&
+      !Array.isArray(result[key])
+    ) {
+      result[key] = deepMergeConfig(result[key], overlayValue);
+    } else {
+      result[key] = overlayValue;
+    }
+  }
+  return result;
+}
+
+function resolveSources(sources) {
+  return sources.reduce((resolved, source) => deepMergeConfig(resolved, source.config), {});
+}
+
 /**
  * Flatten a nested object into dot-path → value pairs.
  * e.g. { auth: { site_url: "x" } } → { "auth.site_url": "x" }
@@ -166,6 +224,146 @@ function diffFlatConfigs(from, to) {
 
   return { added, changed, removed };
 }
+
+// Commit structured config states for a git branch.
+// The CLI owns file discovery and schema resolution. env-server stores semantic
+// targets only, so the storage model is not coupled to config file names.
+app.put("/projects/:ref/config-state", async (c) => {
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  if (!body || typeof body !== "object") return c.json({ error: "Body must be a JSON object" }, 400);
+  const { gitBranch, states } = body;
+  if (typeof gitBranch !== "string" || gitBranch.length === 0) {
+    return c.json({ error: "Missing required field: gitBranch" }, 400);
+  }
+  if (!Array.isArray(states)) return c.json({ error: "Missing required field: states" }, 400);
+
+  const ref = c.req.param("ref");
+  const insert = db.prepare(`
+    INSERT INTO config_state_commits (
+      project_ref,
+      git_branch,
+      target_key,
+      target_type,
+      environment,
+      target_branch,
+      config_json,
+      metadata_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const tx = db.transaction(() => {
+    for (const state of states) {
+      if (!state || typeof state !== "object") throw new Error("Each state must be an object");
+      const targetKey = configTargetKey(state.target);
+      if (!targetKey) throw new Error("Invalid config state target");
+      if (!Array.isArray(state.sources) || state.sources.length === 0) {
+        throw new Error("Each state requires one or more sources");
+      }
+      for (const source of state.sources) {
+        if (!source || typeof source !== "object") throw new Error("Each source must be an object");
+        if (typeof source.name !== "string" || source.name.length === 0) throw new Error("Each source requires a name");
+        if (typeof source.path !== "string" || source.path.length === 0) throw new Error("Each source requires a path");
+        if (!source.config || typeof source.config !== "object" || Array.isArray(source.config)) {
+          throw new Error("Each source requires an object config");
+        }
+      }
+
+      insert.run(
+        ref,
+        gitBranch,
+        targetKey,
+        state.target.type,
+        state.target.environment ?? null,
+        state.target.branch ?? null,
+        JSON.stringify(state.sources),
+        JSON.stringify({ target: state.target })
+      );
+
+      db.prepare(`
+        DELETE FROM config_state_commits
+        WHERE project_ref = ? AND git_branch = ? AND target_key = ?
+          AND id NOT IN (
+            SELECT id FROM config_state_commits
+            WHERE project_ref = ? AND git_branch = ? AND target_key = ?
+            ORDER BY id DESC
+            LIMIT ?
+          )
+      `).run(ref, gitBranch, targetKey, ref, gitBranch, targetKey, CONFIG_HISTORY_LIMIT);
+    }
+  });
+
+  try {
+    tx();
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+
+  return c.json({ ok: true, committed: states.length }, 201);
+});
+
+// Diff structured config states between two git branches.
+app.get("/projects/:ref/config-state/diff", (c) => {
+  const from = c.req.query("from");
+  const to = c.req.query("to");
+  const type = c.req.query("type") ?? "environment";
+  const environment = c.req.query("environment") ?? "production";
+  const branch = c.req.query("branch");
+  const targetKey = configTargetKey({ type, environment, branch });
+  if (!from || !to || !targetKey) {
+    return c.json({ error: "from, to, type, and environment query params required" }, 400);
+  }
+
+  const ref = c.req.param("ref");
+  const fromRow = db
+    .prepare("SELECT config_json FROM config_state_commits WHERE project_ref = ? AND git_branch = ? AND target_key = ? ORDER BY id DESC LIMIT 1")
+    .get(ref, from, targetKey);
+  const toRow = db
+    .prepare("SELECT config_json FROM config_state_commits WHERE project_ref = ? AND git_branch = ? AND target_key = ? ORDER BY id DESC LIMIT 1")
+    .get(ref, to, targetKey);
+
+  if (!fromRow) return c.json({ error: `No config found for branch '${from}' target '${targetKey}'` }, 404);
+  if (!toRow) return c.json({ error: `No config found for branch '${to}' target '${targetKey}'` }, 404);
+
+  const fromFlat = flattenConfig(resolveSources(JSON.parse(fromRow.config_json)));
+  const toFlat = flattenConfig(resolveSources(JSON.parse(toRow.config_json)));
+  const diff = diffFlatConfigs(fromFlat, toFlat);
+  const hasChanges = diff.added.length > 0 || diff.changed.length > 0 || diff.removed.length > 0;
+
+  return c.json({ from, to, targetKey, target: { type, environment, branch }, hasChanges, ...diff }, 200);
+});
+
+// Get latest structured config states for a git branch.
+app.get("/projects/:ref/config-state/:gitBranch", (c) => {
+  const ref = c.req.param("ref");
+  const gitBranch = decodeURIComponent(c.req.param("gitBranch"));
+  const rows = db
+    .prepare(
+      "SELECT id, git_branch, target_key, target_type, environment, target_branch, committed_at, config_json, metadata_json FROM config_state_commits WHERE project_ref = ? AND git_branch = ? GROUP BY target_key HAVING id = MAX(id) ORDER BY target_key"
+    )
+    .all(ref, gitBranch);
+  if (rows.length === 0) return c.json({ error: "Not found" }, 404);
+  return c.json(
+    rows.map((r) => {
+      const metadata = JSON.parse(r.metadata_json);
+      return {
+        id: r.id,
+        gitBranch: r.git_branch,
+        targetKey: r.target_key,
+        target: metadata.target,
+        sources: JSON.parse(r.config_json),
+        resolved: resolveSources(JSON.parse(r.config_json)),
+        committedAt: r.committed_at,
+      };
+    }),
+    200
+  );
+});
 
 // Commit a config snapshot for a git branch + env layer
 // PUT /projects/:ref/config/:gitBranch/:envName
@@ -222,6 +420,15 @@ app.get("/projects/:ref/config/:gitBranch", (c) => {
 // List all git branches that have config snapshots
 // GET /projects/:ref/config
 app.get("/projects/:ref/config", (c) => {
+  const stateRows = db
+    .prepare(
+      "SELECT git_branch, MAX(committed_at) as last_committed_at, COUNT(DISTINCT target_key) as env_count FROM config_state_commits WHERE project_ref = ? GROUP BY git_branch ORDER BY last_committed_at DESC"
+    )
+    .all(c.req.param("ref"));
+  if (stateRows.length > 0) {
+    return c.json(stateRows.map((r) => ({ gitBranch: r.git_branch, lastCommittedAt: r.last_committed_at, envCount: r.env_count })), 200);
+  }
+
   const rows = db
     .prepare(
       "SELECT git_branch, MAX(committed_at) as last_committed_at, COUNT(DISTINCT env_name) as env_count FROM config_commits WHERE project_ref = ? GROUP BY git_branch ORDER BY last_committed_at DESC"

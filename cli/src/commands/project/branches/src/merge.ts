@@ -4,6 +4,7 @@ import { createClient } from "@/lib/api.js";
 import { resolveProjectContext } from "@/lib/resolve-project.js";
 import { diffRemoteAuthConfig, diffRemotePostgrestConfig, buildAuthApiUpdatePayload, buildPostgrestApiUpdatePayload } from "@supabase-dx/config";
 import { createSpinner, setOutputMode } from "@/components/output.js";
+import { reconcileConfigTargets } from "@/lib/config-reconciler.js";
 
 export interface MergeOptions {
   yes?: boolean;
@@ -14,7 +15,7 @@ export interface MergeOptions {
 }
 
 export async function mergeBranch(options: MergeOptions = {}): Promise<void> {
-  const { projectRef, parentProjectRef, token, isBranch } = await resolveProjectContext({
+  const { cwd, branch, projectRef, parentProjectRef, token, isBranch } = await resolveProjectContext({
     ...options,
     skipBranchResolution: false,
   });
@@ -139,6 +140,19 @@ export async function mergeBranch(options: MergeOptions = {}): Promise<void> {
     }
 
     await Promise.all(tasks);
+
+    spinner.message("Reconciling preview branches...");
+    await reconcileConfigTargets({
+      cwd,
+      parentProjectRef,
+      currentProjectRef: projectRef,
+      currentBranch: branch,
+      isBranch,
+      client,
+      dryRun: options.dryRun,
+      verbose: false,
+      includePreviewBranches: "all",
+    });
 
     spinner.stop(chalk.green("Merged to production."));
 

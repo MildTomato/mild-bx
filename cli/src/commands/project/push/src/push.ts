@@ -37,6 +37,7 @@ import { checkEnvMatchesBranch, refreshTypesAndCodegen, runCodegenIfStale } from
 import { providerPayloadToEnvVars } from "@/lib/auth-providers.js";
 import { getEnvRefs, getSecretRefs, detectHardcodedSecrets, stripHardcodedSecrets, detectMissingSecrets, type HardcodedSecret } from "@/lib/config-ref.js";
 import { commitAllConfigSnapshots } from "@/lib/config-storage-bridge.js";
+import { reconcileConfigTargets } from "@/lib/config-reconciler.js";
 
 export interface PushOptions {
   profile?: string;
@@ -724,6 +725,25 @@ export async function pushCommand(options: PushOptions) {
 
       // Snapshot all config layers so diffs are available at merge time.
       await commitAllConfigSnapshots(cwd, parentProjectRef, currentBranch ?? "main");
+
+      applySpinner.message("Reconciling preview config...");
+      const reconcileResults = await reconcileConfigTargets({
+        cwd,
+        parentProjectRef,
+        currentProjectRef: projectRef,
+        currentBranch,
+        isBranch,
+        client,
+        dryRun,
+        verbose: options.verbose,
+        includePreviewBranches: "auto",
+      });
+      const failedTargets = reconcileResults.filter((r) => r.missing.length > 0);
+      if (failedTargets.length > 0) {
+        applyWarnings.push(
+          `Config reconciliation skipped ${failedTargets.length} target${failedTargets.length === 1 ? "" : "s"} with missing env values`
+        );
+      }
     }
 
     // Apply schema changes

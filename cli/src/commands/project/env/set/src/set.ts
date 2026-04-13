@@ -11,8 +11,10 @@ import { isSensitiveKey } from "@/lib/env-file.js";
 import { setRemoteVariable, warnIfUnrecognisedPlatformVar } from "@/lib/env-api-bridge.js";
 import { scopedVarName, type Scope } from "@supabase-dx/env-vars";
 import { createSpinner, setOutputMode } from "@/components/output.js";
-import { getSecretRefs } from "@/lib/config-ref.js";
+import { getSecretRefs, isSchemaSecretEnvVar } from "@/lib/config-ref.js";
 import { EXIT_CODES } from "@/lib/exit-codes.js";
+import { resolveEnvScope } from "@/lib/resolve-project.js";
+import { printContextExtra } from "@/components/command-header.js";
 
 export interface SetOptions {
   key: string;
@@ -25,7 +27,15 @@ export interface SetOptions {
 }
 
 export async function setCommand(options: SetOptions): Promise<void> {
-  const scope = options.scope ?? "production";
+  const ctx = await setupEnvCommand({
+    command: "supa project env set",
+    description: "Set a single environment variable.",
+    json: options.json,
+    profile: options.profile,
+  });
+  if (!ctx) return;
+
+  const scope = options.scope ?? resolveEnvScope(ctx);
 
   if (scope === "branch" && !options.branch) {
     console.error("Error: --branch is required when --scope is 'branch'");
@@ -33,7 +43,6 @@ export async function setCommand(options: SetOptions): Promise<void> {
   }
 
   const storedKey = scopedVarName(options.key, scope, options.branch);
-
   const scopeLabel = scope === "branch"
     ? `branch:${options.branch}`
     : scope;
@@ -45,19 +54,11 @@ export async function setCommand(options: SetOptions): Promise<void> {
   if (options.secret) {
     context.push(["Secret", chalk.yellow("yes")]);
   }
+  printContextExtra(context);
 
-  const ctx = await setupEnvCommand({
-    command: "supa project env set",
-    description: "Set a single environment variable.",
-    json: options.json,
-    profile: options.profile,
-    context,
-  });
-  if (!ctx) return;
-
-  // Check if this key is a secret() ref in config — takes precedence over everything
+  // Schema-backed secrets and explicit secret() refs take precedence over flags/prompts.
   const secretRefs = getSecretRefs(ctx.config);
-  const isConfigSecret = secretRefs.has(options.key);
+  const isConfigSecret = secretRefs.has(options.key) || isSchemaSecretEnvVar(options.key);
 
   function rejectSecretInNonTTY(): never {
     const msg = "Secrets must be set interactively. Run this command in your terminal.";
@@ -142,7 +143,7 @@ export async function setCommand(options: SetOptions): Promise<void> {
   spinner.start(`Setting ${storedKey}...`);
 
   try {
-    await setRemoteVariable( ctx.parentProjectRef, [{ key: storedKey, value, secret: isSecret ?? false }]);
+    await setRemoteVariable(ctx.parentProjectRef, [{ key: storedKey, value, secret: isSecret ?? false, scope }]);
     spinner.stop(`Set ${chalk.cyan(storedKey)} (scope: ${scopeLabel})`);
 
     if (scope === "preview") {

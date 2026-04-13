@@ -33,12 +33,18 @@ export default async function set(argv: string[]): Promise<number> {
     return 0;
   }
 
-  const [key, value] = args._;
+  let [key, value] = args._;
 
   if (!key) {
     console.error("Error: KEY argument is required");
     renderHelp(setSubcommand, { parent: envCommand });
     return 1;
+  }
+
+  if (value === undefined && key.includes("=")) {
+    const [parsedKey, ...parsedValue] = key.split("=");
+    key = parsedKey;
+    value = parsedValue.join("=");
   }
 
   await setHandler({

@@ -10,6 +10,8 @@ import { handleCommandError } from "@/lib/command-error.js";
 import { deleteRemoteVariable } from "@/lib/env-api-bridge.js";
 import { scopedVarName, type Scope } from "@supabase-dx/env-vars";
 import { createSpinner, setOutputMode } from "@/components/output.js";
+import { resolveEnvScope } from "@/lib/resolve-project.js";
+import { printContextExtra } from "@/components/command-header.js";
 
 export interface UnsetOptions {
   key: string;
@@ -22,7 +24,15 @@ export interface UnsetOptions {
 
 export async function unsetCommand(options: UnsetOptions): Promise<void> {
   setOutputMode(options);
-  const scope = options.scope ?? "production";
+  const ctx = await setupEnvCommand({
+    command: "supa project env unset",
+    description: "Delete an environment variable.",
+    json: options.json,
+    profile: options.profile,
+  });
+  if (!ctx) return;
+
+  const scope = options.scope ?? resolveEnvScope(ctx);
 
   if (scope === "branch" && !options.branch) {
     console.error("Error: --branch is required when --scope is 'branch'");
@@ -30,22 +40,14 @@ export async function unsetCommand(options: UnsetOptions): Promise<void> {
   }
 
   const storedKey = scopedVarName(options.key, scope, options.branch);
-
   const scopeLabel = scope === "branch"
     ? `branch:${options.branch}`
     : scope;
 
-  const ctx = await setupEnvCommand({
-    command: "supa project env unset",
-    description: "Delete an environment variable.",
-    json: options.json,
-    profile: options.profile,
-    context: [
-      ["Key", storedKey],
-      ["Scope", scopeLabel],
-    ],
-  });
-  if (!ctx) return;
+  printContextExtra([
+    ["Key", storedKey],
+    ["Scope", scopeLabel],
+  ]);
 
   // Confirm unless --yes
   if (!options.yes && process.stdout.isTTY && !options.json) {
@@ -64,7 +66,7 @@ export async function unsetCommand(options: UnsetOptions): Promise<void> {
   spinner.start(`Deleting ${storedKey}...`);
 
   try {
-    await deleteRemoteVariable( ctx.parentProjectRef, storedKey);
+    await deleteRemoteVariable(ctx.parentProjectRef, storedKey, scope);
     spinner.stop(`Deleted ${chalk.cyan(storedKey)} (scope: ${scopeLabel})`);
 
     if (scope === "preview") {

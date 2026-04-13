@@ -114,6 +114,37 @@ function loadSecretPaths(): Set<string> {
 
 const SECRET_PATHS = loadSecretPaths();
 
+function configPathToEnvVar(path: string): string {
+  return `SUPABASE_${path.replace(/\./g, "_").replace(/[^A-Za-z0-9_]/g, "_").toUpperCase()}`;
+}
+
+function loadSchemaSecretEnvVars(): Set<string> {
+  const vars = new Set<string>();
+  const schema = platformSchema as unknown as SchemaNode;
+
+  function walk(obj: SchemaNode, path: string): void {
+    if (obj.secret === true && path) {
+      const defaultRef = parseConfigRef(obj.default);
+      vars.add(defaultRef?.varName ?? configPathToEnvVar(path));
+    }
+    const props = obj.properties as Record<string, SchemaNode> | undefined;
+    if (!props) return;
+    for (const [key, val] of Object.entries(props)) {
+      walk(val, path ? `${path}.${key}` : key);
+    }
+  }
+
+  walk(schema, "");
+  return vars;
+}
+
+const SCHEMA_SECRET_ENV_VARS = loadSchemaSecretEnvVars();
+
+/** Returns true when an env var maps to a schema field marked `secret: true`. */
+export function isSchemaSecretEnvVar(key: string): boolean {
+  return SCHEMA_SECRET_ENV_VARS.has(key);
+}
+
 export interface HardcodedSecret {
   /** Dot-path to the field in config, e.g. "auth.external.github.secret" */
   path: string;

@@ -60,6 +60,16 @@ export async function setCommand(options: SetOptions): Promise<void> {
   const secretRefs = getSecretRefs(ctx.config);
   const isConfigSecret = secretRefs.has(options.key) || isSchemaSecretEnvVar(options.key);
 
+  if (isConfigSecret) {
+    const message = `${options.key} is a config secret. Use: supa config secret set ${options.key} <value>`;
+    if (options.json) {
+      console.error(JSON.stringify({ status: "error", message }));
+    } else {
+      p.log.error(message);
+    }
+    process.exit(EXIT_CODES.VALIDATION_ERROR);
+  }
+
   function rejectSecretInNonTTY(): never {
     const msg = "Secrets must be set interactively. Run this command in your terminal.";
     if (options.json) {

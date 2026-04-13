@@ -50,6 +50,7 @@ import { getEnvRefs, getSecretRefs, detectHardcodedSecrets, stripHardcodedSecret
 import { listRemoteVariables } from "@/lib/env-api-bridge.js";
 import { commitAllConfigSnapshots } from "@/lib/config-storage-bridge.js";
 import { BranchResolutionError, resolveBranchContext, resolveEnvScope } from "@/lib/resolve-project.js";
+import { reconcileConfigTargets } from "@/lib/config-reconciler.js";
 import { createDevOutput } from "./dev-output.js";
 import type { ConfigChange } from "./dev-output.js";
 
@@ -522,6 +523,25 @@ export async function devCommand(options: DevOptions): Promise<void> {
 
   const parentProjectRef = config.project_id ?? projectRef;
 
+  const reconcileConfig = async () => {
+    output.verboseLog("config: reconciling preview-wide targets…");
+    const results = await reconcileConfigTargets({
+      cwd,
+      parentProjectRef,
+      currentProjectRef: state.projectRef,
+      currentBranch,
+      isBranch: state.isBranch,
+      client,
+      dryRun: options.dryRun,
+      verbose: options.verbose,
+      includePreviewBranches: "auto",
+    });
+    const skipped = results.filter((r) => r.missing.length > 0);
+    if (skipped.length > 0) {
+      output.logNested(`${C.warning}⚠${C.reset} Config reconciliation skipped ${skipped.length} target${skipped.length === 1 ? "" : "s"} with missing env values`);
+    }
+  };
+
   // Extra context lines (schema, seed, hooks, mode)
   const extra: [string, string][] = [["Schema", relative(cwd, schemaDir)]];
   if (seedEnabled) {
@@ -721,6 +741,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
       }
       if (!options.dryRun) {
         await commitAllConfigSnapshots(cwd, parentProjectRef, currentBranch ?? "main");
+        await reconcileConfig();
       }
       return lookupEnvVar;
     } catch (error) {
@@ -995,6 +1016,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
           startupLookupEnvVar = lookupEnvVar;
           config = freshConfig as ProjectConfig;
           await commitAllConfigSnapshots(cwd, parentProjectRef, currentBranch ?? "main");
+          await reconcileConfig();
         } catch (error) {
           output.logNested(`${C.warning}⚠${C.reset} Config sync failed: ${error instanceof Error ? error.message : String(error)}`);
         }

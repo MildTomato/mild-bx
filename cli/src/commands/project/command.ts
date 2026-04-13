@@ -13,6 +13,7 @@ import { envCommand } from "./env/command.js";
 import { branchesSubcommand } from "./branches/command.js";
 import { envServerCommand } from "./env-server/command.js";
 import { devCommand } from "@/commands/dev/command.js";
+import { configCommand } from "@/commands/config/command.js";
 import type { Command } from "@/util/commands/types.js";
 
 export const projectCommand = {
@@ -32,6 +33,7 @@ export const projectCommand = {
     envCommand,
     envServerCommand,
     branchesSubcommand,
+    configCommand,
   ],
   options: [],
   examples: [

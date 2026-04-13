@@ -114,18 +114,18 @@ function loadSecretPaths(): Set<string> {
 
 const SECRET_PATHS = loadSecretPaths();
 
-function configPathToEnvVar(path: string): string {
+export function configPathToEnvVar(path: string): string {
   return `SUPABASE_${path.replace(/\./g, "_").replace(/[^A-Za-z0-9_]/g, "_").toUpperCase()}`;
 }
 
-function loadSchemaSecretEnvVars(): Set<string> {
-  const vars = new Set<string>();
+function loadSchemaSecretEnvVars(): Map<string, string> {
+  const vars = new Map<string, string>();
   const schema = platformSchema as unknown as SchemaNode;
 
   function walk(obj: SchemaNode, path: string): void {
     if (obj.secret === true && path) {
       const defaultRef = parseConfigRef(obj.default);
-      vars.add(defaultRef?.varName ?? configPathToEnvVar(path));
+      vars.set(defaultRef?.varName ?? configPathToEnvVar(path), path);
     }
     const props = obj.properties as Record<string, SchemaNode> | undefined;
     if (!props) return;
@@ -143,6 +143,15 @@ const SCHEMA_SECRET_ENV_VARS = loadSchemaSecretEnvVars();
 /** Returns true when an env var maps to a schema field marked `secret: true`. */
 export function isSchemaSecretEnvVar(key: string): boolean {
   return SCHEMA_SECRET_ENV_VARS.has(key);
+}
+
+/** Returns the schema dot-path for a config secret env var, if known. */
+export function getSchemaSecretPathForEnvVar(key: string): string | undefined {
+  return SCHEMA_SECRET_ENV_VARS.get(key);
+}
+
+export function isSchemaSecretPath(path: string): boolean {
+  return SECRET_PATHS.has(path);
 }
 
 export interface HardcodedSecret {

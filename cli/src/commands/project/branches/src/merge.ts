@@ -5,6 +5,10 @@ import { resolveProjectContext } from "@/lib/resolve-project.js";
 import { diffRemoteAuthConfig, diffRemotePostgrestConfig, buildAuthApiUpdatePayload, buildPostgrestApiUpdatePayload } from "@supabase-dx/config";
 import { createSpinner, setOutputMode } from "@/components/output.js";
 import { reconcileConfigTargets } from "@/lib/config-reconciler.js";
+import { deleteRemoteVariable, listRemoteVariables, setRemoteVariable } from "@/lib/env-api-bridge.js";
+import { isSchemaSecretEnvVar } from "@/lib/config-ref.js";
+import { branchToScope, parseScopedVarName, scopedVarName } from "@supabase-dx/env-vars";
+import type { EnvScope } from "@/lib/env-server-types.js";
 
 export interface MergeOptions {
   yes?: boolean;
@@ -30,6 +34,30 @@ export async function mergeBranch(options: MergeOptions = {}): Promise<void> {
   }
 
   const client = createClient(token);
+  const envVars = await listRemoteVariables(parentProjectRef).catch(() => []);
+  const branchSecretSuffix = branchToScope(branch);
+  const branchConfigSecrets = envVars.filter((v) => {
+    const parsed = parseScopedVarName(v.key);
+    return parsed.scope === "branch" && parsed.branch === branchSecretSuffix && isSchemaSecretEnvVar(parsed.base);
+  });
+  const envKeys = new Set(envVars.map((v) => v.key));
+  const missingProductionSecrets = branchConfigSecrets
+    .map((v) => parseScopedVarName(v.key).base)
+    .filter((key) => !envKeys.has(scopedVarName(key, "production")));
+
+  if (missingProductionSecrets.length > 0) {
+    const message = `Missing production config secret${missingProductionSecrets.length === 1 ? "" : "s"}: ${missingProductionSecrets.join(", ")}`;
+    if (options.json) {
+      console.log(JSON.stringify({ status: "error", message, missingProductionSecrets }));
+    } else {
+      console.error(chalk.bgYellow.black.bold(" MISSING PRODUCTION SECRET "));
+      for (const key of missingProductionSecrets) {
+        console.error(`  ${chalk.dim("•")} ${key}`);
+        console.error(`    ${chalk.dim("→")} supa config secret set ${key} <value> --scope production`);
+      }
+    }
+    process.exit(1);
+  }
 
   // Fetch schema diff + config from both sides in parallel
   const [schemaDiffResult, branchAuth, prodAuth, branchPostgrest, prodPostgrest] = await Promise.allSettled([
@@ -140,6 +168,23 @@ export async function mergeBranch(options: MergeOptions = {}): Promise<void> {
     }
 
     await Promise.all(tasks);
+
+    if (branchConfigSecrets.length > 0) {
+      spinner.message("Promoting branch config secrets to preview...");
+      await Promise.all(branchConfigSecrets.map(async (secret) => {
+        const parsed = parseScopedVarName(secret.key);
+        if (parsed.scope !== "branch") return;
+        await setRemoteVariable(parentProjectRef, [{
+          key: scopedVarName(parsed.base, "preview"),
+          value: secret.value,
+          secret: true,
+          scope: "preview",
+        }]);
+        if (secret.scope) {
+          await deleteRemoteVariable(parentProjectRef, secret.key, secret.scope as EnvScope);
+        }
+      }));
+    }
 
     spinner.message("Reconciling preview branches...");
     await reconcileConfigTargets({

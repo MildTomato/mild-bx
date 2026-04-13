@@ -5,6 +5,7 @@
 import type { Command } from "@/util/commands/types.js";
 import { showSubcommand } from "./show/command.js";
 import { diffSubcommand } from "./diff/command.js";
+import { secretSubcommand } from "./secret/command.js";
 
 export const configCommand = {
   name: "config",
@@ -12,7 +13,7 @@ export const configCommand = {
   description: "Manage project config",
   arguments: [],
   options: [],
-  subcommands: [showSubcommand, diffSubcommand],
+  subcommands: [showSubcommand, diffSubcommand, secretSubcommand],
   examples: [
     {
       name: "Show effective config",
@@ -21,6 +22,10 @@ export const configCommand = {
     {
       name: "Diff config between branches",
       value: "supa config diff main feat/my-feature",
+    },
+    {
+      name: "Set a config secret",
+      value: "supa config secret set SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET",
     },
   ],
 } as const satisfies Command;

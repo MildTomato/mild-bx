@@ -15,6 +15,7 @@ import env from "./env/index.js";
 import branches from "./branches/index.js";
 import envServer from "./env-server/index.js";
 import dev from "@/commands/dev/index.js";
+import config from "@/commands/config/index.js";
 
 export { projectCommand };
 
@@ -51,6 +52,8 @@ export default async function project(argv: string[]): Promise<number> {
       return env(rest);
     case "branches":
       return branches(rest);
+    case "config":
+      return config(rest);
     case "env-server":
       return envServer(rest);
     default:

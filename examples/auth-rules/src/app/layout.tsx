@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ErrorBoundaryWrapper } from "@/components/error-boundary-wrapper";
 import { GlobalMutationIndicator } from "@/components/global-mutation-indicator";
+import { Analytics } from "@vercel/analytics/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,6 +37,7 @@ export default function RootLayout({
             <GlobalMutationIndicator />
           </Providers>
         </ErrorBoundaryWrapper>
+        <Analytics />
       </body>
     </html>
   );
